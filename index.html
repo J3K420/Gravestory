@@ -1,0 +1,2856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>GraveStory</title>
+
+<!-- PWA Meta Tags -->
+<meta name="application-name" content="GraveStory">
+<meta name="description" content="Photograph a gravestone. Uncover the life story it marks.">
+<meta name="theme-color" content="#1a1410">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GraveStory">
+
+<!-- PWA Icons (embedded PNG) -->
+<link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAFi0lEQVR42u3dPZITMRRFYXfXRAQEZGyDhNwZG2FR3ogz8knYBhkBASmkFAUu94+enp6+s4CZtnT69pVaM75cAAAAAAAAAAAAAAAYmsUQnMO7t29+Hf0Z33/8NB+EHktashN6SoEJTujSAhOc0OUlJjehS4tM7MmEnkHi2eVeiExsQhOZ2ISuLfL9dn09+jM+ff7ykdiEDhX5DHEzil5F7IXI5wh8hnSRv6uq2AuZt4nVoxZEX8/IUi9EfixND4GzXOuIYi8zyzySxL0+w2hSLzPK/C8JRpI4+nONJPVC5PFFJvZgQh+V+e8Jrihx1GfPLvVSWeaZRW45FpmlXmaQeWaRW41LVqmXyiKTeb60XqrKTOQ503qpIDOR+4udReqVzPhz3PYevspyVHclMypJvYwoM5FzV5Ce9WMlM85O655Jvc6UHIitIFNVjq13cXaZ77frt4MCva8WIj2qxzKSzBlEPiruqKLvnYNoqRcy5xI4s+AjSL2QOb/EmeTOLnVaoXvIPIrIvcXeMzdRQq+ZZY4UeVSZe17/lnmK2spbMsvcOp1Hlrh3Yu+dp9ZJvWaS+a9J+dhS5KoyR32+vfPTOqnXZBPxGiHzZRKipM704qWp0NkWgTPJnFnqlim9ZJK5pdC9ZP5Xn+1xLS17daY+napyVJN5lqTOdBShidDZ95tRt3qsnVNDb7ZIzC20/5qPnr50S2jpLKXTJ/Szd9tIB8ZxPLQiU7prh7YQrL1A7MFp+4Bb0zniQ5/9eO18FvnbaJ9j61yfsS+9XoBCnCJ0xnRGnuoR2aUlNCR0RJ/CnCl9lJeoulGBPQuzLIeTRuHd2ze/jiwO1yAR7DsjxIP16N205/GDOWtHxFPfohAWhRaDyLo43C20U3VovThUOaByqBuoVDteDHPzNYQ95+wJrT8ja49uVjnUDfSoHRaFUDmAMkLrz8jco5vsclTqz58+f/ma7Zrut+uH0Xv0/XZ9vd+ur2c7onJAhwYIDRAa2IZX38UXYBL6Ac9soXhDiGfY8sZwy9adygEdGtChazwmu71k0eUlNAgNEBogNGBR2BkLMwkNEBogNKBDP0emv1rR4yU0CA0QGiA0cCabv5xlpEP+/lHifxe573tfwxZHtnyJkISGygEQGiA0QGgQ+vRVdOj3O2MsWu6CbRb6yPcwA619UzmgcgDTCa1HI7o/7xZaj0bG/qxyQOVQO5C1bkhoSGg9Gln7c0hCqx2IqhsqB1SOI48FKT13OkfU2ZCE9n0riPLgsNAWh8iwGAzv0BaHFoPpOzRQalG49TEhpaVz6/oqoSGhpTQypnP3hCZ1bZmHTug9KY3aRKdz14RWPVSN9Al99t2G+pztS9cOLaWlc/qE3nrXkXpemVs8zdeMg4IxZc5AM6H3pDTGpnc6Xy47/oP/Vp75j/97HlvSPIegWapGysqhT1sEphd6791I6pq9ufW2bkhC7+3TpM4vc5aqEV45LBItAktUDn1aby7VoY/cpaSuIXPkcYjwhCY1mctVjiNSEzte5FFkvlwCXqw8YstLFyk9zgKwl8ypF4VnDCrmG/euQu+5i0mdX+aeZ+K7JzSpyVyucvgrlxpkmMfVYKDS/K0GBZXmbTU4qDRfL5kHaes+NQTPatBQaV5Wg4dK87EaRFSah5fRBlOvJvIjhky+s6T+32Gnkd5Etv4Moz0dh32Un53UI8kdda0jVr3hu2mLCvLomGoPwaOvZ+Q1S4nFVste/ewZ7DPEivxdVRfgpXYPIhaMPf7IIOKpUGUnqeR2WI+dkDNE71Fnqm2Jlt7ftcU3j8hTCE3seUSeSmhiz/O2ddpXyjPIPeORgenPSFQUe+azLw79FJHbAS5CDy04gQk9tOAEJvRwspMWAAAAAAAAAAAAAPbwG/vaQZb8e3hKAAAAAElFTkSuQmCC">
+<link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABDElEQVR42u1XIQ7DMAxsrKKBgbF+o6Q8rB/po/KRsPKSPWKkbGBgtEOboqjnxJGrVtsslTSJ7xI78bmqft1MyaLL+bSgsfvjKfJZl4B6Zyc0rx/GRULG5IJzoAyZLkXC5Ow6Bu+HsUNr0FxExEjAOWCOCEfC5IDHwN7ZGRx5g4ggEiYV8/dCBMrEv1kjkSSQCw52O0tJkEa2S8w7O4VXmrgrpAmM/NWFzq7gf+WdbSW+iIu9tgU59QkD7V2MdidQF2Zy+zUn8CdAoXgIr8lWr2D8HB83BNqngPxRLCjBK3gr+dZA2Wq4VS6I9ACnBTXqQEyAOG2vVZTEmvAQqvgQfUFhZ9Spd0Zb9oa72wuHBOWLbFRBGQAAAABJRU5ErkJggg==">
+<link rel="icon" type="image/png" sizes="192x192" href="data:image/png;base64,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">
+
+<!-- PWA Manifest (inline) -->
+<link rel="manifest" href="data:application/manifest+json,{
+  %22name%22: %22GraveStory%22,
+  %22short_name%22: %22GraveStory%22,
+  %22description%22: %22Photograph a gravestone. Uncover the life story it marks.%22,
+  %22start_url%22: %22.%22,
+  %22display%22: %22standalone%22,
+  %22background_color%22: %22%231a1410%22,
+  %22theme_color%22: %22%231a1410%22,
+  %22orientation%22: %22portrait%22,
+  %22icons%22: [
+    {%22src%22:%22data:image/png;base64,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%22,%22sizes%22:%22192x192%22,%22type%22:%22image/png%22,%22purpose%22:%22any%20maskable%22},
+    {%22src%22:%22data:image/png;base64,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%22,%22sizes%22:%22512x512%22,%22type%22:%22image/png%22,%22purpose%22:%22any%20maskable%22}
+  ]
+}">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1410;
+    --parchment: #f5f0e8;
+    --aged: #e8dfc8;
+    --stone: #8a7e6e;
+    --moss: #4a5c3e;
+    --rust: #8b3a2a;
+    --gold: #c9a84c;
+    --shadow: rgba(26,20,16,0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--ink);
+    color: var(--parchment);
+    font-family: 'Crimson Pro', serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  /* SCREENS */
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ── HOME SCREEN ── */
+  #home {
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    position: relative;
+    text-align: center;
+  }
+
+  .home-bg {
+    position: fixed;
+    inset: 0;
+    background: 
+      radial-gradient(ellipse at 20% 80%, rgba(74,92,62,0.25) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(139,58,42,0.15) 0%, transparent 50%),
+      linear-gradient(180deg, #0d0b08 0%, #1a1410 50%, #0f0e0a 100%);
+    z-index: -1;
+  }
+
+  /* Decorative vine/border */
+  .home-border {
+    position: absolute;
+    top: 2rem; left: 2rem; right: 2rem; bottom: 2rem;
+    border: 1px solid rgba(201,168,76,0.2);
+    pointer-events: none;
+  }
+  .home-border::before, .home-border::after {
+    content: '✦';
+    position: absolute;
+    color: var(--gold);
+    opacity: 0.4;
+    font-size: 1rem;
+  }
+  .home-border::before { top: -0.6rem; left: 50%; transform: translateX(-50%); }
+  .home-border::after { bottom: -0.6rem; left: 50%; transform: translateX(-50%); }
+
+  .logo-area { margin-bottom: 3rem; }
+
+  .logo-symbol {
+    font-size: 3.5rem;
+    display: block;
+    margin-bottom: 1rem;
+    animation: flicker 4s ease-in-out infinite;
+  }
+
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    92% { opacity: 1; }
+    93% { opacity: 0.7; }
+    94% { opacity: 1; }
+    96% { opacity: 0.8; }
+    97% { opacity: 1; }
+  }
+
+  .logo-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 3rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--parchment);
+    line-height: 1;
+    display: block;
+  }
+
+  .logo-subtitle {
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-size: 1rem;
+    color: var(--stone);
+    letter-spacing: 0.15em;
+    margin-top: 0.5rem;
+    display: block;
+  }
+
+  .divider {
+    width: 120px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 2rem auto;
+  }
+
+  .scan-btn {
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.1em;
+    padding: 1rem 2.5rem;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.3s ease;
+    overflow: hidden;
+  }
+
+  .scan-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--gold);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+    z-index: -1;
+  }
+
+  .scan-btn:hover::before { transform: scaleX(1); }
+  .scan-btn:hover { color: var(--ink); }
+
+  .scan-btn:active { transform: scale(0.98); }
+
+  .home-desc {
+    font-size: 1rem;
+    color: var(--stone);
+    font-style: italic;
+    margin-top: 1.5rem;
+    max-width: 280px;
+    line-height: 1.6;
+  }
+
+  /* Saved stories section */
+  .saved-section { margin-top: 3rem; width: 100%; max-width: 500px; }
+
+  .saved-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    color: var(--stone);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+
+  .saved-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+  .saved-card {
+    background: rgba(245,240,232,0.04);
+    border: 1px solid rgba(201,168,76,0.15);
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .saved-card:hover {
+    background: rgba(245,240,232,0.08);
+    border-color: rgba(201,168,76,0.4);
+  }
+
+  .saved-card-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.95rem;
+    color: var(--parchment);
+  }
+
+  .saved-card-date {
+    font-size: 0.8rem;
+    color: var(--stone);
+    font-style: italic;
+  }
+
+  .empty-saved {
+    font-style: italic;
+    color: rgba(138,126,110,0.5);
+    font-size: 0.9rem;
+  }
+
+  /* ── CAMERA SCREEN ── */
+  #camera {
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: #0d0b08;
+    position: relative;
+  }
+
+  .camera-back {
+    position: absolute;
+    top: 1.5rem;
+    left: 1.5rem;
+    background: none;
+    border: none;
+    color: var(--stone);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+  }
+
+  .camera-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.4rem;
+    margin-bottom: 0.5rem;
+    color: var(--parchment);
+  }
+
+  .camera-hint {
+    font-style: italic;
+    color: var(--stone);
+    font-size: 0.9rem;
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+
+  .upload-zone {
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 3/4;
+    border: 1px dashed rgba(201,168,76,0.4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    background: rgba(245,240,232,0.02);
+    transition: all 0.3s ease;
+  }
+
+  .upload-zone:hover {
+    border-color: rgba(201,168,76,0.8);
+    background: rgba(245,240,232,0.04);
+  }
+
+  .upload-zone img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .upload-zone-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    z-index: 1;
+  }
+
+  .upload-icon { font-size: 3rem; opacity: 0.5; }
+
+  .upload-text {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    color: var(--stone);
+    text-align: center;
+  }
+
+  .upload-sub {
+    font-size: 0.8rem;
+    color: rgba(138,126,110,0.6);
+    font-style: italic;
+  }
+
+  #file-input { display: none; }
+
+  .camera-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    width: 100%;
+    max-width: 360px;
+  }
+
+  .btn-secondary {
+    flex: 1;
+    padding: 0.9rem;
+    background: transparent;
+    border: 1px solid rgba(138,126,110,0.4);
+    color: var(--stone);
+    font-family: 'Crimson Pro', serif;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--stone);
+    color: var(--parchment);
+  }
+
+  .btn-primary {
+    flex: 2;
+    padding: 0.9rem;
+    background: var(--gold);
+    border: none;
+    color: var(--ink);
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    letter-spacing: 0.05em;
+  }
+
+  .btn-primary:hover { background: #d4b55a; }
+  .btn-primary:disabled {
+    background: rgba(201,168,76,0.3);
+    color: rgba(26,20,16,0.5);
+    cursor: not-allowed;
+  }
+
+  /* ── LOADING SCREEN ── */
+  #loading {
+    align-items: center;
+    justify-content: center;
+    background: #0d0b08;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .loading-symbol {
+    font-size: 4rem;
+    display: block;
+    margin-bottom: 2rem;
+    animation: pulse-fade 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-fade {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+  }
+
+  .loading-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem;
+    color: var(--parchment);
+    margin-bottom: 0.5rem;
+  }
+
+  .loading-step {
+    font-style: italic;
+    color: var(--stone);
+    font-size: 1rem;
+    min-height: 1.5rem;
+    transition: opacity 0.5s ease;
+  }
+
+  .loading-dots {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 2rem;
+  }
+
+  .loading-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--gold);
+    animation: dot-pulse 1.4s ease-in-out infinite;
+  }
+
+  .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot-pulse {
+    0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1); }
+  }
+
+  /* ── RESULT SCREEN ── */
+  #result {
+    background: var(--parchment);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+
+  .result-header {
+    background: var(--ink);
+    padding: 1.5rem 1.5rem 2rem;
+    position: relative;
+  }
+
+  .result-back {
+    background: none;
+    border: none;
+    color: var(--stone);
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    margin-bottom: 1.5rem;
+    display: block;
+  }
+
+  .result-image-container {
+    width: 100%;
+    max-height: 220px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    position: relative;
+  }
+
+  .result-image-container img {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    opacity: 0.7;
+  }
+
+  .result-image-container::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background: linear-gradient(transparent, var(--ink));
+  }
+
+  .result-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--parchment);
+    line-height: 1.2;
+  }
+
+  .result-dates {
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    color: var(--gold);
+    font-size: 1.1rem;
+    margin-top: 0.25rem;
+  }
+
+  .result-body { padding: 1.5rem; }
+
+  .result-section {
+    margin-bottom: 2rem;
+    opacity: 0;
+    transform: translateY(12px);
+    animation: fade-up 0.6s ease forwards;
+  }
+
+  .result-section:nth-child(1) { animation-delay: 0.1s; }
+  .result-section:nth-child(2) { animation-delay: 0.25s; }
+  .result-section:nth-child(3) { animation-delay: 0.4s; }
+  .result-section:nth-child(4) { animation-delay: 0.55s; }
+
+  @keyframes fade-up {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .section-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--stone);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(138,126,110,0.3);
+  }
+
+  .biography-text {
+    font-family: 'Crimson Pro', serif;
+    font-size: 1.05rem;
+    line-height: 1.8;
+    color: #2a2016;
+  }
+
+  .biography-text p { margin-bottom: 1rem; }
+
+  .sources-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .source-item {
+    font-size: 0.85rem;
+    color: var(--stone);
+    padding: 0.5rem 0.75rem;
+    background: rgba(138,126,110,0.08);
+    border-left: 2px solid var(--gold);
+    font-style: italic;
+  }
+
+  .source-item a {
+    color: var(--moss);
+    text-decoration: underline;
+    word-break: break-all;
+  }
+
+  .location-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--stone);
+    font-style: italic;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid rgba(138,126,110,0.3);
+    margin-bottom: 1.5rem;
+  }
+
+  /* Action buttons */
+  .result-actions {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem 2rem;
+    background: var(--parchment);
+    border-top: 1px solid rgba(138,126,110,0.2);
+    position: sticky;
+    bottom: 0;
+  }
+
+  .action-btn {
+    flex: 1;
+    padding: 0.9rem;
+    font-family: 'Playfair Display', serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+  }
+
+  .action-save {
+    background: var(--ink);
+    color: var(--parchment);
+  }
+
+  .action-save:hover { background: #2a2016; }
+  .action-save.saved { background: var(--moss); }
+
+  .action-share {
+    background: transparent;
+    border: 1px solid var(--ink) !important;
+    color: var(--ink);
+  }
+
+  .action-share:hover { background: rgba(26,20,16,0.08); }
+
+  .action-new {
+    background: var(--gold);
+    color: var(--ink);
+    font-weight: 700;
+  }
+
+  .action-new:hover { background: #d4b55a; }
+
+  /* Error message */
+  .error-box {
+    background: rgba(139,58,42,0.1);
+    border: 1px solid rgba(139,58,42,0.4);
+    color: var(--rust);
+    padding: 1rem;
+    font-style: italic;
+    font-size: 0.9rem;
+    margin-top: 1rem;
+    display: none;
+    max-width: 360px;
+    text-align: center;
+  }
+
+  /* ── MAP SCREEN ── */
+  #cemetery-map-screen {
+    background: var(--parchment);
+    color: var(--ink);
+    min-height: 100vh;
+    /* display and flex-direction controlled by .screen / .screen.active */
+  }
+
+  .map-header {
+    background: var(--ink);
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .map-header-title {
+    font-family: 'Playfair Display', serif;
+    color: var(--parchment);
+    font-size: 1.3rem;
+    flex: 1;
+  }
+
+  .map-header-back {
+    background: none;
+    border: none;
+    color: var(--stone);
+    font-size: 1.3rem;
+    cursor: pointer;
+  }
+
+  #leaflet-map {
+    flex: 1;
+    min-height: 400px;
+    width: 100%;
+  }
+
+  .map-footer {
+    background: var(--parchment);
+    padding: 1rem 1.5rem;
+    border-top: 1px solid rgba(138,126,110,0.2);
+  }
+
+  .map-cemetery-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    color: var(--ink);
+    margin-bottom: 0.25rem;
+  }
+
+  /* Perimeter walk overlay */
+  #perimeter-overlay {
+    display: none;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  #perimeter-overlay.active {
+    display: block;
+    pointer-events: all;
+  }
+  #perimeter-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(26,20,16,0.92);
+    padding: 1rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    border-top: 2px solid #ffee00;
+  }
+  #perimeter-status {
+    font-family: 'Playfair Display', serif;
+    color: #ffee00;
+    font-size: 1rem;
+    text-align: center;
+  }
+  #perimeter-point-count {
+    font-size: 0.8rem;
+    color: var(--stone);
+    font-style: italic;
+  }
+  #perimeter-btn-row {
+    display: flex;
+    gap: 0.75rem;
+    width: 100%;
+  }
+  .perimeter-btn {
+    flex: 1;
+    padding: 0.75rem;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .perimeter-btn-finish {
+    background: #ffee00;
+    color: #1a1410;
+    font-weight: bold;
+  }
+  .perimeter-btn-cancel {
+    background: rgba(139,58,42,0.8);
+    color: var(--parchment);
+  }
+
+  .map-grave-count {
+    font-size: 0.85rem;
+    color: var(--stone);
+    font-style: italic;
+  }
+
+  .map-graves-list {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .map-grave-item {
+    font-size: 0.85rem;
+    color: var(--ink);
+    padding: 0.4rem 0.75rem;
+    background: rgba(138,126,110,0.08);
+    border-left: 2px solid var(--gold);
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .map-grave-item:hover {
+    background: rgba(138,126,110,0.15);
+  }
+
+  .map-grave-item-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.9rem;
+  }
+
+  .map-grave-item-dates {
+    font-size: 0.75rem;
+    color: var(--stone);
+    font-style: italic;
+  }
+
+  /* Result map tab */
+  .result-map-btn {
+    width: calc(100% - 3rem);
+    margin: 0 1.5rem 1rem;
+    padding: 0.75rem;
+    background: transparent;
+    border: 1px solid rgba(138,126,110,0.4);
+    color: var(--stone);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.95rem;
+    font-style: italic;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: none;
+  }
+
+  .result-map-btn:hover {
+    border-color: var(--gold);
+    color: var(--ink);
+  }
+
+  .result-map-btn.visible {
+    display: block;
+  }
+
+  /* Cemetery map nav item */
+  .home-map-btn {
+    margin-top: 1.5rem;
+    background: transparent;
+    border: 1px solid rgba(201,168,76,0.3);
+    color: var(--stone);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.9rem;
+    font-style: italic;
+    padding: 0.6rem 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .home-map-btn:hover {
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+
+  /* ── PERMISSION MODAL ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(13,11,8,0.85);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.hidden { display: none; }
+
+  .modal-box {
+    background: #1a1410;
+    border: 1px solid rgba(201,168,76,0.3);
+    max-width: 380px;
+    width: 100%;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .modal-icon { font-size: 2.5rem; margin-bottom: 1rem; display: block; }
+
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    color: var(--parchment);
+    margin-bottom: 0.75rem;
+  }
+
+  .modal-body {
+    font-size: 0.95rem;
+    color: var(--stone);
+    line-height: 1.7;
+    margin-bottom: 1.5rem;
+    font-style: italic;
+  }
+
+  .modal-body strong {
+    color: var(--parchment);
+    font-style: normal;
+  }
+
+  .modal-divider {
+    width: 60px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 0 auto 1.5rem;
+  }
+
+  .modal-note {
+    font-size: 0.78rem;
+    color: rgba(138,126,110,0.6);
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+  }
+
+  .modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .modal-btn-allow {
+    padding: 0.9rem;
+    background: var(--gold);
+    border: none;
+    color: var(--ink);
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: background 0.2s;
+  }
+
+  .modal-btn-allow:hover { background: #d4b55a; }
+
+  .modal-btn-deny {
+    padding: 0.75rem;
+    background: transparent;
+    border: 1px solid rgba(138,126,110,0.3);
+    color: var(--stone);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .modal-btn-deny:hover {
+    border-color: var(--stone);
+    color: var(--parchment);
+  }
+
+  .modal-settings-link {
+    font-size: 0.78rem;
+    color: rgba(138,126,110,0.5);
+    margin-top: 0.5rem;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .modal-settings-link:hover { color: var(--stone); }
+
+  /* ── INSTALL BANNER ── */
+  .install-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #1a1410;
+    border-top: 1px solid rgba(201,168,76,0.3);
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    z-index: 1500;
+    transition: transform 0.3s ease;
+  }
+
+  .install-banner.hidden {
+    display: none;
+  }
+
+  .install-banner-text {
+    flex: 1;
+  }
+
+  .install-banner-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.95rem;
+    color: var(--parchment);
+  }
+
+  .install-banner-sub {
+    font-size: 0.78rem;
+    color: var(--stone);
+    font-style: italic;
+  }
+
+  .install-banner-btn {
+    background: var(--gold);
+    border: none;
+    color: var(--ink);
+    font-family: 'Playfair Display', serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .install-banner-dismiss {
+    background: none;
+    border: none;
+    color: var(--stone);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0.25rem;
+  }
+
+  /* iOS safe area padding */
+  @supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .result-actions {
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    }
+    .install-banner {
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--ink); }
+  ::-webkit-scrollbar-thumb { background: var(--stone); }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+
+<!-- ═══ HOME SCREEN ═══ -->
+<div id="home" class="screen active">
+  <div class="home-bg"></div>
+  <div class="home-border"></div>
+
+  <div class="logo-area">
+    <span class="logo-symbol">🪦</span>
+    <span class="logo-title">GraveStory</span>
+    <span class="logo-subtitle">every life deserves to be remembered</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <button class="scan-btn" onclick="showScreen('camera')">
+    ✦ Scan a Gravestone ✦
+  </button>
+
+  <p class="home-desc">
+    Photograph a gravestone. We'll uncover the story of the life it marks.
+  </p>
+
+  <button class="home-map-btn" onclick="openCemeteryMap()" id="home-map-btn" style="display:none;">
+    🗺️ View Cemetery Map
+  </button>
+
+  <p id="ios-install-hint" style="display:none;font-size:0.75rem;color:rgba(138,126,110,0.5);margin-top:1rem;font-style:italic;max-width:260px;line-height:1.6;">
+    To install: tap the Share button in Safari, then "Add to Home Screen"
+  </p>
+
+  <div class="saved-section">
+    <p class="saved-label">✦ Remembered Stories</p>
+    <div class="saved-list" id="saved-list">
+      <p class="empty-saved">Your saved stories will appear here</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CAMERA SCREEN ═══ -->
+<div id="camera" class="screen">
+  <button class="camera-back" onclick="showScreen('home')">← Back</button>
+
+  <h2 class="camera-title">Photograph the Stone</h2>
+  <p class="camera-hint">Frame the gravestone clearly for best results</p>
+
+  <div class="upload-zone">
+    <div class="upload-zone-inner" id="upload-inner">
+      <span class="upload-icon">📷</span>
+      <span class="upload-text">Tap to choose photo</span>
+      <span class="upload-sub">JPG, PNG, WEBP supported</span>
+      <div style="display:flex;gap:0.75rem;margin-top:0.75rem;">
+        <button onclick="event.stopPropagation();document.getElementById('camera-input').click()" 
+          style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.4);color:var(--gold);font-family:Crimson Pro,serif;font-size:0.85rem;padding:0.4rem 0.9rem;cursor:pointer;">
+          📷 Camera
+        </button>
+        <button onclick="event.stopPropagation();document.getElementById('file-input').click()" 
+          style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.4);color:var(--gold);font-family:Crimson Pro,serif;font-size:0.85rem;padding:0.4rem 0.9rem;cursor:pointer;">
+          🖼️ Gallery
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="file-input" accept="image/*" onchange="handleImageUpload(this, false)">
+<input type="file" id="camera-input" accept="image/*" capture="environment" onchange="handleImageUpload(this, true)" style="display:none">
+
+  <div class="camera-actions">
+    <button class="btn-secondary" onclick="showScreen('home')">Cancel</button>
+    <button class="btn-primary" id="analyze-btn" onclick="startAnalysis()" disabled>
+      Uncover the Story →
+    </button>
+  </div>
+
+  <div class="error-box" id="error-box"></div>
+</div>
+
+<!-- ═══ LOADING SCREEN ═══ -->
+<div id="loading" class="screen">
+  <span class="loading-symbol">🕯️</span>
+  <h2 class="loading-title">Researching this life…</h2>
+  <p class="loading-step" id="loading-step">Reading the gravestone…</p>
+  <div class="loading-dots">
+    <div class="loading-dot"></div>
+    <div class="loading-dot"></div>
+    <div class="loading-dot"></div>
+  </div>
+</div>
+
+<!-- ═══ RESULT SCREEN ═══ -->
+<div id="result" class="screen">
+  <div class="result-header">
+    <button class="result-back" onclick="showScreen('home')">← New Search</button>
+    <div class="result-image-container" id="result-image-container"></div>
+    <div class="result-name" id="result-name"></div>
+    <div class="result-dates" id="result-dates"></div>
+  </div>
+
+  <div class="result-body" id="result-body"></div>
+
+  <button class="result-map-btn" id="result-map-btn" onclick="openCemeteryMap()">
+    🗺️ View on Cemetery Map
+  </button>
+
+  <div class="result-actions">
+    <button class="action-btn action-save" id="save-btn" onclick="saveStory()">💾 Save</button>
+    <button class="action-btn action-share" onclick="shareStory()">↗ Share</button>
+    <button class="action-btn action-new" onclick="showScreen('camera')">+ New</button>
+  </div>
+</div>
+
+<!-- ═══ CEMETERY MAP SCREEN ═══ -->
+<div id="cemetery-map-screen" class="screen" style="position:relative;">
+  <div class="map-header">
+    <button class="map-header-back" onclick="showScreen('home')">← Back</button>
+    <div class="map-header-title">🗺️ Cemetery Map</div>
+    <button onclick="exportCemeteryData()" style="background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);font-size:0.75rem;padding:0.3rem 0.6rem;cursor:pointer;font-family:Crimson Pro,serif;">Export</button>
+  </div>
+  <div id="leaflet-map" style="position:relative;"></div>
+
+  <!-- Perimeter walk overlay — sits over the map during recording -->
+  <div id="perimeter-overlay">
+    <div id="perimeter-bar">
+      <div id="perimeter-status">🚶 Walk the cemetery boundary</div>
+      <div id="perimeter-point-count">0 points recorded</div>
+      <div id="perimeter-btn-row">
+        <button class="perimeter-btn perimeter-btn-cancel" onclick="cancelPerimeterWalk()">✕ Cancel</button>
+        <button class="perimeter-btn perimeter-btn-finish" onclick="finishPerimeterWalk()" id="perimeter-finish-btn" disabled>✓ Finish</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="map-footer">
+    <div class="map-cemetery-name" id="map-cemetery-name">📍 Cemetery</div>
+    <div class="map-grave-count" id="map-grave-count">0 graves mapped</div>
+    <div id="nearby-loading" style="display:none;font-size:0.8rem;color:var(--stone);font-style:italic;padding:0.5rem 0;">
+      🔍 Finding nearby cemeteries…
+    </div>
+    <div id="map-this-cemetery-btn" style="display:none;margin-top:0.75rem;">
+      <button onclick="startPerimeterWalk()" style="width:100%;padding:0.7rem;background:rgba(255,238,0,0.12);border:1px solid #ffee00;color:#ffee00;font-family:'Crimson Pro',serif;font-size:0.95rem;cursor:pointer;border-radius:4px;letter-spacing:0.05em;">
+        🚶 Map This Cemetery's Boundary
+      </button>
+      <div style="font-size:0.75rem;color:var(--stone);text-align:center;margin-top:0.3rem;font-style:italic;">
+        Walk the perimeter to draw the cemetery outline
+      </div>
+    </div>
+    <div class="map-graves-list" id="map-graves-list"></div>
+    <div id="nearby-section" style="display:none;margin-top:1rem;">
+      <div class="section-label" style="font-family:Playfair Display,serif;font-size:0.7rem;letter-spacing:0.2em;color:var(--stone);text-transform:uppercase;margin-bottom:0.75rem;">
+        ✦ Nearby Cemeteries
+      </div>
+      <div class="map-graves-list" id="nearby-cemetery-list"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══ INSTALL BANNER ═══ -->
+<div class="install-banner hidden" id="install-banner">
+  <div class="install-banner-text">
+    <div class="install-banner-title">🪦 Add GraveStory to Home Screen</div>
+    <div class="install-banner-sub">Works like a native app, always ready</div>
+  </div>
+  <button class="install-banner-btn" onclick="installPWA()">Install</button>
+  <button class="install-banner-dismiss" onclick="dismissInstallBanner()">✕</button>
+</div>
+
+<!-- ═══ LOCATION PERMISSION MODAL ═══ -->
+<div class="modal-overlay hidden" id="location-permission-modal">
+  <div class="modal-box">
+    <span class="modal-icon">📍</span>
+    <div class="modal-title">Location Permission</div>
+    <div class="modal-divider"></div>
+    <div class="modal-body">
+      GraveStory would like to read the <strong>GPS location embedded in your gravestone photos</strong> to help identify the cemetery and build your personal cemetery map.
+    </div>
+    <div class="modal-note">
+      Your location data stays on your device and is never uploaded or shared with anyone. It is only used to improve search accuracy and place pins on your personal cemetery map.
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn-allow" onclick="handleLocationPermission(true)">
+        ✦ Allow Location Access
+      </button>
+      <button class="modal-btn-deny" onclick="handleLocationPermission(false)">
+        Continue Without Location
+      </button>
+      <div class="modal-settings-link" onclick="showPrivacyInfo()">
+        How is my data used?
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PRIVACY INFO MODAL ═══ -->
+<div class="modal-overlay hidden" id="privacy-modal">
+  <div class="modal-box">
+    <span class="modal-icon">🔒</span>
+    <div class="modal-title">Your Privacy</div>
+    <div class="modal-divider"></div>
+    <div class="modal-body" style="text-align:left;">
+      <strong>What we collect:</strong><br>
+      GPS coordinates embedded in photos you scan.<br><br>
+      <strong>What we do with it:</strong><br>
+      Use it to identify the cemetery location and improve search results. Place a pin on your personal cemetery map.<br><br>
+      <strong>What we never do:</strong><br>
+      Upload your location to any server. Share it with third parties. Track your movements.<br><br>
+      <strong>Where it's stored:</strong><br>
+      Only on your device, in your browser's local storage. You can clear it any time.
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn-allow" onclick="closePrivacyInfo()">Got it</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────
+// API keys live server-side in the Cloudflare Worker proxy.
+// Update PROXY_BASE to your deployed Worker URL after running `wrangler deploy`.
+// Example: 'https://gravestory-proxy.YOUR-SUBDOMAIN.workers.dev'
+const PROXY_BASE = 'https://gravestory-proxy.YOUR-SUBDOMAIN.workers.dev';
+
+// ── SAFE JSON PARSER ─────────────────────────────────────────────
+function safeParseJSON(text, fallback) {
+  fallback = fallback || {};
+  try {
+    var clean = text.replace(/```json|```/gi, '').trim();
+    return JSON.parse(clean);
+  } catch(e1) {
+    try {
+      var match = text.match(/\{[\s\S]*\}/);
+      if (match) return JSON.parse(match[0]);
+    } catch(e2) {
+      try {
+        var clean2 = text.replace(/```json|```/gi, '').trim();
+        var lastBrace = clean2.lastIndexOf('}');
+        if (lastBrace > 0) return JSON.parse(clean2.substring(0, lastBrace + 1));
+      } catch(e3) {}
+    }
+  }
+  return fallback;
+}
+
+// ── STATE ────────────────────────────────────────────────────────
+let currentImage = null;
+let currentImageBase64 = null;
+let currentPhotoFile = null;
+let currentExifLocation = null;
+let currentStory = null;
+let userLocation = null;
+let savedStories = JSON.parse(localStorage.getItem('gravestories') || '[]');
+let locationPermission = localStorage.getItem('gs_location_permission'); // 'granted', 'denied', or null
+
+// ── NAVIGATION ───────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+  if (id === 'home') {
+    renderSavedList();
+    updateHomeMapButton();
+  }
+}
+
+// ── GEOLOCATION ─────────────────────────────────────────────────
+
+// Try to extract GPS from photo EXIF data first
+function getExifLocation(file) {
+  return new Promise((resolve) => {
+    if (!window.EXIF) { resolve(null); return; }
+    EXIF.getData(file, function() {
+      try {
+        const lat = EXIF.getTag(this, 'GPSLatitude');
+        const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+        const lng = EXIF.getTag(this, 'GPSLongitude');
+        const lngRef = EXIF.getTag(this, 'GPSLongitudeRef');
+        if (lat && lng) {
+          const latDec = convertDMSToDD(lat, latRef);
+          const lngDec = convertDMSToDD(lng, lngRef);
+          if (latDec && lngDec) {
+            console.log('📍 GPS from photo EXIF:', latDec, lngDec);
+            resolve({ lat: latDec, lng: lngDec, source: 'exif' });
+          } else resolve(null);
+        } else {
+          console.log('📍 No EXIF GPS data in photo');
+          resolve(null);
+        }
+      } catch(e) { resolve(null); }
+    });
+  });
+}
+
+// Convert degrees/minutes/seconds to decimal degrees
+function convertDMSToDD(dms, ref) {
+  if (!dms || dms.length < 3) return null;
+  const dd = dms[0] + dms[1]/60 + dms[2]/3600;
+  return (ref === 'S' || ref === 'W') ? -dd : dd;
+}
+
+// Fallback: get device GPS (only used if no EXIF and user is live-capturing)
+function getDeviceLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, source: 'device' }),
+      () => resolve(null),
+      { timeout: 5000 }
+    );
+  });
+}
+
+async function reverseGeocode(lat, lng) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
+    const data = await res.json();
+    const a = data.address;
+    const parts = [a.city || a.town || a.village || a.county, a.state, a.country].filter(Boolean);
+    return parts.join(', ');
+  } catch { return null; }
+}
+
+// Forward geocode a text location string to {lat, lng}
+async function forwardGeocode(locationStr, personName) {
+  if (!locationStr) return null;
+  const lower = locationStr.toLowerCase();
+
+  // Step 1 — find the cemetery/estate coordinates via Nominatim
+  const queries = [locationStr];
+
+  const nearMatch = locationStr.match(/^Cemetery (?:near|in or near) (.+)$/i);
+  if (nearMatch) {
+    queries.push(nearMatch[1] + ' cemetery');
+    queries.push(nearMatch[1]);
+  }
+  if (!lower.includes('tomb') && !lower.includes('grave') && !lower.includes('cemetery')) {
+    queries.push(locationStr + ' cemetery');
+  }
+  const parts = locationStr.split(',');
+  if (parts.length > 1) {
+    queries.push(parts.slice(1).join(',').trim() + ' cemetery');
+    queries.push(parts.slice(1).join(',').trim());
+  }
+
+  let cemeteryCoords = null;
+  for (const q of queries) {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data || data.length === 0) {
+        console.log('📍 Nominatim no results for:', q);
+        continue;
+      }
+      console.log('📍 Nominatim raw for', q, '→', data.map(r => `${r.class}/${r.type}: ${r.display_name}`));
+
+      // STRICT cemetery match — actual OSM cemetery/graveyard features only
+      const strictCemetery = data.find(r =>
+        (r.class === 'landuse' && r.type === 'cemetery') ||
+        (r.class === 'amenity' && r.type === 'grave_yard') ||
+        r.type === 'cemetery' || r.type === 'grave_yard'
+      );
+
+      // FUZZY cemetery match — display_name mentions cemetery/memorial/etc, but reject pure city/place results
+      const fuzzyCemetery = !strictCemetery ? data.find(r => {
+        const isPlace = r.class === 'place' || r.class === 'boundary';
+        if (isPlace) return false; // never accept a town/city as a cemetery
+        const dn = (r.display_name || '').toLowerCase();
+        return dn.includes('cemetery') || dn.includes('memorial park') ||
+               dn.includes('graveyard') || dn.includes('burial') || dn.includes('tomb');
+      }) : null;
+
+      const result = strictCemetery || fuzzyCemetery;
+      if (!result) {
+        console.log('📍 Nominatim returned only non-cemetery results for', q, '— skipping');
+        continue;
+      }
+      cemeteryCoords = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
+      console.log('📍 Cemetery coords:', result.display_name, cemeteryCoords, `(${strictCemetery ? 'strict' : 'fuzzy'})`);
+      break;
+    } catch { continue; }
+  }
+
+  if (!cemeteryCoords) return null;
+
+  // Step 2 — if we have a person's name, search Overpass for a named grave/memorial
+  // node within 500m of the cemetery center that matches the name
+  if (personName) {
+    // Extract all meaningful name tokens (ignore short words)
+    const nameTokens = personName.toLowerCase()
+      .split(/[\s,().]+/)
+      .filter(t => t.length > 2 && !['and','the','née','nee','von','van','de'].includes(t));
+
+    try {
+      // Broad query — get ALL named nodes inside the cemetery area
+      const overpassQuery = `
+        [out:json][timeout:15];
+        (
+          node[name](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
+          way[name](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
+        );
+        out center;
+      `;
+      const res = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(overpassQuery)
+      });
+      const data = await res.json();
+      if (data.elements && data.elements.length > 0) {
+        // Score each element by how many name tokens it contains
+        let bestMatch = null;
+        let bestScore = 0;
+        for (const el of data.elements) {
+          if (!el.tags || !el.tags.name) continue;
+          const elName = el.tags.name.toLowerCase();
+          const score = nameTokens.filter(t => elName.includes(t)).length;
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = el;
+          }
+        }
+        // Only use if at least one token matched
+        if (bestMatch && bestScore > 0) {
+          const lat = bestMatch.lat || bestMatch.center?.lat;
+          const lng = bestMatch.lon || bestMatch.center?.lon;
+          if (lat && lng) {
+            console.log('📍 Found named grave in OSM:', bestMatch.tags.name, 'score:', bestScore, lat, lng);
+            return { lat, lng };
+          }
+        }
+      }
+    } catch(e) {
+      console.log('Overpass named grave search failed:', e);
+    }
+  }
+
+  // Step 3 — fall back to cemetery center coords
+  return cemeteryCoords;
+}
+
+// ── IMAGE UPLOAD ─────────────────────────────────────────────────
+async function handleImageUpload(input, isLiveCamera = false) {
+  const file = input.files[0];
+  if (!file) return;
+
+  // Ask permission before reading GPS from photo
+  currentPhotoFile = file;
+  await new Promise(resolve => {
+    requestLocationPermission(async (allowed) => {
+      if (allowed) {
+        const exifCoords = await getExifLocation(file);
+        if (exifCoords) {
+          currentExifLocation = exifCoords;
+          console.log('📍 Will use EXIF GPS from photo for location search');
+        } else if (isLiveCamera) {
+          // Only use device GPS as fallback for live camera shots —
+          // gallery uploads could be from anywhere so device GPS would be wrong
+          console.log('📍 No EXIF GPS — using device GPS (live camera shot)');
+          const deviceGPS = await getDeviceLocation();
+          if (deviceGPS) {
+            currentExifLocation = deviceGPS;
+            console.log('📍 Got device GPS:', deviceGPS.lat, deviceGPS.lng);
+          } else {
+            currentExifLocation = null;
+            console.log('📍 No device GPS available');
+          }
+        } else {
+          currentExifLocation = null;
+          console.log('📍 No EXIF GPS — gallery upload, skipping device GPS');
+        }
+      } else {
+        currentExifLocation = null;
+        console.log('📍 Location permission denied by user');
+      }
+      resolve();
+    });
+  });
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    currentImage = e.target.result;
+    currentImageBase64 = e.target.result.split(',')[1];
+
+    const zone = document.querySelector('.upload-zone');
+    const inner = document.getElementById('upload-inner');
+
+    // Show preview
+    const existing = zone.querySelector('img');
+    if (existing) existing.remove();
+    const img = document.createElement('img');
+    img.src = currentImage;
+    zone.appendChild(img);
+    inner.style.display = 'none';
+
+    document.getElementById('analyze-btn').disabled = false;
+    document.getElementById('error-box').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── LOADING STEPS ────────────────────────────────────────────────
+const steps = [
+  'Reading the gravestone…',
+  'Detecting location…',
+  'Searching historical records…',
+  'Consulting genealogy archives…',
+  'Searching for obituaries…',
+  'Weaving the story together…',
+  'Almost ready…'
+];
+
+function cycleSteps() {
+  let i = 0;
+  return setInterval(() => {
+    const el = document.getElementById('loading-step');
+    el.style.opacity = 0;
+    setTimeout(() => {
+      i = Math.min(i + 1, steps.length - 1);
+      el.textContent = steps[i];
+      el.style.opacity = 1;
+    }, 300);
+  }, 2800);
+}
+
+// ── MAIN ANALYSIS ────────────────────────────────────────────────
+async function startAnalysis() {
+  if (!currentImageBase64) return;
+
+  showScreen('loading');
+  const stepInterval = cycleSteps();
+
+  try {
+    // 1. Get location — prefer EXIF from photo, fall back to device GPS
+    setStep(0);
+    let locationStr = null;
+    if (currentExifLocation) {
+      locationStr = await reverseGeocode(currentExifLocation.lat, currentExifLocation.lng);
+      console.log('📍 Reverse geocoded location:', locationStr);
+    } else {
+      console.log('📍 No GPS coordinates available — skipping location');
+    }
+    userLocation = locationStr;
+
+    // 2. Read gravestone with Gemini Vision
+    setStep(1);
+    const graveData = await readGravestone(currentImageBase64, locationStr);
+
+    // 3. Search web for more info
+    setStep(2);
+    const searchResults = await searchForPerson(graveData, locationStr);
+
+    // 4. Search WikiTree
+    setStep(3);
+    const wikiData = await searchWikiTree(graveData);
+
+    // 5. Generate full biography with Gemini
+    setStep(4);
+    const story = await generateBiography(graveData, searchResults, wikiData, locationStr);
+
+    clearInterval(stepInterval);
+    // Use GPS-derived location if available, otherwise fall back to location inferred by Gemini from research
+    const finalLocation = locationStr || story.location || null;
+    currentStory = { 
+      ...story, 
+      image: currentImage, 
+      location: finalLocation, 
+      timestamp: Date.now(),
+      gps: currentExifLocation ? { lat: currentExifLocation.lat, lng: currentExifLocation.lng } : null
+    };
+    renderResult(currentStory);
+    showScreen('result');
+
+  } catch (err) {
+    clearInterval(stepInterval);
+    showScreen('camera');
+    const errBox = document.getElementById('error-box');
+    errBox.textContent = 'Something went wrong: ' + (err.message || 'Please try again.');
+    errBox.style.display = 'block';
+  }
+}
+
+function setStep(i) {
+  const el = document.getElementById('loading-step');
+  if (el) el.textContent = steps[i];
+}
+
+// ── GEMINI: READ GRAVESTONE ──────────────────────────────────────
+async function readGravestone(base64, location) {
+  const locationHint = location ? `This gravestone is located near: ${location}.` : '';
+
+  const prompt = `You are an expert gravestone reader. Carefully examine this gravestone image and extract ALL visible text and symbols.
+
+${locationHint}
+
+Return ONLY a valid JSON object with these exact fields:
+{
+  "names": ["full name 1", "full name 2"],
+  "primary_name": "the main person's full name",
+  "birth_date": "date or year if visible",
+  "death_date": "date or year if visible",
+  "married_date": "if visible",
+  "inscription": "any quote, scripture, or epitaph text",
+  "symbols": ["list of symbols, emblems, or decorations"],
+  "family_name": "surname",
+  "notes": "any other text or observations"
+}
+
+If multiple people are on the stone, use the names array. Be precise about dates. Return only JSON.`;
+
+  const response = await fetch(
+    `${PROXY_BASE}/gemini/gemini-2.5-flash-lite`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: 'image/jpeg', data: base64 } }
+          ]
+        }],
+        generationConfig: { temperature: 0.1 }
+      })
+    }
+  );
+
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
+
+  const text = data.candidates[0].content.parts[0].text;
+  console.log('GRAVESTONE RAW:', text);
+  return safeParseJSON(text, {names:[], primary_name:'Unknown', birth_date:'', death_date:'', inscription:'', symbols:[], family_name:'Unknown', notes:''});
+}
+
+// ── TAVILY: WEB SEARCH ───────────────────────────────────────────
+async function searchForPerson(graveData, location) {
+  // Collect ALL names from the stone
+  const allNames = [];
+  if (graveData.names && graveData.names.length > 0) {
+    graveData.names.forEach(n => { if (n && n !== 'Unknown') allNames.push(n); });
+  } else if (graveData.primary_name && graveData.primary_name !== 'Unknown') {
+    allNames.push(graveData.primary_name);
+  }
+  if (allNames.length === 0 && graveData.family_name) allNames.push(graveData.family_name);
+  if (allNames.length === 0) return [];
+
+  const deathYear = graveData.death_date?.match(/\d{4}/)?.[0] || '';
+  const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0] || '';
+  const loc = location ? location.split(',').slice(0,2).map(s=>s.trim()).join(' ') : '';
+
+  // Build targeted queries for each person + targeted site searches
+  const queries = [];
+  // BURIAL-FIRST: explicit burial queries run first so they survive the slice(0,4) cap.
+  // Without this, generic obituary queries dominate and the model conflates death-place with burial-place.
+  allNames.slice(0, 3).forEach(name => {
+    queries.push(`"${name}" buried cemetery grave location`.trim());
+    queries.push(`site:findagrave.com "${name}" buried`.trim());
+  });
+  allNames.slice(0, 3).forEach(name => {
+    const yr = deathYear || birthYear;
+    queries.push(`site:findagrave.com "${name}" ${yr}`.trim());
+    queries.push(`site:legacy.com "${name}" obituary ${loc}`.trim());
+    queries.push(`"${name}" obituary ${yr} ${loc}`.trim());
+  });
+  // Add family history search
+  if (graveData.family_name) {
+    queries.push(`site:newspapers.com "${graveData.family_name}" ${loc} ${deathYear}`.trim());
+  }
+  // Add Atlas Obscura search for cemetery/location historical context
+  if (loc) {
+    queries.push(`site:atlasobscura.com ${loc} cemetery history`.trim());
+    queries.push(`historic cemetery ${loc} history abandoned`.trim());
+  }
+
+  const results = [];
+  const seen = new Set();
+
+  console.log('🔎 TAVILY queries planned:', queries.slice(0, 4));
+
+  for (const query of queries.slice(0, 4)) {
+    try {
+      const res = await fetch(`${PROXY_BASE}/tavily`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query,
+          search_depth: 'basic',
+          max_results: 3,
+          include_answer: false
+        })
+      });
+      const data = await res.json();
+      console.log(`🔎 TAVILY "${query}" →`, data.results?.length || 0, 'results', data.results?.map(r => r.title));
+      if (data.results) {
+        data.results.forEach(r => {
+          if (!seen.has(r.url)) {
+            seen.add(r.url);
+            results.push({
+              title: r.title,
+              url: r.url,
+              content: r.content?.slice(0, 1000)
+            });
+          }
+        });
+      }
+    } catch (e) { console.log('🔎 TAVILY query failed:', query, e); }
+  }
+
+  console.log('🔎 TAVILY final aggregated results:', results);
+  return results;
+}
+
+// ── WIKITREE: GENEALOGY SEARCH ───────────────────────────────────
+async function searchWikiTree(graveData) {
+  const name = graveData.primary_name || graveData.names?.[0];
+  if (!name) return null;
+
+  const parts = name.trim().split(' ');
+  const firstName = parts[0];
+  const lastName = parts[parts.length - 1];
+  const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0] || '';
+
+  // WikiTree requires server-side proxy due to CORS - skipping for local use
+  return null;
+}
+
+// ── GEMINI: GENERATE BIOGRAPHY ───────────────────────────────────
+async function generateBiography(graveData, searchResults, wikiData, location) {
+  const searchContext = searchResults.length > 0
+    ? 'Web research found:\n' + searchResults.map(r => `- ${r.title}: ${r.content}`).join('\n')
+    : 'No additional web results found.';
+
+  const wikiContext = wikiData
+    ? `WikiTree genealogy record found: ${JSON.stringify(wikiData)}`
+    : 'No WikiTree record found.';
+
+  const locationContext = location ? `Cemetery location: ${location}` : 'Cemetery location: unknown — infer from research results if possible.';
+
+  const prompt = `You are GraveStory AI, a compassionate and thoughtful historian. Using the gravestone data and research below, write a respectful, moving life history for this person.
+
+GRAVESTONE DATA:
+${JSON.stringify(graveData, null, 2)}
+
+${locationContext}
+
+${searchContext}
+
+${wikiContext}
+
+Write a rich, 500-word biography that:
+- Opens with the full name(s), birth and death dates, and a vivid sense of the era they lived in
+- Paints a picture of their world — historical events, cultural shifts, and local context of their lifetime
+- Weaves in known details about family, marriage, faith, community, or relationships
+- Deeply analyzes symbols on the stone — religious imagery (crosses, Divine Mercy, etc.), military emblems, fraternal symbols, and floral carvings all reveal character and belief
+- Considers surname origin and cultural heritage as context (Italian, Irish, Polish, German surnames each carry rich histories)
+- When web research is limited, draws richly on historical context and what the stone's symbols and inscription reveal about who they were
+- Reflects on the inscription or epitaph with depth and compassion
+- If multiple people share the stone, weaves their stories together meaningfully
+- Closes with a warm, dignified reflection on their shared legacy
+- If an inscription seems unusual or sad, approaches it with extra warmth and humanity
+- Never refuses — always produces a full, meaningful biography regardless of available sources
+
+For the location field: this MUST be the BURIAL location — where the body lies — NOT where the person was born, lived, died, or was famous. These are often different places. For example: Bruce Lee died in Hong Kong but is buried at Lake View Cemetery in Seattle, Washington. Marilyn Monroe died in Los Angeles and is buried at Westwood Village Memorial Park in Los Angeles — same city. Napoleon died on St. Helena but is buried at Les Invalides in Paris. Always read the research results carefully for words like "buried", "interred", "laid to rest", "grave at", "final resting place", or a cemetery name — these signal burial location. Words like "died in", "born in", "passed away in", or "lived in" are NOT burial location signals. IMPORTANT: if this person is a well-known historical or public figure whose burial place is common knowledge, trust your own knowledge of where they are buried OVER ambiguous search snippets that emphasize their birthplace or deathplace. Search results often over-represent where someone lived or died because that's where most articles about them are written. If a GPS location was provided above, use it exactly. Format as: "Cemetery Name, City, State/Country" (e.g. "St. Casimir Cemetery, Baldwin, Pennsylvania" or "Lake View Cemetery, Seattle, Washington"). For famous figures buried on estates, use the specific tomb/vault name. If the research clearly identifies a burial cemetery, use it. If only a city/region is mentioned as burial place, format as "Cemetery near City, State". If burial location cannot be determined from research, leave it empty — do NOT substitute the death or birth place.
+
+Return ONLY valid JSON with these exact fields:
+{
+  "name": "full name",
+  "dates": "born [date] — died [date]",
+  "biography": "2-3 paragraph biography as a single string with \\n\\n between paragraphs",
+  "sources": ["source 1 description", "source 2 description"],
+  "source_urls": ["url1 or empty string", "url2 or empty string"],
+  "location": "Cemetery Name, City, State — as specific as possible, empty string if unknown"
+}`;
+
+  const response = await fetch(
+    `${PROXY_BASE}/gemini/gemini-2.5-flash`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 8000 }
+      })
+    }
+  );
+
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
+
+  const text = data.candidates[0].content.parts[0].text;
+  console.log('BIOGRAPHY RAW:', text);
+  const parsed = safeParseJSON(text, null);
+  if (parsed && parsed.biography) return parsed;
+  // Build basic story from gravestone data if AI response failed
+  return {
+    name: graveData.primary_name || graveData.names?.[0] || 'Unknown',
+    dates: (graveData.birth_date && graveData.death_date) ? 'born ' + graveData.birth_date + ' — died ' + graveData.death_date : '',
+    biography: 'This stone marks the life of ' + (graveData.primary_name || graveData.names?.[0] || 'an individual') + 
+      (graveData.birth_date ? ', born ' + graveData.birth_date : '') + 
+      (graveData.death_date ? ' and passed ' + graveData.death_date : '') + 
+      '. ' + (graveData.inscription ? 'Their stone bears the words: "' + graveData.inscription + '".' : '') +
+      ' Though we could not gather more details at this time, every life leaves an indelible mark on the world.',
+    sources: ['Gravestone inscription (primary source)'],
+    source_urls: ['']
+  };
+}
+
+// ── RENDER RESULT ────────────────────────────────────────────────
+function renderResult(story) {
+  // Header image
+  const imgContainer = document.getElementById('result-image-container');
+  if (story.image) {
+    imgContainer.innerHTML = `<img src="${story.image}" alt="Gravestone">`;
+    imgContainer.style.display = 'block';
+  } else {
+    imgContainer.style.display = 'none';
+  }
+
+  document.getElementById('result-name').textContent = story.name || 'Unknown';
+  document.getElementById('result-dates').textContent = story.dates || '';
+
+  // Body
+  const body = document.getElementById('result-body');
+  body.innerHTML = '';
+
+  // Location tag — show ? indicator when location is approximate/uncertain
+  if (story.location) {
+    const isUncertain = !story.gps && (
+      story.location.toLowerCase().includes('near ') ||
+      story.location.toLowerCase().includes('in or near') ||
+      story.location.toLowerCase().startsWith('cemetery near') ||
+      story.location.toLowerCase().startsWith('grave near')
+    );
+    const locTag = document.createElement('div');
+    locTag.className = 'location-tag';
+    locTag.innerHTML = isUncertain
+      ? `📍 ${story.location} <span title="Approximate location — no GPS data" style="display:inline-flex;align-items:center;justify-content:center;width:1rem;height:1rem;border-radius:50%;background:rgba(138,126,110,0.3);color:var(--stone);font-size:0.65rem;font-style:normal;cursor:help;margin-left:0.2rem;">?</span>`
+      : `📍 ${story.location}`;
+    body.appendChild(locTag);
+  }
+
+  // Biography
+  const bioSection = document.createElement('div');
+  bioSection.className = 'result-section';
+  const bioLabel = document.createElement('div');
+  bioLabel.className = 'section-label';
+  bioLabel.textContent = 'Life Story';
+  const bioText = document.createElement('div');
+  bioText.className = 'biography-text';
+  const paragraphs = (story.biography || '').split('\n\n');
+  bioText.innerHTML = paragraphs.map(p => `<p>${p}</p>`).join('');
+  bioSection.appendChild(bioLabel);
+  bioSection.appendChild(bioText);
+  body.appendChild(bioSection);
+
+  // Sources
+  if (story.sources?.length > 0) {
+    const srcSection = document.createElement('div');
+    srcSection.className = 'result-section';
+    const srcLabel = document.createElement('div');
+    srcLabel.className = 'section-label';
+    srcLabel.textContent = 'Sources & Research';
+    const srcList = document.createElement('div');
+    srcList.className = 'sources-list';
+    story.sources.forEach((src, i) => {
+      const item = document.createElement('div');
+      item.className = 'source-item';
+      const url = story.source_urls?.[i];
+      if (url && url.startsWith('http')) {
+        item.innerHTML = `<a href="${url}" target="_blank">${src}</a>`;
+      } else {
+        item.textContent = src;
+      }
+      srcList.appendChild(item);
+    });
+    srcSection.appendChild(srcLabel);
+    srcSection.appendChild(srcList);
+    body.appendChild(srcSection);
+  }
+
+  // Show map button if GPS or text location available
+  const mapBtn = document.getElementById('result-map-btn');
+  if (mapBtn) {
+    if (story.gps || story.location) {
+      mapBtn.classList.add('visible');
+    } else {
+      mapBtn.classList.remove('visible');
+    }
+  }
+
+  // Reset save button
+  const saveBtn = document.getElementById('save-btn');
+  saveBtn.textContent = '💾 Save';
+  saveBtn.className = 'action-btn action-save';
+}
+
+// ── SAVE STORY ───────────────────────────────────────────────────
+function saveStory() {
+  if (!currentStory) return;
+  savedStories.unshift(currentStory);
+  if (savedStories.length > 20) savedStories = savedStories.slice(0, 20);
+  localStorage.setItem('gravestories', JSON.stringify(savedStories));
+  updateHomeMapButton();
+
+  const btn = document.getElementById('save-btn');
+  btn.textContent = '✓ Saved';
+  btn.className = 'action-btn action-save saved';
+}
+
+// ── SHARE STORY ──────────────────────────────────────────────────
+async function shareStory() {
+  if (!currentStory) return;
+  const text = `${currentStory.name}\n${currentStory.dates}\n\n${currentStory.biography?.slice(0, 300)}...\n\nShared from GraveStory`;
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: `GraveStory: ${currentStory.name}`, text });
+    } catch (e) { copyToClipboard(text); }
+  } else {
+    copyToClipboard(text);
+  }
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Story copied to clipboard!');
+  }).catch(() => {
+    alert('Could not copy — try selecting and copying the text manually.');
+  });
+}
+
+// ── SAVED STORIES ────────────────────────────────────────────────
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+function isInStandaloneMode() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+}
+
+function checkIOSInstallHint() {
+  const hint = document.getElementById('ios-install-hint');
+  if (!hint) return;
+  // Show hint on iOS Safari if not already installed as PWA
+  if (isIOS() && !isInStandaloneMode()) {
+    hint.style.display = 'block';
+  }
+}
+
+function renderSavedList() {
+  const list = document.getElementById('saved-list');
+  if (savedStories.length === 0) {
+    list.innerHTML = '<p class="empty-saved">Your saved stories will appear here</p>';
+    return;
+  }
+
+  list.innerHTML = savedStories.slice(0, 5).map((s, i) => `
+    <div class="saved-card" style="display:flex;align-items:center;gap:0.5rem;">
+      <div style="flex:1;min-width:0;cursor:pointer;" onclick="loadSaved(${i})">
+        <div class="saved-card-name">${s.name || 'Unknown'}</div>
+        <div class="saved-card-date">${s.dates || ''}</div>
+      </div>
+      <span style="color:var(--gold);opacity:0.5;cursor:pointer;" onclick="loadSaved(${i})">→</span>
+      <button onclick="deleteSaved(event, ${i})" title="Delete story"
+        style="background:none;border:none;color:rgba(139,58,42,0.6);font-size:1.1rem;cursor:pointer;padding:0.25rem 0.4rem;flex-shrink:0;line-height:1;border-radius:3px;"
+        onmouseover="this.style.color='#8b3a2a';this.style.background='rgba(139,58,42,0.1)'"
+        onmouseout="this.style.color='rgba(139,58,42,0.6)';this.style.background='none'">✕</button>
+    </div>
+  `).join('');
+}
+
+function loadSaved(index) {
+  currentStory = savedStories[index];
+  renderResult(currentStory);
+  showScreen('result');
+}
+
+function deleteSaved(event, index) {
+  event.stopPropagation(); // prevent card click
+  const story = savedStories[index];
+  if (!confirm(`Delete story for ${story.name || 'this person'}?`)) return;
+  savedStories.splice(index, 1);
+  localStorage.setItem('gravestories', JSON.stringify(savedStories));
+  renderSavedList();
+  updateHomeMapButton();
+}
+
+// ── RESET CAMERA ─────────────────────────────────────────────────
+function resetCamera() {
+  currentImage = null;
+  currentImageBase64 = null;
+  currentPhotoFile = null;
+  currentExifLocation = null;
+  const zone = document.querySelector('.upload-zone');
+  const inner = document.getElementById('upload-inner');
+  const existing = zone.querySelector('img');
+  if (existing) existing.remove();
+  inner.style.display = 'flex';
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('file-input').value = '';
+  document.getElementById('camera-input').value = '';
+  document.getElementById('error-box').style.display = 'none';
+}
+
+// Override showScreen to reset camera when navigating to it
+const _origShow = showScreen;
+window.showScreen = function(id) {
+  if (id === 'camera') resetCamera();
+  _origShow(id);
+};
+
+// ── LOCATION PERMISSION ──────────────────────────────────────────
+
+function requestLocationPermission(callback) {
+  // If already decided, respect the saved preference
+  if (locationPermission === 'granted') { callback(true); return; }
+  if (locationPermission === 'denied') { callback(false); return; }
+  // First time — show the modal
+  window._locationPermissionCallback = callback;
+  document.getElementById('location-permission-modal').classList.remove('hidden');
+}
+
+function handleLocationPermission(allowed) {
+  document.getElementById('location-permission-modal').classList.add('hidden');
+  locationPermission = allowed ? 'granted' : 'denied';
+  localStorage.setItem('gs_location_permission', locationPermission);
+  if (window._locationPermissionCallback) {
+    window._locationPermissionCallback(allowed);
+    window._locationPermissionCallback = null;
+  }
+}
+
+function showPrivacyInfo() {
+  document.getElementById('privacy-modal').classList.remove('hidden');
+}
+
+function closePrivacyInfo() {
+  document.getElementById('privacy-modal').classList.add('hidden');
+}
+
+function resetLocationPermission() {
+  locationPermission = null;
+  localStorage.removeItem('gs_location_permission');
+}
+
+// ── PWA SERVICE WORKER ───────────────────────────────────────────
+// Only register service worker when hosted on https:// (not local files)
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  const swCode = `
+    const CACHE = 'gravestory-v3';
+    const TILE_CACHE = 'gravestory-tiles-v1';
+    const OFFLINE_URLS = ['/'];
+    self.addEventListener('install', e => {
+      e.waitUntil(
+        caches.open(CACHE).then(c => c.addAll(OFFLINE_URLS))
+      );
+      self.skipWaiting();
+    });
+    self.addEventListener('activate', e => {
+      e.waitUntil(
+        caches.keys().then(keys =>
+          Promise.all(keys.filter(k => k !== CACHE && k !== TILE_CACHE).map(k => caches.delete(k)))
+        )
+      );
+      self.clients.claim();
+    });
+    self.addEventListener('fetch', e => {
+      if (e.request.method !== 'GET') return;
+      const url = e.request.url;
+      // CACHE-FIRST for map tiles — tiles never change, so cache hits should win immediately.
+      // This eliminates pop-in and flicker during zoom/pan because tiles render from disk, not network.
+      const isTile = url.includes('tile.openstreetmap.org') || url.includes('/tile/');
+      if (isTile) {
+        e.respondWith(
+          caches.open(TILE_CACHE).then(cache =>
+            cache.match(e.request).then(cached => {
+              if (cached) return cached;
+              return fetch(e.request).then(r => {
+                if (r.ok) cache.put(e.request, r.clone());
+                return r;
+              });
+            })
+          )
+        );
+        return;
+      }
+      // NETWORK-FIRST for everything else — keep app fresh, fall back to cache offline.
+      e.respondWith(
+        fetch(e.request)
+          .then(r => {
+            const clone = r.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone));
+            return r;
+          })
+          .catch(() => caches.match(e.request))
+      );
+    });
+  `;
+  const blob = new Blob([swCode], { type: 'application/javascript' });
+  const swUrl = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl)
+    .then(() => console.log('✅ GraveStory PWA ready'))
+    .catch(err => console.log('SW skipped:', err));
+}
+
+// ── ADD TO HOME SCREEN PROMPT ─────────────────────────────────────
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  // Show install banner after a short delay
+  setTimeout(showInstallBanner, 3000);
+});
+
+function showInstallBanner() {
+  if (!deferredPrompt) return;
+  const banner = document.getElementById('install-banner');
+  if (banner) banner.classList.remove('hidden');
+}
+
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(choice => {
+    deferredPrompt = null;
+    document.getElementById('install-banner').classList.add('hidden');
+  });
+}
+
+function dismissInstallBanner() {
+  const banner = document.getElementById('install-banner');
+  if (banner) banner.classList.add('hidden');
+  deferredPrompt = null;
+}
+
+// ── INIT ─────────────────────────────────────────────────────────
+renderSavedList();
+updateHomeMapButton();
+checkIOSInstallHint();
+// ── CEMETERY MAP ─────────────────────────────────────────────────
+
+let leafletMap = null;
+let mapMarkers = [];
+
+// Group graves into cemeteries by proximity (within ~500 meters)
+function groupGravesByCemetery(stories) {
+  const cemeteries = [];
+  const storiesWithGPS = stories.filter(s => s.gps);
+
+  storiesWithGPS.forEach(story => {
+    let added = false;
+    for (const cem of cemeteries) {
+      const dist = getDistanceMeters(
+        story.gps.lat, story.gps.lng,
+        cem.centerLat, cem.centerLng
+      );
+      if (dist < 500) {
+        cem.graves.push(story);
+        // Recalculate center
+        cem.centerLat = cem.graves.reduce((s,g) => s + g.gps.lat, 0) / cem.graves.length;
+        cem.centerLng = cem.graves.reduce((s,g) => s + g.gps.lng, 0) / cem.graves.length;
+        added = true;
+        break;
+      }
+    }
+    if (!added) {
+      cemeteries.push({
+        id: Date.now() + Math.random(),
+        centerLat: story.gps.lat,
+        centerLng: story.gps.lng,
+        graves: [story]
+      });
+    }
+  });
+  return cemeteries;
+}
+
+// Haversine distance in meters between two GPS points
+function getDistanceMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// Open cemetery map screen
+function openCemeteryMap() {
+  showScreen('cemetery-map-screen');
+  // Give the screen time to fully paint before Leaflet calculates dimensions
+  setTimeout(async () => {
+    await initCemeteryMap();
+    // Force Leaflet to recalculate size after tiles render
+    if (leafletMap) {
+      setTimeout(() => leafletMap.invalidateSize(), 200);
+    }
+  }, 150);
+}
+
+// Initialize or refresh the Leaflet map
+async function initCemeteryMap() {
+  // Also include current unsaved story
+  const allStories = [...savedStories];
+  if (currentStory && !savedStories.find(s => s.timestamp === currentStory.timestamp)) {
+    allStories.unshift(currentStory);
+  }
+
+  // Stories with real GPS coords
+  let mapped = allStories.filter(s => s.gps);
+
+  // Stories with only text location — geocode them to get coords
+  const textOnly = allStories.filter(s => !s.gps && s.location);
+  if (textOnly.length > 0) {
+    document.getElementById('map-cemetery-name').textContent = '📍 Locating…';
+    for (const story of textOnly) {
+      const coords = await forwardGeocode(story.location, story.name);
+      if (coords) {
+        // Attach geocoded coords temporarily (not saved to localStorage)
+        story._geocodedGps = coords;
+        mapped.push({ ...story, gps: coords });
+      }
+    }
+  }
+
+  if (mapped.length === 0) {
+    document.getElementById('map-cemetery-name').textContent = '📍 No location data yet';
+    document.getElementById('map-grave-count').textContent = 'Scan gravestones on-site to build your map';
+    renderLeafletMap(39.5, -98.35, 4, []);
+    tryShowNearbyCemeteries(null);
+    return;
+  }
+
+  // Group into cemeteries
+  const cemeteries = groupGravesByCemetery(mapped);
+  const largest = cemeteries.sort((a,b) => b.graves.length - a.graves.length)[0];
+
+  // Update footer
+  const locationName = largest.graves[0].location || 'Unknown Location';
+  document.getElementById('map-cemetery-name').textContent = '📍 ' + locationName;
+  document.getElementById('map-grave-count').textContent =
+    mapped.length + ' grave' + (mapped.length !== 1 ? 's' : '') + ' mapped across ' +
+    cemeteries.length + ' location' + (cemeteries.length !== 1 ? 's' : '');
+
+  // Render graves list — with fly-to and view story buttons
+  const list = document.getElementById('map-graves-list');
+  list.innerHTML = mapped.map((s) => {
+    // Find index in savedStories so we can navigate to it
+    const savedIdx = savedStories.findIndex(saved => saved.timestamp === s.timestamp);
+    const viewBtn = savedIdx >= 0
+      ? `<button onclick="viewStoryFromMap(${savedIdx})" title="Read story"
+           style="background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);font-size:0.72rem;padding:0.2rem 0.5rem;cursor:pointer;border-radius:3px;white-space:nowrap;font-family:'Crimson Pro',serif;">
+           📖 Story
+         </button>`
+      : '';
+    return `
+      <div class="map-grave-item" style="display:flex;align-items:center;gap:0.5rem;">
+        <div style="flex:1;min-width:0;cursor:pointer;" onclick="flyToGrave(${s.gps.lat}, ${s.gps.lng})">
+          <div class="map-grave-item-name">${s.name || 'Unknown'}</div>
+          <div class="map-grave-item-dates">${s.dates || ''}</div>
+        </div>
+        ${viewBtn}
+      </div>
+    `;
+  }).join('');
+
+  renderLeafletMap(largest.centerLat, largest.centerLng, 18, mapped);
+
+  // After map loads, fetch nearby cemeteries from OpenStreetMap
+  tryShowNearbyCemeteries({ lat: largest.centerLat, lng: largest.centerLng });
+}
+
+// ── CEMETERY BOUNDARY STORAGE KEY ───────────────────────────────
+function cemBoundaryKey(lat, lng) {
+  // Round to ~100m grid to group nearby GPS points as same cemetery
+  return 'gs_boundary_' + Math.round(lat * 1000) + '_' + Math.round(lng * 1000);
+}
+
+function saveCemeteryBoundary(lat, lng, polygonPoints) {
+  const key = cemBoundaryKey(lat, lng);
+  localStorage.setItem(key, JSON.stringify(polygonPoints));
+  console.log('📐 Saved user-drawn boundary for', key);
+}
+
+function loadCemeteryBoundary(lat, lng) {
+  const key = cemBoundaryKey(lat, lng);
+  const saved = localStorage.getItem(key);
+  return saved ? JSON.parse(saved) : null;
+}
+
+// ── FETCH OSM CEMETERY OR ESTATE BOUNDARY POLYGON ───────────────
+async function fetchOSMCemeteryBoundary(lat, lng) {
+  // Pass 1 — look for a cemetery boundary right at this location
+  const cemeteryQuery = `
+    [out:json][timeout:10];
+    (
+      way[landuse=cemetery](around:200,${lat},${lng});
+      way[amenity=grave_yard](around:200,${lat},${lng});
+      relation[landuse=cemetery](around:200,${lat},${lng});
+      relation[amenity=grave_yard](around:200,${lat},${lng});
+    );
+    out geom;
+  `;
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query = cemeteryQuery)
+    });
+    const data = await res.json();
+    const way = data.elements && data.elements.find(el => el.geometry && el.geometry.length > 2);
+    if (way) return way.geometry.map(pt => [pt.lat, pt.lon]);
+  } catch(e) {
+    console.log('OSM cemetery boundary fetch failed:', e);
+  }
+
+  // Pass 2 — no cemetery boundary found; look for estate/property/historic site boundary
+  // This covers graves on private estates, historic plantations, national monuments, etc.
+  const estateQuery = `
+    [out:json][timeout:10];
+    (
+      way[historic=estate](around:500,${lat},${lng});
+      way[historic=manor](around:500,${lat},${lng});
+      way[historic=farm](around:500,${lat},${lng});
+      way[boundary=historic](around:500,${lat},${lng});
+      way[tourism=attraction][boundary](around:500,${lat},${lng});
+      way[leisure=park][name](around:500,${lat},${lng});
+      way[landuse=grass][name](around:500,${lat},${lng});
+      relation[historic=estate](around:500,${lat},${lng});
+      relation[boundary=historic](around:500,${lat},${lng});
+      relation[tourism=attraction](around:500,${lat},${lng});
+      relation[leisure=park](around:500,${lat},${lng});
+    );
+    out geom;
+  `;
+  try {
+    const res2 = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(estateQuery)
+    });
+    const data2 = await res2.json();
+    if (!data2.elements || data2.elements.length === 0) return null;
+
+    // Pick the smallest enclosing polygon — avoids huge park boundaries swallowing the grave
+    const candidates = data2.elements.filter(el => el.geometry && el.geometry.length > 2);
+    if (candidates.length === 0) return null;
+
+    // Score by how well the polygon contains the grave point and how compact it is
+    const scored = candidates.map(el => {
+      const pts = el.geometry.map(pt => [pt.lat, pt.lon]);
+      const lats = pts.map(p => p[0]);
+      const lngs = pts.map(p => p[1]);
+      const area = (Math.max(...lats) - Math.min(...lats)) * (Math.max(...lngs) - Math.min(...lngs));
+      const containsGrave = lat >= Math.min(...lats) && lat <= Math.max(...lats) &&
+                            lng >= Math.min(...lngs) && lng <= Math.max(...lngs);
+      return { el, pts, area, containsGrave };
+    });
+
+    // Prefer polygons that actually contain the grave point, then smallest area
+    const containing = scored.filter(s => s.containsGrave);
+    const pool = containing.length > 0 ? containing : scored;
+    pool.sort((a, b) => a.area - b.area);
+
+    return pool[0].pts;
+  } catch(e) {
+    console.log('OSM estate boundary fetch failed:', e);
+    return null;
+  }
+}
+
+// ── RENDER MAP WITH BOUNDARY ─────────────────────────────────────
+async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
+  // Destroy existing map if present
+  if (leafletMap) {
+    leafletMap.remove();
+    leafletMap = null;
+    mapMarkers = [];
+  }
+
+  leafletMap = L.map('leaflet-map').setView([centerLat, centerLng], zoom);
+
+  // OpenStreetMap tiles — free, no API key
+  // Performance tuning:
+  // - subdomains a/b/c lets the browser fetch tiles in parallel from 3 hosts instead of 1
+  // - keepBuffer:4 keeps adjacent off-screen tiles cached in DOM so pan/zoom doesn't refetch
+  // - updateWhenZooming:false defers tile rendering until zoom animation completes (no flicker)
+  // - updateWhenIdle:true batches updates for smoother feel
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 21,
+    subdomains: 'abc',
+    keepBuffer: 4,
+    updateWhenZooming: false,
+    updateWhenIdle: true,
+    crossOrigin: true
+  }).addTo(leafletMap);
+
+  // Custom grave marker icon
+  const graveIcon = L.divIcon({
+    html: '<div style="font-size:1.4rem;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5))">🪦</div>',
+    className: '',
+    iconSize: [24, 24],
+    iconAnchor: [12, 24],
+    popupAnchor: [0, -24]
+  });
+
+  // Add a marker for each grave
+  graves.forEach(story => {
+    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: graveIcon })
+      .addTo(leafletMap)
+      .bindPopup(`
+        <div style="font-family:'Playfair Display',serif;min-width:150px;">
+          <strong>${story.name || 'Unknown'}</strong><br>
+          <em style="font-size:0.85rem;color:#666">${story.dates || ''}</em><br>
+          <small style="color:#888">${story.location || ''}</small>
+        </div>
+      `);
+    mapMarkers.push(marker);
+  });
+
+  // Try to show a boundary for this cemetery location
+  if (graves.length > 0) {
+    await loadAndDrawBoundary(centerLat, centerLng);
+  }
+
+  // If multiple graves with no boundary yet, fit to grave markers
+  if (graves.length > 1) {
+    const group = L.featureGroup(mapMarkers);
+    const bounds = group.getBounds().pad(0.2);
+    leafletMap.fitBounds(bounds);
+  }
+}
+
+let currentBoundaryLayer = null;
+
+async function loadAndDrawBoundary(lat, lng) {
+  // 1. Check for user-drawn boundary first
+  const userBoundary = loadCemeteryBoundary(lat, lng);
+  if (userBoundary) {
+    drawBoundary(userBoundary, 'user');
+    fitMapToBoundary(userBoundary);
+    hideMayThisCemeteryBtn();
+    return;
+  }
+
+  // 2. Try OSM boundary
+  const osmBoundary = await fetchOSMCemeteryBoundary(lat, lng);
+  if (osmBoundary) {
+    drawBoundary(osmBoundary, 'osm');
+    fitMapToBoundary(osmBoundary);
+    hideMayThisCemeteryBtn();
+    return;
+  }
+
+  // 3. No boundary found — tight zoom + show "Map this Cemetery" button
+  leafletMap.setView([lat, lng], 18);
+  showMapThisCemeteryBtn();
+}
+
+function drawBoundary(points, type) {
+  if (currentBoundaryLayer) {
+    leafletMap.removeLayer(currentBoundaryLayer);
+    currentBoundaryLayer = null;
+  }
+  // dark gold for OSM-sourced, bright yellow for user-drawn
+  const color = type === 'user' ? '#ffee00' : '#a07830';
+  const weight = type === 'user' ? 2.5 : 2;
+  currentBoundaryLayer = L.polygon(points, {
+    color: color,
+    weight: weight,
+    fillColor: color,
+    fillOpacity: 0.06,
+    dashArray: type === 'user' ? '6,4' : null
+  }).addTo(leafletMap);
+}
+
+function fitMapToBoundary(points) {
+  if (!leafletMap || !points || points.length === 0) return;
+  const bounds = L.latLngBounds(points);
+  leafletMap.fitBounds(bounds, { padding: [20, 20] });
+}
+
+function showMapThisCemeteryBtn() {
+  const btn = document.getElementById('map-this-cemetery-btn');
+  if (btn) btn.style.display = 'block';
+}
+function hideMayThisCemeteryBtn() {
+  const btn = document.getElementById('map-this-cemetery-btn');
+  if (btn) btn.style.display = 'none';
+}
+
+// ── PERIMETER WALK ───────────────────────────────────────────────
+let perimeterWatchId = null;
+let perimeterPoints = [];
+let perimeterPolyline = null;
+let perimeterCenterLat = null;
+let perimeterCenterLng = null;
+
+function startPerimeterWalk() {
+  if (!navigator.geolocation) {
+    alert('GPS not available on this device.');
+    return;
+  }
+  perimeterPoints = [];
+  perimeterPolyline = null;
+
+  // Store cemetery center to save boundary against correct key
+  const mapped = savedStories.filter(s => s.gps);
+  if (mapped.length > 0) {
+    perimeterCenterLat = mapped[0].gps.lat;
+    perimeterCenterLng = mapped[0].gps.lng;
+  }
+
+  // Show overlay
+  const overlay = document.getElementById('perimeter-overlay');
+  overlay.classList.add('active');
+  updatePerimeterStatus('🚶 Start walking the boundary…', 0);
+
+  // Begin watching GPS
+  perimeterWatchId = navigator.geolocation.watchPosition(
+    onPerimeterGPS,
+    (err) => console.log('Perimeter GPS error:', err),
+    { enableHighAccuracy: true, maximumAge: 1000 }
+  );
+}
+
+function onPerimeterGPS(pos) {
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
+
+  // Deduplicate — only add point if >3m from last
+  if (perimeterPoints.length > 0) {
+    const last = perimeterPoints[perimeterPoints.length - 1];
+    const dist = getDistanceMeters(last[0], last[1], lat, lng);
+    if (dist < 3) return;
+  }
+
+  perimeterPoints.push([lat, lng]);
+  updatePerimeterStatus('🚶 Recording boundary…', perimeterPoints.length);
+
+  // Draw live polyline on map
+  if (perimeterPolyline) {
+    leafletMap.removeLayer(perimeterPolyline);
+  }
+  perimeterPolyline = L.polyline(perimeterPoints, {
+    color: '#ffee00',
+    weight: 3,
+    opacity: 0.85
+  }).addTo(leafletMap);
+
+  // Enable finish button once we have enough points
+  const finishBtn = document.getElementById('perimeter-finish-btn');
+  if (finishBtn) finishBtn.disabled = perimeterPoints.length < 4;
+}
+
+function updatePerimeterStatus(msg, count) {
+  const status = document.getElementById('perimeter-status');
+  const countEl = document.getElementById('perimeter-point-count');
+  if (status) status.textContent = msg;
+  if (countEl) countEl.textContent = count + ' points recorded' + (count < 4 ? ' (need at least 4)' : '');
+}
+
+function finishPerimeterWalk() {
+  stopPerimeterWatch();
+
+  if (perimeterPoints.length < 4) {
+    alert('Not enough points to draw a boundary. Walk further and try again.');
+    cancelPerimeterWalk();
+    return;
+  }
+
+  // Close the polygon — add first point at end
+  const closedPoints = [...perimeterPoints, perimeterPoints[0]];
+
+  // Remove the live polyline
+  if (perimeterPolyline) {
+    leafletMap.removeLayer(perimeterPolyline);
+    perimeterPolyline = null;
+  }
+
+  // Save and draw as filled polygon
+  if (perimeterCenterLat && perimeterCenterLng) {
+    saveCemeteryBoundary(perimeterCenterLat, perimeterCenterLng, closedPoints);
+  }
+  drawBoundary(closedPoints, 'user');
+  fitMapToBoundary(closedPoints);
+  hideMayThisCemeteryBtn();
+
+  // Hide overlay
+  document.getElementById('perimeter-overlay').classList.remove('active');
+  perimeterPoints = [];
+}
+
+function cancelPerimeterWalk() {
+  stopPerimeterWatch();
+  if (perimeterPolyline) {
+    leafletMap.removeLayer(perimeterPolyline);
+    perimeterPolyline = null;
+  }
+  perimeterPoints = [];
+  document.getElementById('perimeter-overlay').classList.remove('active');
+}
+
+function stopPerimeterWatch() {
+  if (perimeterWatchId !== null) {
+    navigator.geolocation.clearWatch(perimeterWatchId);
+    perimeterWatchId = null;
+  }
+}
+
+// Navigate from map to a saved story
+function viewStoryFromMap(index) {
+  currentStory = savedStories[index];
+  renderResult(currentStory);
+  showScreen('result');
+}
+
+// Fly to a specific grave when clicked in the list
+function flyToGrave(lat, lng) {
+  if (!leafletMap) return;
+  leafletMap.flyTo([lat, lng], 20, { duration: 1.5 });
+  // Open popup for this marker
+  mapMarkers.forEach(m => {
+    const pos = m.getLatLng();
+    if (Math.abs(pos.lat - lat) < 0.0001 && Math.abs(pos.lng - lng) < 0.0001) {
+      m.openPopup();
+    }
+  });
+}
+
+// Show/hide map button on home screen based on whether any story has GPS or location
+function updateHomeMapButton() {
+  const btn = document.getElementById('home-map-btn');
+  if (!btn) return;
+  const hasLocation = savedStories.some(s => s.gps || s.location);
+  btn.style.display = hasLocation ? 'block' : 'none';
+}
+
+// ── NEARBY CEMETERIES (OpenStreetMap Overpass API) ───────────────
+
+let nearbyCemeteryMarkers = [];
+
+async function tryShowNearbyCemeteries(coords) {
+  // If no coords provided, try device location
+  if (!coords) {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => fetchNearbyCemeteries(pos.coords.latitude, pos.coords.longitude),
+        () => console.log('📍 No location for nearby cemetery search')
+      );
+    }
+    return;
+  }
+  fetchNearbyCemeteries(coords.lat, coords.lng);
+}
+
+async function fetchNearbyCemeteries(lat, lng) {
+  if (!leafletMap) return;
+
+  // Show loading indicator on map
+  const loadingDiv = document.getElementById('nearby-loading');
+  if (loadingDiv) loadingDiv.style.display = 'block';
+
+  try {
+    // Overpass API query — find all cemeteries within 10km
+    // Includes active, historic, and abandoned cemeteries
+    const radius = 10000; // 10km
+    const query = `
+      [out:json][timeout:15];
+      (
+        way[landuse=cemetery](around:${radius},${lat},${lng});
+        way[amenity=grave_yard](around:${radius},${lat},${lng});
+        node[historic=cemetery](around:${radius},${lat},${lng});
+        way[landuse=cemetery][historic](around:${radius},${lat},${lng});
+        node[abandoned:landuse=cemetery](around:${radius},${lat},${lng});
+        way[abandoned:landuse=cemetery](around:${radius},${lat},${lng});
+      );
+      out center tags;
+    `;
+
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query)
+    });
+
+    const data = await res.json();
+    if (!data.elements || data.elements.length === 0) {
+      console.log('No nearby cemeteries found in OSM');
+      return;
+    }
+
+    console.log(`Found ${data.elements.length} nearby cemeteries in OSM`);
+
+    // Remove old nearby markers
+    nearbyCemeteryMarkers.forEach(m => leafletMap.removeLayer(m));
+    nearbyCemeteryMarkers = [];
+
+    // Cemetery icon - different from grave marker
+    const cemIcon = L.divIcon({
+      html: `<div style="
+        background: rgba(74,92,62,0.9);
+        border: 2px solid rgba(201,168,76,0.8);
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+      ">⛪</div>`,
+      className: '',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+      popupAnchor: [0, -14]
+    });
+
+    const historicCemIcon = L.divIcon({
+      html: `<div style="
+        background: rgba(139,58,42,0.9);
+        border: 2px solid rgba(201,168,76,0.8);
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+      ">🏛️</div>`,
+      className: '',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+      popupAnchor: [0, -14]
+    });
+
+    data.elements.forEach(el => {
+      const elLat = el.lat || el.center?.lat;
+      const elLng = el.lon || el.center?.lon;
+      if (!elLat || !elLng) return;
+
+      const name = el.tags?.name || 'Unnamed Cemetery';
+      const isHistoric = el.tags?.historic || el.tags?.['abandoned:landuse'];
+      const religion = el.tags?.religion || '';
+      const denomination = el.tags?.denomination || '';
+      const icon = isHistoric ? historicCemIcon : cemIcon;
+      const badge = isHistoric ? '🏛️ Historic' : '⛪ Cemetery';
+      const dist = (getDistanceMeters(lat, lng, elLat, elLng) / 1000).toFixed(1);
+
+      const marker = L.marker([elLat, elLng], { icon })
+        .addTo(leafletMap)
+        .bindPopup(`
+          <div style="font-family:'Playfair Display',serif;min-width:160px;">
+            <div style="font-size:0.75rem;color:#888;margin-bottom:0.25rem;">${badge}</div>
+            <strong>${name}</strong><br>
+            ${religion ? `<small style="color:#666">${denomination || religion}</small><br>` : ''}
+            <small style="color:#888">${dist}km away</small><br>
+            <small style="color:var(--moss,#4a5c3e);cursor:pointer;text-decoration:underline"
+              onclick="window.open('https://www.openstreetmap.org/?mlat=${elLat}&mlon=${elLng}&zoom=17','_blank')">
+              View on OSM ↗
+            </small>
+          </div>
+        `);
+
+      nearbyCemeteryMarkers.push(marker);
+    });
+
+    // Update count in footer
+    const countEl = document.getElementById('map-grave-count');
+    if (countEl) {
+      const existing = countEl.textContent;
+      countEl.textContent = existing + ' · ' + data.elements.length + ' cemeteries found nearby';
+    }
+
+    // Update nearby section
+    renderNearbyCemeteryList(data.elements, lat, lng);
+
+  } catch(e) {
+    console.log('OSM nearby fetch failed:', e);
+  } finally {
+    if (loadingDiv) loadingDiv.style.display = 'none';
+  }
+}
+
+function renderNearbyCemeteryList(elements, userLat, userLng) {
+  const list = document.getElementById('nearby-cemetery-list');
+  if (!list) return;
+
+  const sorted = elements
+    .filter(el => el.lat || el.center?.lat)
+    .map(el => ({
+      name: el.tags?.name || 'Unnamed Cemetery',
+      lat: el.lat || el.center?.lat,
+      lng: el.lon || el.center?.lon,
+      historic: el.tags?.historic || el.tags?.['abandoned:landuse'],
+      dist: getDistanceMeters(userLat, userLng, el.lat || el.center?.lat, el.lon || el.center?.lon)
+    }))
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, 8);
+
+  list.innerHTML = sorted.map(c => `
+    <div class="map-grave-item" onclick="flyToGrave(${c.lat}, ${c.lng})" 
+         style="border-left-color: ${c.historic ? '#8b3a2a' : '#4a5c3e'}">
+      <div class="map-grave-item-name">
+        ${c.historic ? '🏛️ ' : '⛪ '}${c.name}
+      </div>
+      <div class="map-grave-item-dates">${(c.dist/1000).toFixed(1)}km away${c.historic ? ' · Historic' : ''}</div>
+    </div>
+  `).join('');
+
+  // Show the nearby section
+  const section = document.getElementById('nearby-section');
+  if (section) section.style.display = 'block';
+}
+
+// Export cemetery data as JSON
+function exportCemeteryData() {
+  const mapped = savedStories.filter(s => s.gps);
+  if (mapped.length === 0) { alert('No GPS data to export yet.'); return; }
+  const data = mapped.map(s => ({
+    name: s.name,
+    dates: s.dates,
+    lat: s.gps.lat,
+    lng: s.gps.lng,
+    location: s.location
+  }));
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'gravestory-cemetery-data.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+</script>
+</body>
+</html>

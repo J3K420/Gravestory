@@ -1338,8 +1338,54 @@ async function reverseGeocode(lat, lng) {
   } catch { return null; }
 }
 
+// ── GRAVE LOCATION CACHE ────────────────────────────────────────
+// Cache the precise grave coords returned by Overpass when we're highly confident
+// (most/all name tokens matched a named OSM node inside the cemetery). This avoids
+// re-querying flaky Overpass for the same well-known graves, and gives users the
+// correct pin even when OSM is temporarily down.
+const GRAVE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function graveCacheKey(personName, cemeteryName, dates) {
+  // Normalize to lowercase alphanumeric+underscore for a stable key
+  const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const yearMatch = (dates || '').match(/\d{4}/g) || [];
+  const yearKey = yearMatch.slice(0, 2).join('-') || 'na';
+  return `grave_v1:${norm(personName)}:${norm(cemeteryName)}:${yearKey}`;
+}
+
+function readGraveCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    if (!entry || !entry.ts || !entry.coords) return null;
+    if (Date.now() - entry.ts > GRAVE_CACHE_TTL_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return entry.coords;
+  } catch {
+    return null;
+  }
+}
+
+function writeGraveCache(key, coords, sourceName, score) {
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      ts: Date.now(),
+      coords,
+      sourceName,
+      score
+    }));
+    console.log('💾 Cached grave coords for', key, '→', sourceName, '(score', score + ')');
+  } catch(e) {
+    // localStorage full or disabled — non-fatal
+    console.log('Cache write failed:', e);
+  }
+}
+
 // Forward geocode a text location string to {lat, lng}
-async function forwardGeocode(locationStr, personName) {
+async function forwardGeocode(locationStr, personName, dates) {
   if (!locationStr) return null;
   const lower = locationStr.toLowerCase();
 
@@ -1414,6 +1460,18 @@ async function forwardGeocode(locationStr, personName) {
 
   if (!cemeteryCoords) return null;
 
+  // Cache lookup — if we already verified this person's grave at this cemetery, use it.
+  // Cemetery name is the first comma-segment of locationStr (e.g. "Pacific View Memorial Park").
+  const cemeteryNameForKey = locationStr.split(',')[0].trim();
+  const cacheKey = personName ? graveCacheKey(personName, cemeteryNameForKey, dates) : null;
+  if (cacheKey) {
+    const cached = readGraveCache(cacheKey);
+    if (cached) {
+      console.log('💾 Cache hit for', cacheKey, '→', cached);
+      return { ...cached, isCemetery: true };
+    }
+  }
+
   // Step 2 — if we have a person's name, search Overpass for a named grave/memorial
   // node within 500m of the cemetery center that matches the name
   if (personName) {
@@ -1436,6 +1494,7 @@ async function forwardGeocode(locationStr, personName) {
         method: 'POST',
         body: 'data=' + encodeURIComponent(overpassQuery)
       });
+      if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
       const data = await res.json();
       if (data.elements && data.elements.length > 0) {
         // Score each element by how many name tokens it contains
@@ -1450,14 +1509,26 @@ async function forwardGeocode(locationStr, personName) {
             bestMatch = el;
           }
         }
-        // Only use if at least one token matched
-        if (bestMatch && bestScore > 0) {
+        // Confidence gate for accepting AND caching:
+        //   - need at least 2 matched tokens (or all tokens if name has only 1),
+        //   - and at least 75% of available tokens matched.
+        // This rejects single-token coincidences like "Lee" matching unrelated people,
+        // while accepting strong matches like "Bruce Lee" → "Bruce and Brandon Lee Graves".
+        const minRequired = Math.max(
+          nameTokens.length === 1 ? 1 : 2,
+          Math.ceil(nameTokens.length * 0.75)
+        );
+        if (bestMatch && bestScore >= minRequired) {
           const lat = bestMatch.lat || bestMatch.center?.lat;
           const lng = bestMatch.lon || bestMatch.center?.lon;
           if (lat && lng) {
-            console.log('📍 Found named grave in OSM:', bestMatch.tags.name, 'score:', bestScore, lat, lng);
-            return { lat, lng, isCemetery: true };
+            console.log('📍 Found named grave in OSM:', bestMatch.tags.name, 'score:', bestScore, '/', nameTokens.length, lat, lng);
+            const coords = { lat, lng };
+            if (cacheKey) writeGraveCache(cacheKey, coords, bestMatch.tags.name, bestScore);
+            return { ...coords, isCemetery: true };
           }
+        } else if (bestMatch) {
+          console.log('📍 Best OSM match', bestMatch.tags.name, 'rejected — score', bestScore, '<', minRequired, 'required');
         }
       }
     } catch(e) {
@@ -1465,7 +1536,8 @@ async function forwardGeocode(locationStr, personName) {
     }
   }
 
-  // Step 3 — fall back to cemetery center coords
+  // Step 3 — fall back to cemetery center coords. Deliberately NOT cached: fallback
+  // results aren't verified and would lock in a "good enough" answer if cached.
   return { ...cemeteryCoords, isCemetery: true };
 }
 
@@ -2173,7 +2245,7 @@ function resetLocationPermission() {
 // Only register service worker when hosted on https:// (not local files)
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   const swCode = `
-    const CACHE = 'gravestory-v3';
+    const CACHE = 'gravestory-v4';
     const TILE_CACHE = 'gravestory-tiles-v1';
     const OFFLINE_URLS = ['/'];
     self.addEventListener('install', e => {
@@ -2341,7 +2413,7 @@ async function initCemeteryMap() {
   if (textOnly.length > 0) {
     document.getElementById('map-cemetery-name').textContent = '📍 Locating…';
     for (const story of textOnly) {
-      const coords = await forwardGeocode(story.location, story.name);
+      const coords = await forwardGeocode(story.location, story.name, story.dates);
       if (coords) {
         // Attach geocoded coords temporarily (not saved to localStorage)
         story._geocodedGps = coords;

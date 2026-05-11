@@ -1732,7 +1732,7 @@ async function startAnalysis() {
 
   } catch (err) {
     clearInterval(stepInterval);
-    showScreen('camera');
+    _origShow('camera');
     const errBox = document.getElementById('error-box');
     const message = 'Something went wrong: ' + (err.message || 'Please try again.');
     // Render with a retry button. startAnalysis() reuses currentImageBase64 so the

@@ -1806,7 +1806,7 @@ Return ONLY a valid JSON object with these exact fields:
 If multiple people are on the stone, use the names array. Be precise about dates. Return only JSON.`;
 
   const response = await fetch(
-    `${PROXY_BASE}/gemini/gemini-2.5-flash-lite`,
+    `${PROXY_BASE}/gemini/gemini-3.1-flash-lite-preview`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1971,7 +1971,7 @@ Return ONLY valid JSON with these exact fields:
 }`;
 
   const response = await fetch(
-    `${PROXY_BASE}/gemini/gemini-2.5-flash`,
+    `${PROXY_BASE}/gemini/gemini-3.1-flash-lite-preview`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2245,7 +2245,8 @@ function resetLocationPermission() {
 // Only register service worker when hosted on https:// (not local files)
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   const swCode = `
-    const CACHE = 'gravestory-v5';
+    const CACHE = 'gravestory-v6
+';
     const TILE_CACHE = 'gravestory-tiles-v1';
     const OFFLINE_URLS = ['/'];
     self.addEventListener('install', e => {

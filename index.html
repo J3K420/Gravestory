@@ -1350,7 +1350,7 @@ function graveCacheKey(personName, cemeteryName, dates) {
   const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   const yearMatch = (dates || '').match(/\d{4}/g) || [];
   const yearKey = yearMatch.slice(0, 2).join('-') || 'na';
-  return `grave_v1:${norm(personName)}:${norm(cemeteryName)}:${yearKey}`;
+  return `grave_v2:${norm(personName)}:${norm(cemeteryName)}:${yearKey}`;
 }
 
 function readGraveCache(key) {
@@ -1481,12 +1481,18 @@ async function forwardGeocode(locationStr, personName, dates) {
       .filter(t => t.length > 2 && !['and','the','née','nee','von','van','de'].includes(t));
 
     try {
-      // Broad query — get ALL named nodes inside the cemetery area
+      // Restricted query — only nodes/ways tagged as graves, tombs, or memorials.
+      // Avoids false positives like roads/parks named after people
+      // (e.g. "George Washington Memorial Parkway" matching George Washington's tomb).
       const overpassQuery = `
         [out:json][timeout:15];
         (
-          node[name](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
-          way[name](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
+          node[name][historic~"^(memorial|tomb|grave|monument)$"](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
+          way[name][historic~"^(memorial|tomb|grave|monument)$"](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
+          node[name][cemetery=grave](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
+          way[name][cemetery=grave](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
+          node[name][building~"^(tomb|mausoleum)$"](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
+          way[name][building~"^(tomb|mausoleum)$"](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
         );
         out center;
       `;
@@ -2183,6 +2189,46 @@ function deleteSaved(event, index) {
   updateHomeMapButton();
 }
 
+// ── DRAG-TO-CORRECT GRAVE LOCATION ───────────────────────────────
+function handleMarkerDragEnd(marker, story) {
+  const newPos = marker.getLatLng();
+  const newLat = +newPos.lat.toFixed(6);
+  const newLng = +newPos.lng.toFixed(6);
+  const personLabel = story.name || 'this grave';
+  const ok = confirm(`Save corrected location for ${personLabel}?\n\nNew coords: ${newLat}, ${newLng}\n\nThis will be remembered for next time.`);
+  if (!ok) {
+    // User cancelled — snap marker back to original
+    marker.setLatLng([story.gps.lat, story.gps.lng]);
+    return;
+  }
+  // 1. Update the story in savedStories
+  const idx = savedStories.findIndex(s =>
+    s.name === story.name && s.dates === story.dates && s.location === story.location
+  );
+  if (idx >= 0) {
+    savedStories[idx].gps = { lat: newLat, lng: newLng };
+    savedStories[idx].userCorrected = true;
+    localStorage.setItem('gravestories', JSON.stringify(savedStories));
+  }
+  // 2. Write to the verified-grave cache with max score so it beats future Overpass results
+  if (story.name && story.location) {
+    const cemeteryNameForKey = story.location.split(',')[0].trim();
+    const key = graveCacheKey(story.name, cemeteryNameForKey, story.dates);
+    writeGraveCache(key, { lat: newLat, lng: newLng }, 'user-corrected', 999);
+  }
+  // 3. Update the marker's popup to show the corrected badge
+  marker.setPopupContent(`
+    <div style="font-family:'Playfair Display',serif;min-width:150px;">
+      <strong>${story.name || 'Unknown'}</strong><br>
+      <em style="font-size:0.85rem;color:#666">${story.dates || ''}</em><br>
+      <small style="color:#888">${story.location || ''}</small>
+      <br><span style="font-size:0.75rem;color:#2a7a2a">✓ location corrected</span>
+    </div>
+  `);
+  marker.openPopup();
+  console.log('📍 User-corrected coords saved for', story.name, '→', newLat, newLng);
+}
+
 // ── RESET CAMERA ─────────────────────────────────────────────────
 function resetCamera() {
   currentImage = null;
@@ -2245,7 +2291,7 @@ function resetLocationPermission() {
 // Only register service worker when hosted on https:// (not local files)
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   const swCode = `
-    const CACHE = 'gravestory-v6
+    const CACHE = 'gravestory-v7
 ';
     const TILE_CACHE = 'gravestory-tiles-v1';
     const OFFLINE_URLS = ['/'];
@@ -2631,17 +2677,20 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
     popupAnchor: [0, -24]
   });
 
-  // Add a marker for each grave
+  // Add a marker for each grave (draggable for user correction)
   graves.forEach(story => {
-    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: graveIcon })
+    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: graveIcon, draggable: true })
       .addTo(leafletMap)
       .bindPopup(`
         <div style="font-family:'Playfair Display',serif;min-width:150px;">
           <strong>${story.name || 'Unknown'}</strong><br>
           <em style="font-size:0.85rem;color:#666">${story.dates || ''}</em><br>
           <small style="color:#888">${story.location || ''}</small>
+          ${story.userCorrected ? '<br><span style="font-size:0.75rem;color:#2a7a2a">✓ location corrected</span>' : ''}
+          <br><small style="color:#aaa;font-size:0.7rem;font-style:italic">Drag pin to correct location</small>
         </div>
       `);
+    marker.on('dragend', () => handleMarkerDragEnd(marker, story));
     mapMarkers.push(marker);
   });
 

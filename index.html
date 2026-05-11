@@ -1662,9 +1662,47 @@ async function startAnalysis() {
     clearInterval(stepInterval);
     showScreen('camera');
     const errBox = document.getElementById('error-box');
-    errBox.textContent = 'Something went wrong: ' + (err.message || 'Please try again.');
+    const message = 'Something went wrong: ' + (err.message || 'Please try again.');
+    // Render with a retry button. startAnalysis() reuses currentImageBase64 so the
+    // same photo is sent without re-uploading.
+    errBox.innerHTML = `
+      <div style="margin-bottom:0.75rem">${escapeHtml(message)}</div>
+      <button onclick="retryAnalysis()" style="
+        background: rgba(201,168,76,0.15);
+        border: 1px solid rgba(201,168,76,0.6);
+        color: var(--gold);
+        padding: 0.4rem 1.1rem;
+        font-family: 'Marcellus', serif;
+        font-size: 0.85rem;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+        font-style: normal;
+      ">↻ Retry</button>
+    `;
     errBox.style.display = 'block';
   }
+}
+
+// Small HTML-escaper for error messages (which may contain quotes / brackets).
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+// Retry the last analysis with the image still in memory.
+function retryAnalysis() {
+  const errBox = document.getElementById('error-box');
+  if (errBox) errBox.style.display = 'none';
+  if (!currentImageBase64) {
+    // Image was lost somehow — guide user to re-upload
+    if (errBox) {
+      errBox.innerHTML = 'Image no longer available — please choose a photo again.';
+      errBox.style.display = 'block';
+    }
+    return;
+  }
+  startAnalysis();
 }
 
 function setStep(i) {

@@ -1456,7 +1456,7 @@ async function forwardGeocode(locationStr, personName) {
           const lng = bestMatch.lon || bestMatch.center?.lon;
           if (lat && lng) {
             console.log('📍 Found named grave in OSM:', bestMatch.tags.name, 'score:', bestScore, lat, lng);
-            return { lat, lng };
+            return { lat, lng, isCemetery: true };
           }
         }
       }
@@ -1466,7 +1466,7 @@ async function forwardGeocode(locationStr, personName) {
   }
 
   // Step 3 — fall back to cemetery center coords
-  return cemeteryCoords;
+  return { ...cemeteryCoords, isCemetery: true };
 }
 
 // ── IMAGE UPLOAD ─────────────────────────────────────────────────
@@ -2250,7 +2250,8 @@ async function initCemeteryMap() {
       if (coords) {
         // Attach geocoded coords temporarily (not saved to localStorage)
         story._geocodedGps = coords;
-        mapped.push({ ...story, gps: coords });
+        story._isCemetery = coords.isCemetery === true;
+        mapped.push({ ...story, gps: coords, _isCemetery: coords.isCemetery === true });
       }
     }
   }
@@ -2321,34 +2322,60 @@ function loadCemeteryBoundary(lat, lng) {
 }
 
 // ── FETCH OSM CEMETERY OR ESTATE BOUNDARY POLYGON ───────────────
-async function fetchOSMCemeteryBoundary(lat, lng) {
-  // Pass 1 — look for a cemetery boundary right at this location
+async function fetchOSMCemeteryBoundary(lat, lng, skipEstateFallback = false) {
+  // Pass 1 — look for a cemetery boundary at/around this location.
+  // Radius widened to 1000m because pinpoint grave coords sit well inside large cemeteries
+  // (e.g. Lake View Cemetery in Seattle is ~600m across; 200m would miss the boundary).
   const cemeteryQuery = `
-    [out:json][timeout:10];
+    [out:json][timeout:15];
     (
-      way[landuse=cemetery](around:200,${lat},${lng});
-      way[amenity=grave_yard](around:200,${lat},${lng});
-      relation[landuse=cemetery](around:200,${lat},${lng});
-      relation[amenity=grave_yard](around:200,${lat},${lng});
+      way[landuse=cemetery](around:1000,${lat},${lng});
+      way[amenity=grave_yard](around:1000,${lat},${lng});
+      relation[landuse=cemetery](around:1000,${lat},${lng});
+      relation[amenity=grave_yard](around:1000,${lat},${lng});
     );
     out geom;
   `;
   try {
     const res = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
-      body: 'data=' + encodeURIComponent(query = cemeteryQuery)
+      body: 'data=' + encodeURIComponent(cemeteryQuery)
     });
+    if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
     const data = await res.json();
-    const way = data.elements && data.elements.find(el => el.geometry && el.geometry.length > 2);
-    if (way) return way.geometry.map(pt => [pt.lat, pt.lon]);
+    const candidates = (data.elements || []).filter(el => el.geometry && el.geometry.length > 2);
+    if (candidates.length > 0) {
+      // Prefer the smallest polygon that actually contains the grave point.
+      // Avoids grabbing a big multi-cemetery district polygon when the specific cemetery
+      // is a smaller way inside it.
+      const scored = candidates.map(el => {
+        const pts = el.geometry.map(pt => [pt.lat, pt.lon]);
+        const lats = pts.map(p => p[0]);
+        const lngs = pts.map(p => p[1]);
+        const area = (Math.max(...lats) - Math.min(...lats)) * (Math.max(...lngs) - Math.min(...lngs));
+        const containsGrave = lat >= Math.min(...lats) && lat <= Math.max(...lats) &&
+                              lng >= Math.min(...lngs) && lng <= Math.max(...lngs);
+        return { pts, area, containsGrave };
+      });
+      const containing = scored.filter(s => s.containsGrave);
+      const pool = containing.length > 0 ? containing : scored;
+      pool.sort((a, b) => a.area - b.area);
+      return pool[0].pts;
+    }
   } catch(e) {
     console.log('OSM cemetery boundary fetch failed:', e);
   }
 
-  // Pass 2 — no cemetery boundary found; look for estate/property/historic site boundary
-  // This covers graves on private estates, historic plantations, national monuments, etc.
+  // Pass 2 — estate / historic site fallback.
+  // Only run when we DON'T already know this is a cemetery. Otherwise an Overpass timeout
+  // in Pass 1 would wrongly fall through and grab an adjacent park/grass polygon.
+  if (skipEstateFallback) {
+    console.log('📐 Skipping estate fallback — location is a known cemetery');
+    return null;
+  }
+
   const estateQuery = `
-    [out:json][timeout:10];
+    [out:json][timeout:15];
     (
       way[historic=estate](around:500,${lat},${lng});
       way[historic=manor](around:500,${lat},${lng});
@@ -2369,6 +2396,7 @@ async function fetchOSMCemeteryBoundary(lat, lng) {
       method: 'POST',
       body: 'data=' + encodeURIComponent(estateQuery)
     });
+    if (!res2.ok) throw new Error('Overpass HTTP ' + res2.status);
     const data2 = await res2.json();
     if (!data2.elements || data2.elements.length === 0) return null;
 
@@ -2451,7 +2479,10 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
 
   // Try to show a boundary for this cemetery location
   if (graves.length > 0) {
-    await loadAndDrawBoundary(centerLat, centerLng);
+    // If any grave was confirmed as cemetery by the geocoder, skip estate fallback.
+    // For camera-GPS stories (no geocoder call), assume unknown and allow estate search.
+    const knownCemetery = graves.some(g => g._isCemetery === true);
+    await loadAndDrawBoundary(centerLat, centerLng, knownCemetery);
   }
 
   // If multiple graves with no boundary yet, fit to grave markers
@@ -2464,7 +2495,7 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
 
 let currentBoundaryLayer = null;
 
-async function loadAndDrawBoundary(lat, lng) {
+async function loadAndDrawBoundary(lat, lng, knownCemetery = false) {
   // 1. Check for user-drawn boundary first
   const userBoundary = loadCemeteryBoundary(lat, lng);
   if (userBoundary) {
@@ -2474,8 +2505,8 @@ async function loadAndDrawBoundary(lat, lng) {
     return;
   }
 
-  // 2. Try OSM boundary
-  const osmBoundary = await fetchOSMCemeteryBoundary(lat, lng);
+  // 2. Try OSM boundary (skipEstateFallback=true when we already know it's a cemetery)
+  const osmBoundary = await fetchOSMCemeteryBoundary(lat, lng, knownCemetery);
   if (osmBoundary) {
     drawBoundary(osmBoundary, 'osm');
     fitMapToBoundary(osmBoundary);

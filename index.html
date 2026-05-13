@@ -3198,9 +3198,24 @@ function openCemeteryMap(focusStory = null) {
 // Initialize or refresh the Leaflet map
 async function initCemeteryMap() {
   // Also include current unsaved story
-  const allStories = [...savedStories];
+  let allStories = [...savedStories];
   if (currentStory && !savedStories.find(s => s.timestamp === currentStory.timestamp)) {
     allStories.unshift(currentStory);
+  }
+
+  // If opened with a focus story (from a bio page), narrow to that cemetery only.
+  // Filter by matching location string — stories at the same cemetery share it.
+  if (mapFocusStory && mapFocusStory.location) {
+    const focusLocation = mapFocusStory.location.trim().toLowerCase();
+    allStories = allStories.filter(s =>
+      s.location && s.location.trim().toLowerCase() === focusLocation
+    );
+    // Safety net: if the filter accidentally removed the focus story (e.g. case mismatch
+    // or whitespace difference), put it back so we have at least one grave to show.
+    if (!allStories.find(s => s.timestamp === mapFocusStory.timestamp)) {
+      allStories.unshift(mapFocusStory);
+    }
+    console.log('🎯 Focus mode — narrowed to', allStories.length, 'grave(s) at', mapFocusStory.location);
   }
 
   // Stories with real GPS coords

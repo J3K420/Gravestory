@@ -743,10 +743,6 @@
     color: #1a1410;
     font-weight: bold;
   }
-  .perimeter-btn-cancel {
-    background: rgba(139,58,42,0.8);
-    color: var(--parchment);
-  }
 
   .map-grave-count {
     font-size: 0.85rem;
@@ -1180,31 +1176,11 @@
   </div>
   <div id="leaflet-map" style="position:relative;"></div>
 
-  <!-- Perimeter walk overlay — sits over the map during recording -->
-  <div id="perimeter-overlay">
-    <div id="perimeter-bar">
-      <div id="perimeter-status">🚶 Walk the cemetery boundary</div>
-      <div id="perimeter-point-count">0 points recorded</div>
-      <div id="perimeter-btn-row">
-        <button class="perimeter-btn perimeter-btn-cancel" onclick="cancelPerimeterWalk()">✕ Cancel</button>
-        <button class="perimeter-btn perimeter-btn-finish" onclick="finishPerimeterWalk()" id="perimeter-finish-btn" disabled>✓ Finish</button>
-      </div>
-    </div>
-  </div>
-
   <div class="map-footer">
     <div class="map-cemetery-name" id="map-cemetery-name">📍 Cemetery</div>
     <div class="map-grave-count" id="map-grave-count">0 graves mapped</div>
     <div id="nearby-loading" style="display:none;font-size:0.8rem;color:var(--stone);font-style:italic;padding:0.5rem 0;">
       🔍 Finding nearby cemeteries…
-    </div>
-    <div id="map-this-cemetery-btn" style="display:none;margin-top:0.75rem;">
-      <button onclick="startPerimeterWalk()" style="width:100%;padding:0.7rem;background:rgba(255,238,0,0.12);border:1px solid #ffee00;color:#ffee00;font-family:'Crimson Pro',serif;font-size:0.95rem;cursor:pointer;border-radius:4px;letter-spacing:0.05em;">
-        🚶 Map This Cemetery's Boundary
-      </button>
-      <div style="font-size:0.75rem;color:var(--stone);text-align:center;margin-top:0.3rem;font-style:italic;">
-        Walk the perimeter to draw the cemetery outline
-      </div>
     </div>
     <div class="map-graves-list" id="map-graves-list"></div>
     <div id="nearby-section" style="display:none;margin-top:1rem;">
@@ -3293,24 +3269,6 @@ async function initCemeteryMap() {
   tryShowNearbyCemeteries({ lat: largest.centerLat, lng: largest.centerLng });
 }
 
-// ── CEMETERY BOUNDARY STORAGE KEY ───────────────────────────────
-function cemBoundaryKey(lat, lng) {
-  // Round to ~100m grid to group nearby GPS points as same cemetery
-  return 'gs_boundary_' + Math.round(lat * 1000) + '_' + Math.round(lng * 1000);
-}
-
-function saveCemeteryBoundary(lat, lng, polygonPoints) {
-  const key = cemBoundaryKey(lat, lng);
-  localStorage.setItem(key, JSON.stringify(polygonPoints));
-  console.log('📐 Saved user-drawn boundary for', key);
-}
-
-function loadCemeteryBoundary(lat, lng) {
-  const key = cemBoundaryKey(lat, lng);
-  const saved = localStorage.getItem(key);
-  return saved ? JSON.parse(saved) : null;
-}
-
 // ── FETCH OSM CEMETERY OR ESTATE BOUNDARY POLYGON ───────────────
 async function fetchOSMCemeteryBoundary(lat, lng, skipEstateFallback = false) {
   // Pass 1 — look for a cemetery boundary at/around this location.
@@ -3491,27 +3449,16 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
 let currentBoundaryLayer = null;
 
 async function loadAndDrawBoundary(lat, lng, knownCemetery = false) {
-  // 1. Check for user-drawn boundary first
-  const userBoundary = loadCemeteryBoundary(lat, lng);
-  if (userBoundary) {
-    drawBoundary(userBoundary, 'user');
-    fitMapToBoundary(userBoundary);
-    hideMayThisCemeteryBtn();
-    return;
-  }
-
-  // 2. Try OSM boundary (skipEstateFallback=true when we already know it's a cemetery)
+  // Try OSM boundary (skipEstateFallback=true when we already know it's a cemetery)
   const osmBoundary = await fetchOSMCemeteryBoundary(lat, lng, knownCemetery);
   if (osmBoundary) {
     drawBoundary(osmBoundary, 'osm');
     fitMapToBoundary(osmBoundary);
-    hideMayThisCemeteryBtn();
     return;
   }
 
-  // 3. No boundary found — tight zoom + show "Map this Cemetery" button
+  // No OSM boundary — just tight zoom on the cemetery location
   leafletMap.setView([lat, lng], 18);
-  showMapThisCemeteryBtn();
 }
 
 function drawBoundary(points, type) {
@@ -3535,134 +3482,6 @@ function fitMapToBoundary(points) {
   if (!leafletMap || !points || points.length === 0) return;
   const bounds = L.latLngBounds(points);
   leafletMap.fitBounds(bounds, { padding: [20, 20] });
-}
-
-function showMapThisCemeteryBtn() {
-  const btn = document.getElementById('map-this-cemetery-btn');
-  if (btn) btn.style.display = 'block';
-}
-function hideMayThisCemeteryBtn() {
-  const btn = document.getElementById('map-this-cemetery-btn');
-  if (btn) btn.style.display = 'none';
-}
-
-// ── PERIMETER WALK ───────────────────────────────────────────────
-let perimeterWatchId = null;
-let perimeterPoints = [];
-let perimeterPolyline = null;
-let perimeterCenterLat = null;
-let perimeterCenterLng = null;
-
-function startPerimeterWalk() {
-  if (!navigator.geolocation) {
-    alert('GPS not available on this device.');
-    return;
-  }
-  perimeterPoints = [];
-  perimeterPolyline = null;
-
-  // Store cemetery center to save boundary against correct key
-  const mapped = savedStories.filter(s => s.gps);
-  if (mapped.length > 0) {
-    perimeterCenterLat = mapped[0].gps.lat;
-    perimeterCenterLng = mapped[0].gps.lng;
-  }
-
-  // Show overlay
-  const overlay = document.getElementById('perimeter-overlay');
-  overlay.classList.add('active');
-  updatePerimeterStatus('🚶 Start walking the boundary…', 0);
-
-  // Begin watching GPS
-  perimeterWatchId = navigator.geolocation.watchPosition(
-    onPerimeterGPS,
-    (err) => console.log('Perimeter GPS error:', err),
-    { enableHighAccuracy: true, maximumAge: 1000 }
-  );
-}
-
-function onPerimeterGPS(pos) {
-  const lat = pos.coords.latitude;
-  const lng = pos.coords.longitude;
-
-  // Deduplicate — only add point if >3m from last
-  if (perimeterPoints.length > 0) {
-    const last = perimeterPoints[perimeterPoints.length - 1];
-    const dist = getDistanceMeters(last[0], last[1], lat, lng);
-    if (dist < 3) return;
-  }
-
-  perimeterPoints.push([lat, lng]);
-  updatePerimeterStatus('🚶 Recording boundary…', perimeterPoints.length);
-
-  // Draw live polyline on map
-  if (perimeterPolyline) {
-    leafletMap.removeLayer(perimeterPolyline);
-  }
-  perimeterPolyline = L.polyline(perimeterPoints, {
-    color: '#ffee00',
-    weight: 3,
-    opacity: 0.85
-  }).addTo(leafletMap);
-
-  // Enable finish button once we have enough points
-  const finishBtn = document.getElementById('perimeter-finish-btn');
-  if (finishBtn) finishBtn.disabled = perimeterPoints.length < 4;
-}
-
-function updatePerimeterStatus(msg, count) {
-  const status = document.getElementById('perimeter-status');
-  const countEl = document.getElementById('perimeter-point-count');
-  if (status) status.textContent = msg;
-  if (countEl) countEl.textContent = count + ' points recorded' + (count < 4 ? ' (need at least 4)' : '');
-}
-
-function finishPerimeterWalk() {
-  stopPerimeterWatch();
-
-  if (perimeterPoints.length < 4) {
-    alert('Not enough points to draw a boundary. Walk further and try again.');
-    cancelPerimeterWalk();
-    return;
-  }
-
-  // Close the polygon — add first point at end
-  const closedPoints = [...perimeterPoints, perimeterPoints[0]];
-
-  // Remove the live polyline
-  if (perimeterPolyline) {
-    leafletMap.removeLayer(perimeterPolyline);
-    perimeterPolyline = null;
-  }
-
-  // Save and draw as filled polygon
-  if (perimeterCenterLat && perimeterCenterLng) {
-    saveCemeteryBoundary(perimeterCenterLat, perimeterCenterLng, closedPoints);
-  }
-  drawBoundary(closedPoints, 'user');
-  fitMapToBoundary(closedPoints);
-  hideMayThisCemeteryBtn();
-
-  // Hide overlay
-  document.getElementById('perimeter-overlay').classList.remove('active');
-  perimeterPoints = [];
-}
-
-function cancelPerimeterWalk() {
-  stopPerimeterWatch();
-  if (perimeterPolyline) {
-    leafletMap.removeLayer(perimeterPolyline);
-    perimeterPolyline = null;
-  }
-  perimeterPoints = [];
-  document.getElementById('perimeter-overlay').classList.remove('active');
-}
-
-function stopPerimeterWatch() {
-  if (perimeterWatchId !== null) {
-    navigator.geolocation.clearWatch(perimeterWatchId);
-    perimeterWatchId = null;
-  }
 }
 
 // Navigate from map to a saved story

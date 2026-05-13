@@ -1457,7 +1457,37 @@ async function forwardGeocode(locationStr, personName, dates) {
     return geoTokens.some(t => dn.includes(t));
   };
 
+  // Detect a US state name in the location string for low-confidence flagging.
+  // Does NOT filter results — only marks the pin as uncertain if a confident state
+  // mismatch is detected. This catches cases like "Cemetery, Mansfield, Washington"
+  // resolving to "Mansfield, Ohio" — we still place the pin, but with a "?" badge.
+  const US_STATE_LOOKUP = {
+    'alabama':'alabama','al':'alabama','alaska':'alaska','ak':'alaska','arizona':'arizona','az':'arizona',
+    'arkansas':'arkansas','ar':'arkansas','california':'california','ca':'california','colorado':'colorado','co':'colorado',
+    'connecticut':'connecticut','ct':'connecticut','delaware':'delaware','de':'delaware','florida':'florida','fl':'florida',
+    'georgia':'georgia','ga':'georgia','hawaii':'hawaii','hi':'hawaii','idaho':'idaho','id':'idaho',
+    'illinois':'illinois','il':'illinois','indiana':'indiana','in':'indiana','iowa':'iowa','ia':'iowa',
+    'kansas':'kansas','ks':'kansas','kentucky':'kentucky','ky':'kentucky','louisiana':'louisiana','la':'louisiana',
+    'maine':'maine','me':'maine','maryland':'maryland','md':'maryland','massachusetts':'massachusetts','ma':'massachusetts',
+    'michigan':'michigan','mi':'michigan','minnesota':'minnesota','mn':'minnesota','mississippi':'mississippi','ms':'mississippi',
+    'missouri':'missouri','mo':'missouri','montana':'montana','mt':'montana','nebraska':'nebraska','ne':'nebraska',
+    'nevada':'nevada','nv':'nevada','new hampshire':'new hampshire','nh':'new hampshire','new jersey':'new jersey','nj':'new jersey',
+    'new mexico':'new mexico','nm':'new mexico','new york':'new york','ny':'new york','north carolina':'north carolina','nc':'north carolina',
+    'north dakota':'north dakota','nd':'north dakota','ohio':'ohio','oh':'ohio','oklahoma':'oklahoma','ok':'oklahoma',
+    'oregon':'oregon','or':'oregon','pennsylvania':'pennsylvania','pa':'pennsylvania','rhode island':'rhode island','ri':'rhode island',
+    'south carolina':'south carolina','sc':'south carolina','south dakota':'south dakota','sd':'south dakota','tennessee':'tennessee','tn':'tennessee',
+    'texas':'texas','tx':'texas','utah':'utah','ut':'utah','vermont':'vermont','vt':'vermont',
+    'virginia':'virginia','va':'virginia','washington':'washington','wa':'washington','west virginia':'west virginia','wv':'west virginia',
+    'wisconsin':'wisconsin','wi':'wisconsin','wyoming':'wyoming','wy':'wyoming','district of columbia':'district of columbia','dc':'district of columbia'
+  };
+  let queryStateName = null;
+  for (const part of allParts.slice(1)) {
+    const lc = part.toLowerCase();
+    if (US_STATE_LOOKUP[lc]) { queryStateName = US_STATE_LOOKUP[lc]; break; }
+  }
+
   let cemeteryCoords = null;
+  let lowConfidence = false;
   for (const q of queries) {
     try {
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`;
@@ -1498,7 +1528,20 @@ async function forwardGeocode(locationStr, personName, dates) {
         continue;
       }
       cemeteryCoords = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
-      console.log('📍 Cemetery coords:', result.display_name, cemeteryCoords, `(${strictCemetery ? 'strict' : 'fuzzy'})`);
+
+      // Low-confidence flag: if the query mentioned a US state and the result's
+      // address.state is a different US state, surface a "?" badge on the map pin.
+      // Only fires when BOTH sides resolve cleanly to a known state — silent otherwise.
+      if (queryStateName) {
+        const addrState = (result.address?.state || '').toLowerCase();
+        const resolvedAddrState = US_STATE_LOOKUP[addrState];
+        if (resolvedAddrState && resolvedAddrState !== queryStateName) {
+          lowConfidence = true;
+          console.log('📍 Low-confidence pin: query state', queryStateName, '≠ result state', resolvedAddrState, '—', result.display_name);
+        }
+      }
+
+      console.log('📍 Cemetery coords:', result.display_name, cemeteryCoords, `(${strictCemetery ? 'strict' : 'fuzzy'}${lowConfidence ? ', low-confidence' : ''})`);
       break;
     } catch { continue; }
   }
@@ -1513,7 +1556,7 @@ async function forwardGeocode(locationStr, personName, dates) {
     const cached = readGraveCache(cacheKey);
     if (cached) {
       console.log('💾 Cache hit for', cacheKey, '→', cached);
-      return { ...cached, isCemetery: true };
+      return { ...cached, isCemetery: true, lowConfidence };
     }
   }
 
@@ -1576,7 +1619,7 @@ async function forwardGeocode(locationStr, personName, dates) {
             console.log('📍 Found named grave in OSM:', bestMatch.tags.name, 'score:', bestScore, '/', nameTokens.length, lat, lng);
             const coords = { lat, lng };
             if (cacheKey) writeGraveCache(cacheKey, coords, bestMatch.tags.name, bestScore);
-            return { ...coords, isCemetery: true };
+            return { ...coords, isCemetery: true, lowConfidence };
           }
         } else if (bestMatch) {
           console.log('📍 Best OSM match', bestMatch.tags.name, 'rejected — score', bestScore, '<', minRequired, 'required');
@@ -1589,9 +1632,8 @@ async function forwardGeocode(locationStr, personName, dates) {
 
   // Step 3 — fall back to cemetery center coords. Deliberately NOT cached: fallback
   // results aren't verified and would lock in a "good enough" answer if cached.
-  return { ...cemeteryCoords, isCemetery: true };
+  return { ...cemeteryCoords, isCemetery: true, lowConfidence };
 }
-
 // ── IMAGE UPLOAD ─────────────────────────────────────────────────
 async function handleImageUpload(input, isLiveCamera = false) {
   const file = input.files[0];
@@ -2363,7 +2405,7 @@ function resetLocationPermission() {
 // Only register service worker when hosted on https:// (not local files)
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   const swCode = `
-    const CACHE = 'gravestory-v11
+    const CACHE = 'gravestory-v12
 ';
     const TILE_CACHE = 'gravestory-tiles-v1';
     const OFFLINE_URLS = ['/'];
@@ -2537,7 +2579,8 @@ async function initCemeteryMap() {
         // Attach geocoded coords temporarily (not saved to localStorage)
         story._geocodedGps = coords;
         story._isCemetery = coords.isCemetery === true;
-        mapped.push({ ...story, gps: coords, _isCemetery: coords.isCemetery === true });
+        story._lowConfidence = coords.lowConfidence === true;
+        mapped.push({ ...story, gps: coords, _isCemetery: coords.isCemetery === true, _lowConfidence: coords.lowConfidence === true });
       }
     }
   }
@@ -2740,18 +2783,18 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
     crossOrigin: true
   }).addTo(leafletMap);
 
-  // Custom grave marker icon
-  const graveIcon = L.divIcon({
-    html: `<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));line-height:0;"><svg viewBox="0 0 100 100" fill="none" stroke-width="2" xmlns="http://www.w3.org/2000/svg" style="width:32px;height:32px;display:block;"><defs><linearGradient id="pinGrad${'$'}{Math.random().toString(36).slice(2,8)}" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f0dca8"/><stop offset="100%" stop-color="#8a6f3a"/></linearGradient></defs><rect x="22" y="84" width="56" height="6" stroke="#c9a84c" fill="rgba(20,15,8,0.85)"/><path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="#c9a84c" fill="rgba(20,15,8,0.85)"/><path d="M38 40 L38 56 Q44 54 49 56 L49 42 Q44 40 38 40 Z" stroke="#e8d4a0" stroke-width="2" fill="rgba(232,212,160,0.25)"/><path d="M51 42 Q56 40 62 40 L62 56 Q56 54 51 56 Z" stroke="#e8d4a0" stroke-width="2" fill="rgba(232,212,160,0.25)"/><line x1="50" y1="41" x2="50" y2="56" stroke="#e8d4a0" stroke-width="1.5"/><line x1="50" y1="63" x2="50" y2="76" stroke="#e8d4a0" stroke-width="1.5"/><line x1="44" y1="68" x2="56" y2="68" stroke="#e8d4a0" stroke-width="1.5"/></svg></div>`,
+  // Custom grave marker icon — generator function so low-confidence pins can show a "?" badge
+  const makeGraveIcon = (lowConfidence) => L.divIcon({
+    html: `<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));line-height:0;position:relative;"><svg viewBox="0 0 100 100" fill="none" stroke-width="2" xmlns="http://www.w3.org/2000/svg" style="width:32px;height:32px;display:block;"><defs><linearGradient id="pinGrad${'$'}{Math.random().toString(36).slice(2,8)}" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f0dca8"/><stop offset="100%" stop-color="#8a6f3a"/></linearGradient></defs><rect x="22" y="84" width="56" height="6" stroke="#c9a84c" fill="rgba(20,15,8,0.85)"/><path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="#c9a84c" fill="rgba(20,15,8,0.85)"/><path d="M38 40 L38 56 Q44 54 49 56 L49 42 Q44 40 38 40 Z" stroke="#e8d4a0" stroke-width="2" fill="rgba(232,212,160,0.25)"/><path d="M51 42 Q56 40 62 40 L62 56 Q56 54 51 56 Z" stroke="#e8d4a0" stroke-width="2" fill="rgba(232,212,160,0.25)"/><line x1="50" y1="41" x2="50" y2="56" stroke="#e8d4a0" stroke-width="1.5"/><line x1="50" y1="63" x2="50" y2="76" stroke="#e8d4a0" stroke-width="1.5"/><line x1="44" y1="68" x2="56" y2="68" stroke="#e8d4a0" stroke-width="1.5"/></svg>${lowConfidence ? '<div style="position:absolute;top:-4px;right:-6px;width:14px;height:14px;border-radius:50%;background:rgba(60,40,20,0.95);border:1px solid #c9a84c;color:#e8d4a0;font-family:serif;font-size:10px;font-weight:bold;line-height:12px;text-align:center;">?</div>' : ''}</div>`,
     className: '',
-    iconSize: [32, 32],
-    iconAnchor: [16, 30],
-    popupAnchor: [0, -28]
+    iconSize: [24, 24],
+    iconAnchor: [12, 24],
+    popupAnchor: [0, -24]
   });
 
   // Add a marker for each grave (draggable for user correction)
   graves.forEach(story => {
-    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: graveIcon, draggable: true })
+    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGraveIcon(story._lowConfidence), draggable: true })
       .addTo(leafletMap)
       .bindPopup(`
         <div style="font-family:'Playfair Display',serif;min-width:150px;">
@@ -2759,6 +2802,7 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
           <em style="font-size:0.85rem;color:#666">${story.dates || ''}</em><br>
           <small style="color:#888">${story.location || ''}</small>
           ${story.userCorrected ? '<br><span style="font-size:0.75rem;color:#2a7a2a">✓ location corrected</span>' : ''}
+          ${story._lowConfidence && !story.userCorrected ? '<br><span style="font-size:0.75rem;color:#a87a2a">⚠ approximate — state may not match</span>' : ''}
           <br><small style="color:#aaa;font-size:0.7rem;font-style:italic">Drag pin to correct location</small>
         </div>
       `);

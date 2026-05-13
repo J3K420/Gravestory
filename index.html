@@ -2043,12 +2043,64 @@ async function searchWikiTree(graveData) {
   if (!name) return null;
 
   const parts = name.trim().split(' ');
+  if (parts.length < 2) return null;
   const firstName = parts[0];
   const lastName = parts[parts.length - 1];
   const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0] || '';
+  const deathYear = graveData.death_date?.match(/\d{4}/)?.[0] || '';
 
-  // WikiTree requires server-side proxy due to CORS - skipping for local use
-  return null;
+  console.log('🌳 WIKITREE searching:', firstName, lastName, birthYear || '(no year)');
+
+  try {
+    const res = await fetch(`${PROXY_BASE}/wikitree`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'searchPerson',
+        FirstName: firstName,
+        LastName: lastName,
+        BirthDate: birthYear || undefined,
+        DeathDate: deathYear || undefined,
+        fields: 'Name,FirstName,LastNameAtBirth,LastNameCurrent,BirthDate,DeathDate,BirthLocation,DeathLocation,Father,Mother,Gender,Bio'
+      })
+    });
+
+    if (!res.ok) {
+      console.log('🌳 WIKITREE proxy returned', res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    // WikiTree returns an array; the result we want is in data[0].matches
+    const matches = Array.isArray(data) ? data[0]?.matches : data?.matches;
+    if (!matches || matches.length === 0) {
+      console.log('🌳 WIKITREE no matches');
+      return null;
+    }
+
+    // Score matches: prefer ones where birth year aligns
+    let best = matches[0];
+    if (birthYear) {
+      const yearMatch = matches.find(m => m.BirthDate?.startsWith(birthYear));
+      if (yearMatch) best = yearMatch;
+    }
+
+    console.log('🌳 WIKITREE best match:', best.Name, best.BirthDate, '→', best.DeathDate);
+
+    // Trim what gets passed to Gemini — bio text can be massive
+    return {
+      name: `${best.FirstName || ''} ${best.LastNameAtBirth || best.LastNameCurrent || ''}`.trim(),
+      birth: best.BirthDate || null,
+      death: best.DeathDate || null,
+      birthLocation: best.BirthLocation || null,
+      deathLocation: best.DeathLocation || null,
+      wikiTreeId: best.Name || null,
+      bioSnippet: best.Bio ? best.Bio.slice(0, 1500) : null
+    };
+  } catch (e) {
+    console.log('🌳 WIKITREE fetch failed:', e.message);
+    return null;
+  }
 }
 
 // ── GEMINI: GENERATE BIOGRAPHY ───────────────────────────────────

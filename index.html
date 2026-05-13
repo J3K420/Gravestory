@@ -1130,7 +1130,7 @@
 <!-- ═══ CEMETERY MAP SCREEN ═══ -->
 <div id="cemetery-map-screen" class="screen" style="position:relative;">
   <div class="map-header">
-    <button class="map-header-back" onclick="showScreen('home')">← Back</button>
+    <button class="map-header-back" onclick="showScreen(mapPreviousScreen || 'home')">← Back</button>
     <div class="map-header-title">🗺️ Cemetery Map</div>
     <button onclick="exportCemeteryData()" style="background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);font-size:0.75rem;padding:0.3rem 0.6rem;cursor:pointer;font-family:Crimson Pro,serif;">Export</button>
   </div>
@@ -2561,7 +2561,10 @@ function getDistanceMeters(lat1, lng1, lat2, lng2) {
 }
 
 // Open cemetery map screen
+let mapPreviousScreen = 'home';
 function openCemeteryMap() {
+  const activeScreen = document.querySelector('.screen.active');
+  mapPreviousScreen = activeScreen ? activeScreen.id : 'home';
   showScreen('cemetery-map-screen');
   // Give the screen time to fully paint before Leaflet calculates dimensions
   setTimeout(async () => {

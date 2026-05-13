@@ -2231,7 +2231,7 @@ function saveStory() {
   }
 
   savedStories.unshift(currentStory);
-  if (savedStories.length > 20) savedStories = savedStories.slice(0, 20);
+  if (savedStories.length > 500) savedStories = savedStories.slice(0, 500);
   localStorage.setItem('gravestories', JSON.stringify(savedStories));
   updateHomeMapButton();
 
@@ -2287,7 +2287,7 @@ function renderSavedList() {
     return;
   }
 
-  list.innerHTML = savedStories.slice(0, 5).map((s, i) => `
+  list.innerHTML = savedStories.map((s, i) => `
     <div class="saved-card" style="display:flex;align-items:center;gap:0.5rem;">
       <div style="flex:1;min-width:0;cursor:pointer;" onclick="loadSaved(${i})">
         <div class="saved-card-name">${s.name || 'Unknown'}</div>

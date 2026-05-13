@@ -2321,7 +2321,7 @@ function resetLocationPermission() {
 // Only register service worker when hosted on https:// (not local files)
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   const swCode = `
-    const CACHE = 'gravestory-v7
+    const CACHE = 'gravestory-v8
 ';
     const TILE_CACHE = 'gravestory-tiles-v1';
     const OFFLINE_URLS = ['/'];

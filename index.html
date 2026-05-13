@@ -1419,6 +1419,29 @@ async function forwardGeocode(locationStr, personName, dates) {
     }
   }
 
+  // Extract geographic context tokens from the ORIGINAL location string (city/state/country).
+  // Skip the first segment (typically the cemetery name itself) and short fragments.
+  // These tokens are required to appear in any candidate's display_name — prevents matching
+  // "Tomb of the Virgin Mary, Washington DC" when the request was "Mount Vernon, Virginia".
+  const geoTokens = [];
+  const allParts = locationStr.split(',').map(p => p.trim()).filter(Boolean);
+  // Skip parts[0] (cemetery name itself); use everything after as geographic context
+  for (const part of allParts.slice(1)) {
+    const lc = part.toLowerCase();
+    // Skip generic words and very short tokens
+    if (lc.length < 3) continue;
+    if (['usa','us','united states'].includes(lc)) continue;
+    geoTokens.push(lc);
+  }
+  const requireGeo = geoTokens.length > 0;
+  if (requireGeo) console.log('📍 Geographic context required:', geoTokens);
+
+  const passesGeoCheck = (r) => {
+    if (!requireGeo) return true;
+    const dn = (r.display_name || '').toLowerCase();
+    return geoTokens.some(t => dn.includes(t));
+  };
+
   let cemeteryCoords = null;
   for (const q of queries) {
     try {
@@ -1431,17 +1454,21 @@ async function forwardGeocode(locationStr, personName, dates) {
       }
       console.log('📍 Nominatim raw for', q, '→', data.map(r => `${r.class}/${r.type}: ${r.display_name}`));
 
-      // STRICT cemetery match — actual OSM cemetery/graveyard features only
+      // STRICT cemetery match — actual OSM cemetery/graveyard features only.
+      // Must also pass geographic context check.
       const strictCemetery = data.find(r =>
-        (r.class === 'landuse' && r.type === 'cemetery') ||
-        (r.class === 'amenity' && r.type === 'grave_yard') ||
-        r.type === 'cemetery' || r.type === 'grave_yard'
+        ((r.class === 'landuse' && r.type === 'cemetery') ||
+         (r.class === 'amenity' && r.type === 'grave_yard') ||
+         r.type === 'cemetery' || r.type === 'grave_yard') &&
+        passesGeoCheck(r)
       );
 
-      // FUZZY cemetery match — display_name mentions cemetery/memorial/etc, but reject pure city/place results
+      // FUZZY cemetery match — display_name mentions cemetery/memorial/etc, but reject pure
+      // city/place results and require geographic context match.
       const fuzzyCemetery = !strictCemetery ? data.find(r => {
         const isPlace = r.class === 'place' || r.class === 'boundary';
         if (isPlace) return false; // never accept a town/city as a cemetery
+        if (!passesGeoCheck(r)) return false; // reject geographic mismatches
         const dn = (r.display_name || '').toLowerCase();
         return dn.includes('cemetery') || dn.includes('memorial park') ||
                dn.includes('graveyard') || dn.includes('burial') || dn.includes('tomb');
@@ -1449,7 +1476,10 @@ async function forwardGeocode(locationStr, personName, dates) {
 
       const result = strictCemetery || fuzzyCemetery;
       if (!result) {
-        console.log('📍 Nominatim returned only non-cemetery results for', q, '— skipping');
+        // Log why it was rejected to help debug
+        const rejectedByGeo = requireGeo && data.some(r => !passesGeoCheck(r));
+        console.log('📍 Nominatim returned no acceptable cemetery for', q,
+          rejectedByGeo ? '— some matched type but failed geographic check' : '— no type match');
         continue;
       }
       cemeteryCoords = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };

@@ -1160,7 +1160,7 @@
 
   <div class="result-body" id="result-body"></div>
 
-  <button class="result-map-btn" id="result-map-btn" onclick="openCemeteryMap()">
+  <button class="result-map-btn" id="result-map-btn" onclick="openCemeteryMap(currentStory)">
     🗺️ View on Cemetery Map
   </button>
 
@@ -3125,6 +3125,8 @@ function getDistanceMeters(lat1, lng1, lat2, lng2) {
 
 // Open cemetery map screen
 let mapPreviousScreen = 'home';
+let mapFocusStory = null;
+
 // Build the expandable bio section for map popups
 function buildPopupBio(story) {
   if (!story.biography) return '';
@@ -3151,9 +3153,10 @@ function buildPopupBio(story) {
   `;
 }
 
-function openCemeteryMap() {
+function openCemeteryMap(focusStory = null) {
   const activeScreen = document.querySelector('.screen.active');
   mapPreviousScreen = activeScreen ? activeScreen.id : 'home';
+  mapFocusStory = focusStory;
   showScreen('cemetery-map-screen');
   // Give the screen time to fully paint before Leaflet calculates dimensions
   setTimeout(async () => {
@@ -3161,6 +3164,20 @@ function openCemeteryMap() {
     // Force Leaflet to recalculate size after tiles render
     if (leafletMap) {
       setTimeout(() => leafletMap.invalidateSize(), 200);
+    }
+    // After everything's laid out, fly to the focused grave if there is one
+    if (mapFocusStory && mapFocusStory.gps && leafletMap) {
+      setTimeout(() => {
+        leafletMap.flyTo([mapFocusStory.gps.lat, mapFocusStory.gps.lng], 19, { duration: 1.2 });
+        // Open the popup for that grave
+        mapMarkers.forEach(m => {
+          const pos = m.getLatLng();
+          if (Math.abs(pos.lat - mapFocusStory.gps.lat) < 0.0001 &&
+              Math.abs(pos.lng - mapFocusStory.gps.lng) < 0.0001) {
+            m.openPopup();
+          }
+        });
+      }, 400);
     }
   }, 150);
 }

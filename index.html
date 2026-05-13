@@ -2753,9 +2753,11 @@ document.addEventListener('click', (e) => {
 });
 
 async function signInWithGoogle() {
+  // Use a clean URL (no hash or query) so Supabase's redirect fragment doesn't collide
+  const cleanUrl = window.location.origin + window.location.pathname;
   const { error } = await supabaseClient.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.href }
+    options: { redirectTo: cleanUrl }
   });
   if (error) {
     document.getElementById('auth-status').textContent = '❌ ' + error.message;
@@ -2796,10 +2798,19 @@ async function signUpWithEmail() {
 }
 
 async function signOut() {
+  // Wipe sync state and local cache BEFORE Supabase fires its SIGNED_OUT event
+  // so the next sign-in (possibly as a different user) starts clean.
+  const userId = currentUser?.id;
+  if (userId) {
+    localStorage.removeItem(`gs_last_sync_${userId}`);
+  }
+  localStorage.removeItem('gravestories');
+
   await supabaseClient.auth.signOut();
+
+  // Wipe in-memory state too
+  savedStories = [];
   document.getElementById('user-menu-dropdown').style.display = 'none';
-  // Drop cloud cache; revert to whatever's in localStorage (guest mode)
-  savedStories = JSON.parse(localStorage.getItem('gravestories') || '[]');
   renderSavedList();
   updateHomeMapButton();
 }

@@ -2206,15 +2206,30 @@ function renderResult(story) {
     }
   }
 
-  // Reset save button
+  // Set save button based on whether this story is already saved
   const saveBtn = document.getElementById('save-btn');
-  saveBtn.textContent = '💾 Save';
-  saveBtn.className = 'action-btn action-save';
+  const alreadySaved = story.timestamp && savedStories.some(s => s.timestamp === story.timestamp);
+  if (alreadySaved) {
+    saveBtn.textContent = '✓ Saved';
+    saveBtn.className = 'action-btn action-save saved';
+  } else {
+    saveBtn.textContent = '💾 Save';
+    saveBtn.className = 'action-btn action-save';
+  }
 }
 
 // ── SAVE STORY ───────────────────────────────────────────────────
 function saveStory() {
   if (!currentStory) return;
+
+  // Guard against double-saving the same story
+  if (currentStory.timestamp && savedStories.some(s => s.timestamp === currentStory.timestamp)) {
+    const btn = document.getElementById('save-btn');
+    btn.textContent = '✓ Saved';
+    btn.className = 'action-btn action-save saved';
+    return;
+  }
+
   savedStories.unshift(currentStory);
   if (savedStories.length > 20) savedStories = savedStories.slice(0, 20);
   localStorage.setItem('gravestories', JSON.stringify(savedStories));

@@ -2380,7 +2380,7 @@ function renderResult(story) {
 }
 
 // ── SAVE STORY ───────────────────────────────────────────────────
-function saveStory() {
+async function saveStory() {
   if (!currentStory) return;
 
   // Guard against double-saving the same story
@@ -2393,12 +2393,13 @@ function saveStory() {
 
   savedStories.unshift(currentStory);
   if (savedStories.length > 500) savedStories = savedStories.slice(0, 500);
-  localStorage.setItem('gravestories', JSON.stringify(savedStories));
   updateHomeMapButton();
 
   const btn = document.getElementById('save-btn');
   btn.textContent = '✓ Saved';
   btn.className = 'action-btn action-save saved';
+
+  await persistSave(currentStory);
 }
 
 // ── SHARE STORY ──────────────────────────────────────────────────
@@ -2469,18 +2470,18 @@ function loadSaved(index) {
   showScreen('result');
 }
 
-function deleteSaved(event, index) {
+async function deleteSaved(event, index) {
   event.stopPropagation(); // prevent card click
   const story = savedStories[index];
   if (!confirm(`Delete story for ${story.name || 'this person'}?`)) return;
   savedStories.splice(index, 1);
-  localStorage.setItem('gravestories', JSON.stringify(savedStories));
   renderSavedList();
   updateHomeMapButton();
+  await persistDelete(story);
 }
 
 // ── DRAG-TO-CORRECT GRAVE LOCATION ───────────────────────────────
-function handleMarkerDragEnd(marker, story) {
+async function handleMarkerDragEnd(marker, story) {
   const newPos = marker.getLatLng();
   const newLat = +newPos.lat.toFixed(6);
   const newLng = +newPos.lng.toFixed(6);
@@ -2498,7 +2499,7 @@ function handleMarkerDragEnd(marker, story) {
   if (idx >= 0) {
     savedStories[idx].gps = { lat: newLat, lng: newLng };
     savedStories[idx].userCorrected = true;
-    localStorage.setItem('gravestories', JSON.stringify(savedStories));
+    await persistUpdate(savedStories[idx]);
   }
   // 2. Write to the verified-grave cache with max score so it beats future Overpass results
   if (story.name && story.location) {
@@ -2697,17 +2698,24 @@ async function initAuth() {
   updateUserMenu();
 
   // Listen for sign-in / sign-out events
-  supabaseClient.auth.onAuthStateChange((event, session) => {
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
+    const wasSignedOut = !currentUser;
     currentUser = session?.user || null;
     updateUserMenu();
     if (event === 'SIGNED_IN') {
       console.log('✅ Signed in as', currentUser.email);
-      showScreen('home');
+      await syncOnSignIn();
+      if (wasSignedOut) showScreen('home');
     }
     if (event === 'SIGNED_OUT') {
       console.log('👋 Signed out');
     }
   });
+
+  // If we restored an existing session on page load, sync right away
+  if (currentUser) {
+    await syncOnSignIn();
+  }
 }
 
 function updateUserMenu() {
@@ -2790,6 +2798,188 @@ async function signUpWithEmail() {
 async function signOut() {
   await supabaseClient.auth.signOut();
   document.getElementById('user-menu-dropdown').style.display = 'none';
+  // Drop cloud cache; revert to whatever's in localStorage (guest mode)
+  savedStories = JSON.parse(localStorage.getItem('gravestories') || '[]');
+  renderSavedList();
+  updateHomeMapButton();
+}
+
+// ── PERSISTENCE LAYER ──────────────────────────────────────────
+// All saves/deletes/updates go through here. Routes to cloud if signed in
+// (with localStorage as offline cache), or pure localStorage if guest.
+
+// Map an in-memory story object to a row for the Supabase table
+function storyToRow(story) {
+  return {
+    user_id: currentUser.id,
+    name: story.name || null,
+    dates: story.dates || null,
+    biography: story.biography || null,
+    location: story.location || null,
+    inscription: story.inscription || null,
+    symbols: story.symbols || null,
+    family_name: story.family_name || null,
+    notes: story.notes || null,
+    sources: story.sources || null,
+    source_urls: story.source_urls || null,
+    latitude: story.gps?.lat ?? null,
+    longitude: story.gps?.lng ?? null,
+    user_corrected: !!story.userCorrected,
+    low_confidence: !!story._lowConfidence,
+    is_public: !!story.is_public,
+    client_timestamp: story.timestamp || null
+  };
+}
+
+// Map a Supabase row back to the in-memory story shape the rest of the app uses
+function rowToStory(row) {
+  return {
+    id: row.id,
+    timestamp: row.client_timestamp || new Date(row.created_at).getTime(),
+    name: row.name,
+    dates: row.dates,
+    biography: row.biography,
+    location: row.location,
+    inscription: row.inscription,
+    symbols: row.symbols,
+    family_name: row.family_name,
+    notes: row.notes,
+    sources: row.sources,
+    source_urls: row.source_urls,
+    gps: (row.latitude != null && row.longitude != null) ? { lat: row.latitude, lng: row.longitude } : null,
+    userCorrected: row.user_corrected,
+    _lowConfidence: row.low_confidence,
+    is_public: row.is_public
+  };
+}
+
+// Persist the current savedStories array to localStorage as offline cache
+function persistLocal() {
+  try {
+    localStorage.setItem('gravestories', JSON.stringify(savedStories));
+  } catch (e) {
+    console.warn('💾 localStorage write failed:', e.message);
+  }
+}
+
+// SAVE a new story (cloud + local mirror)
+async function persistSave(story) {
+  // Always update local immediately for snappy UI
+  persistLocal();
+
+  if (!currentUser) return; // guest mode, localStorage is the truth
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('stories')
+      .insert(storyToRow(story))
+      .select()
+      .single();
+    if (error) throw error;
+    // Tag the in-memory story with its cloud ID so we can update/delete later
+    story.id = data.id;
+    persistLocal();
+    console.log('☁️ Saved to cloud:', data.id);
+  } catch (e) {
+    console.warn('☁️ Cloud save failed (will retry on next sync):', e.message);
+    // Tag for later retry
+    story._needsCloudSync = true;
+    persistLocal();
+  }
+}
+
+// DELETE a story (cloud + local mirror)
+async function persistDelete(story) {
+  persistLocal();
+  if (!currentUser || !story.id) return;
+
+  try {
+    const { error } = await supabaseClient.from('stories').delete().eq('id', story.id);
+    if (error) throw error;
+    console.log('☁️ Deleted from cloud:', story.id);
+  } catch (e) {
+    console.warn('☁️ Cloud delete failed:', e.message);
+  }
+}
+
+// UPDATE an existing story (used by drag-to-correct, public/private toggle, etc.)
+async function persistUpdate(story) {
+  persistLocal();
+  if (!currentUser || !story.id) return;
+
+  try {
+    const { error } = await supabaseClient
+      .from('stories')
+      .update(storyToRow(story))
+      .eq('id', story.id);
+    if (error) throw error;
+    console.log('☁️ Updated in cloud:', story.id);
+  } catch (e) {
+    console.warn('☁️ Cloud update failed:', e.message);
+    story._needsCloudSync = true;
+    persistLocal();
+  }
+}
+
+// FETCH all stories for the current user from the cloud
+async function fetchCloudStories() {
+  if (!currentUser) return [];
+  try {
+    const { data, error } = await supabaseClient
+      .from('stories')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data.map(rowToStory);
+  } catch (e) {
+    console.warn('☁️ Cloud fetch failed, using local cache:', e.message);
+    return null;  // signals "use local cache"
+  }
+}
+
+// Called on sign-in: merge local stories into cloud, then load all cloud stories
+async function syncOnSignIn() {
+  console.log('☁️ Syncing on sign-in...');
+
+  const localOnly = JSON.parse(localStorage.getItem('gravestories') || '[]');
+  const cloudStories = await fetchCloudStories();
+
+  if (cloudStories === null) {
+    // Cloud unreachable — stay on local cache
+    console.log('☁️ Cloud unreachable, staying on local cache');
+    return;
+  }
+
+  // Build a Set of client_timestamps that already exist in the cloud
+  const cloudTimestamps = new Set(cloudStories.map(s => s.timestamp).filter(Boolean));
+
+  // Upload any local stories that aren't already in cloud
+  const toUpload = localOnly.filter(s => s.timestamp && !cloudTimestamps.has(s.timestamp));
+  if (toUpload.length > 0) {
+    console.log(`☁️ Uploading ${toUpload.length} local story(s) to cloud...`);
+    for (const story of toUpload) {
+      try {
+        const { data, error } = await supabaseClient
+          .from('stories')
+          .insert(storyToRow(story))
+          .select()
+          .single();
+        if (error) throw error;
+        story.id = data.id;
+        cloudStories.unshift(rowToStory(data));
+      } catch (e) {
+        console.warn('☁️ Failed to upload one story:', e.message);
+      }
+    }
+  }
+
+  // Cloud is now authoritative — replace in-memory + local cache
+  savedStories = cloudStories;
+  persistLocal();
+  renderSavedList();
+  updateHomeMapButton();
+  console.log(`☁️ Sync complete. ${savedStories.length} story(s) loaded.`);
 }
 
 // Run auth init on page load

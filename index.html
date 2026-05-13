@@ -3165,19 +3165,45 @@ function openCemeteryMap(focusStory = null) {
     if (leafletMap) {
       setTimeout(() => leafletMap.invalidateSize(), 200);
     }
-    // After everything's laid out, fly to the focused grave if there is one
-    if (mapFocusStory && mapFocusStory.gps && leafletMap) {
-      setTimeout(() => {
-        leafletMap.flyTo([mapFocusStory.gps.lat, mapFocusStory.gps.lng], 19, { duration: 1.2 });
-        // Open the popup for that grave
-        mapMarkers.forEach(m => {
-          const pos = m.getLatLng();
-          if (Math.abs(pos.lat - mapFocusStory.gps.lat) < 0.0001 &&
-              Math.abs(pos.lng - mapFocusStory.gps.lng) < 0.0001) {
-            m.openPopup();
+    // After everything's laid out, fly to the focused grave if there is one.
+    if (mapFocusStory && leafletMap) {
+      const focusName = mapFocusStory.name;
+      const focusTimestamp = mapFocusStory.timestamp;
+      console.log('🎯 Map focus requested for:', focusName, '(timestamp', focusTimestamp + ')');
+
+      // Strategy: wait for the map to settle (no zoom/pan for 600ms), THEN find
+      // the marker matching the focus story by identity and fly to it.
+      // We can't rely on mapFocusStory.gps because geocoded coords are only
+      // attached to the map's working copy of the stories, not the bio's currentStory.
+      let settleTimer = null;
+      let hasFlown = false;
+      const scheduleFly = () => {
+        if (hasFlown) return;
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => {
+          if (hasFlown) return;
+          const target = mapMarkers.find(m =>
+            m.options.story && (
+              (focusTimestamp && m.options.story.timestamp === focusTimestamp) ||
+              (focusName && m.options.story.name === focusName)
+            )
+          );
+          if (!target) {
+            console.log('🎯 No marker found for', focusName, '— may still be geocoding');
+            return;
           }
-        });
-      }, 400);
+          hasFlown = true;
+          leafletMap.off('moveend', scheduleFly);
+          leafletMap.off('zoomend', scheduleFly);
+          const pos = target.getLatLng();
+          console.log('🎯 Map settled — flying to marker at', pos.lat, pos.lng);
+          leafletMap.flyTo([pos.lat, pos.lng], 19, { duration: 1.2 });
+          setTimeout(() => target.openPopup(), 1300);
+        }, 600);
+      };
+      leafletMap.on('moveend', scheduleFly);
+      leafletMap.on('zoomend', scheduleFly);
+      scheduleFly();
     }
   }, 150);
 }
@@ -3418,7 +3444,7 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
 
   // Add a marker for each grave (draggable for user correction)
   graves.forEach(story => {
-    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGraveIcon(story._lowConfidence), draggable: true })
+    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGraveIcon(story._lowConfidence), draggable: true, story: story })
       .addTo(leafletMap)
       .bindPopup(`
         <div style="font-family:'Playfair Display',serif;min-width:150px;max-width:300px;">

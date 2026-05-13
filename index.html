@@ -1818,6 +1818,51 @@ function setStep(i) {
   if (el) el.textContent = steps[i];
 }
 
+// ── GEMINI: CALL WITH FALLBACK ───────────────────────────────────
+// Primary: gemini-3.1-flash-lite (stable). Fallback: gemini-2.5-flash.
+// Falls back on:
+//   - HTTP 503 (Service Unavailable / overload)
+//   - HTTP 429 (rate-limited on primary)
+//   - Network/fetch errors
+//   - Response body containing an explicit overload/unavailable error
+async function geminiCallWithFallback(payload) {
+  const PRIMARY = 'gemini-3.1-flash-lite';
+  const FALLBACK = 'gemini-2.5-flash';
+  const init = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  };
+
+  const shouldFallback = (res, data) => {
+    if (res && (res.status === 503 || res.status === 429)) return true;
+    if (data && data.error) {
+      const msg = (data.error.message || '').toLowerCase();
+      const code = data.error.code;
+      if (code === 503 || code === 429) return true;
+      if (msg.includes('overload') || msg.includes('unavailable') ||
+          msg.includes('high demand') || msg.includes('try again later')) return true;
+    }
+    return false;
+  };
+
+  // Try primary
+  try {
+    const res = await fetch(`${PROXY_BASE}/gemini/${PRIMARY}`, init);
+    const data = await res.json().catch(() => ({ error: { message: 'Invalid JSON response' } }));
+    if (!shouldFallback(res, data)) return { data, model: PRIMARY };
+    console.log(`⚠️ ${PRIMARY} unavailable (status ${res.status}) — falling back to ${FALLBACK}`);
+  } catch (err) {
+    console.log(`⚠️ ${PRIMARY} fetch failed (${err.message}) — falling back to ${FALLBACK}`);
+  }
+
+  // Try fallback
+  const res2 = await fetch(`${PROXY_BASE}/gemini/${FALLBACK}`, init);
+  const data2 = await res2.json().catch(() => ({ error: { message: 'Invalid JSON response from fallback' } }));
+  console.log(`✅ Used fallback model: ${FALLBACK}`);
+  return { data: data2, model: FALLBACK };
+}
+
 // ── GEMINI: READ GRAVESTONE ──────────────────────────────────────
 async function readGravestone(base64, location) {
   const locationHint = location ? `This gravestone is located near: ${location}.` : '';
@@ -1841,24 +1886,15 @@ Return ONLY a valid JSON object with these exact fields:
 
 If multiple people are on the stone, use the names array. Be precise about dates. Return only JSON.`;
 
-  const response = await fetch(
-    `${PROXY_BASE}/gemini/gemini-3.1-flash-lite-preview`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: 'image/jpeg', data: base64 } }
-          ]
-        }],
-        generationConfig: { temperature: 0.1 }
-      })
-    }
-  );
-
-  const data = await response.json();
+  const { data } = await geminiCallWithFallback({
+    contents: [{
+      parts: [
+        { text: prompt },
+        { inline_data: { mime_type: 'image/jpeg', data: base64 } }
+      ]
+    }],
+    generationConfig: { temperature: 0.1 }
+  });
   if (data.error) throw new Error(data.error.message);
 
   const text = data.candidates[0].content.parts[0].text;
@@ -2006,19 +2042,10 @@ Return ONLY valid JSON with these exact fields:
   "location": "Cemetery Name, City, State — as specific as possible, empty string if unknown"
 }`;
 
-  const response = await fetch(
-    `${PROXY_BASE}/gemini/gemini-3.1-flash-lite-preview`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 8000 }
-      })
-    }
-  );
-
-  const data = await response.json();
+  const { data } = await geminiCallWithFallback({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.1, maxOutputTokens: 8000 }
+  });
   if (data.error) throw new Error(data.error.message);
 
   const text = data.candidates[0].content.parts[0].text;
@@ -2321,7 +2348,7 @@ function resetLocationPermission() {
 // Only register service worker when hosted on https:// (not local files)
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   const swCode = `
-    const CACHE = 'gravestory-v8
+    const CACHE = 'gravestory-v9
 ';
     const TILE_CACHE = 'gravestory-tiles-v1';
     const OFFLINE_URLS = ['/'];

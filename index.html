@@ -1418,6 +1418,21 @@ async function forwardGeocode(locationStr, personName, dates) {
       queries.push(cemeteryName);
     }
   }
+  // FINAL FALLBACK: progressively shorter location-only queries (no cemetery name).
+  // For "Washington's Tomb, Mount Vernon Estate, Mount Vernon, Virginia" this tries
+  // "Mount Vernon, Virginia" and "Virginia" — Nominatim usually finds these place names
+  // even when the full string with cemetery name doesn't match anything.
+  // The geographic check + cemetery type filter still apply, so this won't pull random
+  // cities — only legit cemetery/tomb/memorial features inside the geographic region.
+  if (parts.length >= 2) {
+    // Last 2 segments — "Mount Vernon, Virginia"
+    queries.push(parts.slice(-2).join(',').trim() + ' cemetery');
+    queries.push(parts.slice(-2).join(',').trim());
+  }
+  if (parts.length >= 1) {
+    // Last segment alone — "Virginia"
+    queries.push(parts[parts.length - 1].trim() + ' cemetery');
+  }
 
   // Extract geographic context tokens from the ORIGINAL location string (city/state/country).
   // Skip the first segment (typically the cemetery name itself) and short fragments.

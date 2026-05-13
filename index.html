@@ -1271,6 +1271,10 @@ let savedStories = JSON.parse(localStorage.getItem('gravestories') || '[]');
 let locationPermission = localStorage.getItem('gs_location_permission'); // 'granted', 'denied', or null
 
 // ── NAVIGATION ───────────────────────────────────────────────────
+// Track whether a showScreen call originated from a popstate (back/forward button)
+// so we don't push a new history entry when the user is navigating backward.
+let _navigatingViaHistory = false;
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -1279,6 +1283,29 @@ function showScreen(id) {
     renderSavedList();
     updateHomeMapButton();
   }
+
+  // Push a history entry for every screen change EXCEPT the initial home load
+  // and screen changes that are themselves caused by the back button.
+  if (!_navigatingViaHistory) {
+    const currentState = history.state;
+    // Don't push duplicate entries if we're already on this screen
+    if (!currentState || currentState.screen !== id) {
+      history.pushState({ screen: id }, '', '');
+    }
+  }
+}
+
+// Handle hardware back button (Android, mouse back, Alt+Left, etc.)
+window.addEventListener('popstate', (event) => {
+  _navigatingViaHistory = true;
+  const target = (event.state && event.state.screen) || 'home';
+  showScreen(target);
+  _navigatingViaHistory = false;
+});
+
+// Seed the initial history state so the very first back press has somewhere to go
+if (!history.state) {
+  history.replaceState({ screen: 'home' }, '', '');
 }
 
 // ── GEOLOCATION ─────────────────────────────────────────────────

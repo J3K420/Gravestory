@@ -2049,45 +2049,83 @@ async function searchWikiTree(graveData) {
   const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0] || '';
   const deathYear = graveData.death_date?.match(/\d{4}/)?.[0] || '';
 
-  console.log('🌳 WIKITREE searching:', firstName, lastName, birthYear || '(no year)');
-
-  try {
+  // Inner helper: do a single search call
+  async function wikiSearch(body) {
     const res = await fetch(`${PROXY_BASE}/wikitree`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'searchPerson',
-        FirstName: firstName,
-        LastName: lastName,
-        BirthDate: birthYear || undefined,
-        DeathDate: deathYear || undefined,
-        fields: 'Name,FirstName,LastNameAtBirth,LastNameCurrent,BirthDate,DeathDate,BirthLocation,DeathLocation,Father,Mother,Gender,Bio'
-      })
+      body: JSON.stringify(body)
     });
-
     if (!res.ok) {
       console.log('🌳 WIKITREE proxy returned', res.status);
-      return null;
+      return [];
+    }
+    const data = await res.json();
+    const matches = Array.isArray(data) ? data[0]?.matches : data?.matches;
+    return Array.isArray(matches) ? matches : [];
+  }
+
+  const baseQuery = {
+    action: 'searchPerson',
+    FirstName: firstName,
+    LastName: lastName,
+    fields: 'Name,FirstName,LastNameAtBirth,LastNameCurrent,BirthDate,DeathDate,BirthLocation,DeathLocation,Father,Mother,Gender,Bio'
+  };
+
+  console.log('🌳 WIKITREE searching:', firstName, lastName, birthYear || '(no year)');
+
+  try {
+    // Attempt 1: with year filter (if we have one)
+    let matches = [];
+    if (birthYear) {
+      matches = await wikiSearch({ ...baseQuery, BirthDate: birthYear, DeathDate: deathYear || undefined });
+      if (matches.length > 0) {
+        console.log('🌳 WIKITREE pass 1: found', matches.length, 'with year filter');
+      } else {
+        console.log('🌳 WIKITREE pass 1: no matches, retrying without year');
+      }
     }
 
-    const data = await res.json();
-    // WikiTree returns an array; the result we want is in data[0].matches
-    const matches = Array.isArray(data) ? data[0]?.matches : data?.matches;
-    if (!matches || matches.length === 0) {
+    // Attempt 2: no year filter — wider net, then score locally
+    if (matches.length === 0) {
+      matches = await wikiSearch(baseQuery);
+      console.log('🌳 WIKITREE pass 2: found', matches.length, 'without year filter');
+    }
+
+    if (matches.length === 0) {
       console.log('🌳 WIKITREE no matches');
       return null;
     }
 
-    // Score matches: prefer ones where birth year aligns
+    // Score each match: closer birth year = better. ±5 year window allowed.
     let best = matches[0];
-    if (birthYear) {
-      const yearMatch = matches.find(m => m.BirthDate?.startsWith(birthYear));
-      if (yearMatch) best = yearMatch;
+    let bestScore = -Infinity;
+    for (const m of matches) {
+      const mYear = parseInt((m.BirthDate || '').slice(0, 4), 10);
+      let score = 0;
+      if (birthYear && mYear) {
+        const diff = Math.abs(mYear - parseInt(birthYear, 10));
+        if (diff === 0) score = 100;
+        else if (diff <= 2) score = 50;
+        else if (diff <= 5) score = 20;
+        else score = -diff;  // farther → worse
+      }
+      // Slight bonus for records that have an actual birth location filled in
+      if (m.BirthLocation) score += 1;
+      if (score > bestScore) { bestScore = score; best = m; }
     }
 
-    console.log('🌳 WIKITREE best match:', best.Name, best.BirthDate, '→', best.DeathDate);
+    // Sanity check: if we had a birth year and the best match is more than 10 years off, reject it
+    if (birthYear) {
+      const bestYear = parseInt((best.BirthDate || '').slice(0, 4), 10);
+      if (bestYear && Math.abs(bestYear - parseInt(birthYear, 10)) > 10) {
+        console.log('🌳 WIKITREE best match too far off (', bestYear, 'vs', birthYear, ') — rejecting');
+        return null;
+      }
+    }
 
-    // Trim what gets passed to Gemini — bio text can be massive
+    console.log('🌳 WIKITREE best match:', best.Name, best.BirthDate, '→', best.DeathDate, '(score', bestScore + ')');
+
     return {
       name: `${best.FirstName || ''} ${best.LastNameAtBirth || best.LastNameCurrent || ''}`.trim(),
       birth: best.BirthDate || null,

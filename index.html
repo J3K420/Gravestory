@@ -3023,27 +3023,32 @@ function rowToStory(row) {
 
 // ── USER PREFS (display name + default visibility) ───────────────
 // Cached in memory after first load; written through to Supabase on change.
-let userPrefs = { default_visibility: 'prompt', display_name: null };
+let userPrefs = { default_visibility: 'prompt', display_name: null, is_admin: false };
+
+function isAdmin() {
+  return !!(currentUser && userPrefs && userPrefs.is_admin);
+}
 
 async function loadUserPrefs() {
   if (!currentUser) {
-    userPrefs = { default_visibility: 'prompt', display_name: null };
+    userPrefs = { default_visibility: 'prompt', display_name: null, is_admin: false };
     return;
   }
   try {
     const { data, error } = await supabaseClient
       .from('user_prefs')
-      .select('default_visibility, display_name')
+      .select('default_visibility, display_name, is_admin')
       .eq('user_id', currentUser.id)
       .maybeSingle();
     if (error) throw error;
     if (data) {
       userPrefs = {
         default_visibility: data.default_visibility || 'prompt',
-        display_name: data.display_name || null
+        display_name: data.display_name || null,
+        is_admin: !!data.is_admin
       };
     } else {
-      userPrefs = { default_visibility: 'prompt', display_name: null };
+      userPrefs = { default_visibility: 'prompt', display_name: null, is_admin: false };
     }
   } catch (e) {
     console.warn('⚙️ loadUserPrefs failed:', e.message);
@@ -3682,9 +3687,10 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
     popupAnchor: [0, -24]
   });
 
-  // Add a marker for each grave (draggable for user correction)
+  // Add a marker for each grave. Drag-to-correct is admin-only.
+  const canDrag = isAdmin();
   graves.forEach(story => {
-    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGraveIcon(story._lowConfidence), draggable: true, story: story })
+    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGraveIcon(story._lowConfidence), draggable: canDrag, story: story })
       .addTo(leafletMap)
       .bindPopup(`
         <div style="font-family:'Playfair Display',serif;min-width:150px;max-width:300px;">
@@ -3693,11 +3699,11 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
           <small style="color:#888">${story.location || ''}</small>
           ${story.userCorrected ? '<br><span style="font-size:0.75rem;color:#2a7a2a">✓ location corrected</span>' : ''}
           ${story._lowConfidence && !story.userCorrected ? '<br><span style="font-size:0.75rem;color:#a87a2a">⚠ approximate — state may not match</span>' : ''}
-          <br><small style="color:#aaa;font-size:0.7rem;font-style:italic">Drag pin to correct location</small>
+          ${canDrag ? '<br><small style="color:#aaa;font-size:0.7rem;font-style:italic">Drag pin to correct location</small>' : ''}
           ${buildPopupBio(story)}
         </div>
       `, { maxWidth: 320 });
-    marker.on('dragend', () => handleMarkerDragEnd(marker, story));
+    if (canDrag) marker.on('dragend', () => handleMarkerDragEnd(marker, story));
     mapMarkers.push(marker);
   });
 

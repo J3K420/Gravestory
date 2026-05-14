@@ -3482,11 +3482,13 @@ async function initCemeteryMap() {
     for (const story of textOnly) {
       const coords = await forwardGeocode(story.location, story.name, story.dates);
       if (coords) {
-        // Attach geocoded coords temporarily (not saved to localStorage)
-        story._geocodedGps = coords;
+        // Write coords back to the canonical saved story so they persist
+        story.gps = { lat: coords.lat, lng: coords.lng };
         story._isCemetery = coords.isCemetery === true;
         story._lowConfidence = coords.lowConfidence === true;
-        mapped.push({ ...story, gps: coords, _isCemetery: coords.isCemetery === true, _lowConfidence: coords.lowConfidence === true });
+        // Persist to localStorage + cloud so the global map can use them
+        await persistUpdate(story);
+        mapped.push({ ...story, _isCemetery: story._isCemetery, _lowConfidence: story._lowConfidence });
       }
     }
   }

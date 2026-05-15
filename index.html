@@ -1553,11 +1553,13 @@ window.addEventListener('popstate', (event) => {
   }
 });
 
-// Kick off initial routing. Function hoisting puts openCemeteryMap /
-// openGlobalMap in scope even though their declarations appear later in
-// the script — they're called via _navigateToHashTarget if the hash
-// targets a map screen.
-restoreScreenFromUrl();
+// Kick off initial routing AFTER the synchronous script finishes parsing.
+// Function declarations are hoisted, but `let`/`const` bindings used by
+// those functions (e.g. `mapPreviousScreen` inside openCemeteryMap) are
+// in the Temporal Dead Zone until their declaration line is reached.
+// A 0ms setTimeout pushes restoreScreenFromUrl into the next tick, by
+// which point every let/const further down the file has initialized.
+setTimeout(restoreScreenFromUrl, 0);
 
 // ── GEOLOCATION ─────────────────────────────────────────────────
 

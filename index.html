@@ -1462,8 +1462,21 @@ let savedStories = JSON.parse(localStorage.getItem('gravestories') || '[]');
 let locationPermission = localStorage.getItem('gs_location_permission'); // 'granted', 'denied', or null
 
 // ── NAVIGATION ───────────────────────────────────────────────────
-// Track whether a showScreen call originated from a popstate (back/forward button)
-// so we don't push a new history entry when the user is navigating backward.
+// Hash-based routing so reload returns the user to their current screen
+// (previous pushState('', '', '') wrote to an empty URL and lost state on reload).
+//
+// URL shape: yourdomain.com/Gravestory/        → home
+//            yourdomain.com/Gravestory/#camera → camera, etc.
+
+const VALID_SCREENS = [
+  'home', 'auth', 'settings', 'camera', 'result',
+  'cemetery-map-screen', 'global-map-screen'
+  // NOTE: 'loading' deliberately excluded — reload mid-research should
+  // fall back to home, not get stuck on a spinner with no in-flight work.
+];
+
+// Suppress history mutations when the screen change is itself caused by
+// a popstate or by initial hash restoration.
 let _navigatingViaHistory = false;
 
 function showScreen(id) {
@@ -1475,29 +1488,76 @@ function showScreen(id) {
     updateHomeMapButton();
   }
 
-  // Push a history entry for every screen change EXCEPT the initial home load
-  // and screen changes that are themselves caused by the back button.
   if (!_navigatingViaHistory) {
-    const currentState = history.state;
-    // Don't push duplicate entries if we're already on this screen
-    if (!currentState || currentState.screen !== id) {
-      history.pushState({ screen: id }, '', '');
+    const targetHash = id === 'home' ? '' : '#' + id;
+    if (location.hash !== targetHash) {
+      if (id === 'home') {
+        // Strip the hash entirely so root reloads stay on home.
+        history.replaceState({ screen: id }, '', location.pathname + location.search);
+      } else {
+        history.pushState({ screen: id }, '', targetHash);
+      }
     }
   }
 }
 
-// Handle hardware back button (Android, mouse back, Alt+Left, etc.)
+// Single dispatcher used by both initial hash restore and popstate, so the
+// special cases (story rehydration, map (re-)initialization) stay in one place.
+function _navigateToHashTarget(target) {
+  if (target === 'result') {
+    // Rehydrate the last viewed story from localStorage on reload / shared link.
+    const saved = localStorage.getItem('gs_last_story');
+    if (saved) {
+      try {
+        currentStory = JSON.parse(saved);
+        showScreen('result');
+        renderResult(currentStory);
+        return;
+      } catch {
+        // Corrupted blob — fall through to home rather than crash.
+      }
+    }
+    showScreen('home');
+  } else if (target === 'cemetery-map-screen') {
+    // openCemeteryMap() handles Leaflet init + invalidateSize. A bare
+    // showScreen() here would leave the map container empty.
+    openCemeteryMap();
+  } else if (target === 'global-map-screen') {
+    openGlobalMap();
+  } else {
+    showScreen(target);
+  }
+}
+
+function restoreScreenFromUrl() {
+  const hash = location.hash.replace('#', '');
+  const target = VALID_SCREENS.includes(hash) ? hash : 'home';
+  _navigatingViaHistory = true;
+  try {
+    _navigateToHashTarget(target);
+  } finally {
+    _navigatingViaHistory = false;
+  }
+}
+
+// Hardware back button, mouse back, Alt+Left, etc.
 window.addEventListener('popstate', (event) => {
   _navigatingViaHistory = true;
-  const target = (event.state && event.state.screen) || 'home';
-  showScreen(target);
-  _navigatingViaHistory = false;
+  const raw = (event.state && event.state.screen)
+    || (location.hash.replace('#', '') || 'home');
+  const safeTarget = VALID_SCREENS.includes(raw) ? raw : 'home';
+  try {
+    _navigateToHashTarget(safeTarget);
+  } finally {
+    _navigatingViaHistory = false;
+  }
 });
 
-// Seed the initial history state so the very first back press has somewhere to go
-if (!history.state) {
-  history.replaceState({ screen: 'home' }, '', '');
-}
+// Kick off initial routing. Function hoisting puts openCemeteryMap /
+// openGlobalMap in scope even though their declarations appear later in
+// the script — they're called via _navigateToHashTarget if the hash
+// targets a map screen.
+restoreScreenFromUrl();
 
 // ── GEOLOCATION ─────────────────────────────────────────────────
 
@@ -2527,6 +2587,21 @@ Return ONLY valid JSON with these exact fields:
 
 // ── RENDER RESULT ────────────────────────────────────────────────
 function renderResult(story) {
+  // Persist a lightweight copy so a reload on #result can rehydrate. Strip
+  // the in-memory-only base64 image fields — they can easily exceed the
+  // ~5MB localStorage quota and they're not needed for rendering (the R2
+  // image_url plus Wikipedia portrait URLs are sufficient post-reload).
+  try {
+    if (story) {
+      const { image, _pendingImageBase64, ...persistable } = story;
+      localStorage.setItem('gs_last_story', JSON.stringify(persistable));
+    }
+  } catch (e) {
+    // Quota exceeded or serialization failure — non-fatal; reload simply
+    // falls back to home rather than rehydrating.
+    console.warn('Could not persist last story for reload:', e);
+  }
+
   // Header images — 3 slots: portrait | gravestone | portrait
   const imgContainer = document.getElementById('result-image-container');
   const graveSrc = story.image || story.image_url || null;

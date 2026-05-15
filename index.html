@@ -1393,6 +1393,26 @@ function safeParseJSON(text, fallback) {
 // ── STATE ────────────────────────────────────────────────────────
 let currentImage = null;
 let currentImageBase64 = null;
+const R2_UPLOAD_URL = 'https://gravestory-proxy.james-gravestory.workers.dev/upload-image';
+
+async function uploadImageToR2(base64Data, contentType = 'image/jpeg') {
+  try {
+    const response = await fetch(R2_UPLOAD_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contentType, data: base64Data })
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Upload failed (${response.status}): ${text}`);
+    }
+    const result = await response.json();
+    return result.url;
+  } catch (err) {
+    console.warn('☁️ Image upload failed:', err.message);
+    return null;
+  }
+}
 let currentPhotoFile = null;
 let currentExifLocation = null;
 let currentStory = null;
@@ -1972,7 +1992,9 @@ async function startAnalysis() {
     const finalLocation = locationStr || story.location || null;
     currentStory = { 
       ...story, 
-      image: currentImage, 
+      image: currentImage,       // Kept for in-session preview only; stripped before save
+      _pendingImageBase64: currentImageBase64,  // Used by saveStory to upload to R2
+      image_url: null,           // Will be populated after upload
       location: finalLocation, 
       timestamp: Date.now(),
       gps: currentExifLocation ? { lat: currentExifLocation.lat, lng: currentExifLocation.lng } : null
@@ -2372,10 +2394,11 @@ Return ONLY valid JSON with these exact fields:
 
 // ── RENDER RESULT ────────────────────────────────────────────────
 function renderResult(story) {
-  // Header image
+  // Header image — prefer freshly-scanned in-memory data URL, fall back to R2 URL
   const imgContainer = document.getElementById('result-image-container');
-  if (story.image) {
-    imgContainer.innerHTML = `<img src="${story.image}" alt="Gravestone">`;
+  const imgSrc = story.image || story.image_url || null;
+  if (imgSrc) {
+    imgContainer.innerHTML = `<img src="${imgSrc}" alt="Gravestone" loading="lazy">`;
     imgContainer.style.display = 'block';
   } else {
     imgContainer.style.display = 'none';
@@ -2537,15 +2560,34 @@ async function saveStory() {
     const vis = userPrefs.default_visibility || 'prompt';
     if (vis === 'public') currentStory.is_public = true;
     else if (vis === 'private') currentStory.is_public = false;
-    // 'prompt' → leave undefined; the toggle in the bio body will read as Private
-    // and the user can flip it. (Also re-renders below to surface the toggle UI.)
+  }
+
+  const btn = document.getElementById('save-btn');
+
+  // Upload the image to R2 before saving (only if we have pending base64 and no URL yet)
+  if (currentStory._pendingImageBase64 && !currentStory.image_url) {
+    btn.textContent = '☁ Uploading…';
+    const url = await uploadImageToR2(currentStory._pendingImageBase64, 'image/jpeg');
+    if (url) {
+      currentStory.image_url = url;
+      console.log('☁️ Image uploaded:', url);
+    } else {
+      console.warn('☁️ Image upload failed — saving story without image');
+    }
+    // Always clear the in-memory base64 after attempting upload
+    delete currentStory._pendingImageBase64;
+  }
+
+  // Strip the data URL `image` field so it doesn't bloat localStorage
+  // The image_url will be used to render the image from R2 on subsequent loads.
+  if (currentStory.image && currentStory.image.startsWith('data:')) {
+    delete currentStory.image;
   }
 
   savedStories.unshift(currentStory);
   if (savedStories.length > 500) savedStories = savedStories.slice(0, 500);
   updateHomeMapButton();
 
-  const btn = document.getElementById('save-btn');
   btn.textContent = '✓ Saved';
   btn.className = 'action-btn action-save saved';
 
@@ -2993,6 +3035,7 @@ function storyToRow(story) {
     user_corrected: !!story.userCorrected,
     low_confidence: !!story._lowConfidence,
     is_public: !!story.is_public,
+    image_url: story.image_url || null,
     client_timestamp: story.timestamp || null
   };
 }
@@ -3016,6 +3059,7 @@ function rowToStory(row) {
     userCorrected: row.user_corrected,
     _lowConfidence: row.low_confidence,
     is_public: row.is_public,
+    image_url: row.image_url || null,
     _deletedAt: row.deleted_at || null,
     _updatedAt: row.updated_at
   };
@@ -3813,6 +3857,7 @@ async function fetchGlobalStories() {
       userCorrected: row.user_corrected,
       _lowConfidence: row.low_confidence,
       is_public: true,
+      image_url: row.image_url || null,
       _contributor: row.contributor_name || 'Anonymous',
       _isGlobal: true
     }));
@@ -3911,8 +3956,12 @@ function buildGlobalPopup(story) {
   if (!window._globalStoryLookup) window._globalStoryLookup = {};
   window._globalStoryLookup[story.id] = story;
 
+  const thumb = story.image_url
+    ? `<img src="${story.image_url}" alt="" loading="lazy" style="width:100%;max-height:140px;object-fit:cover;border-radius:3px;margin-bottom:0.5rem;">`
+    : '';
   return `
     <div style="font-family:'Playfair Display',serif;min-width:150px;max-width:300px;">
+      ${thumb}
       <strong>${(story.name || 'Unknown').replace(/</g, '&lt;')}</strong><br>
       <em style="font-size:0.85rem;color:#666">${(story.dates || '').replace(/</g, '&lt;')}</em><br>
       <small style="color:#888">${(story.location || '').replace(/</g, '&lt;')}</small><br>

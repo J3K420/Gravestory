@@ -462,17 +462,57 @@
 
   .result-image-container {
     width: 100%;
-    max-height: 220px;
-    overflow: hidden;
+    min-height: 240px;
     margin-bottom: 1.5rem;
     position: relative;
   }
 
-  .result-image-container img {
+  .result-image-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
     width: 100%;
-    height: 220px;
-    object-fit: cover;
-    opacity: 0.7;
+    height: 240px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .result-image-slot {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .result-image-slot.portrait {
+    flex: 0 0 25%;
+    max-width: 25%;
+  }
+
+  .result-image-slot.gravestone {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .result-image-slot img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    opacity: 0.85;
+  }
+
+  .result-image-slot.portrait img {
+    border-radius: 3px;
+  }
+
+  /* When no portraits, gravestone is centered and a bit wider */
+  .result-image-row.solo .result-image-slot.gravestone {
+    max-width: 70%;
   }
 
   .result-image-container::after {
@@ -481,8 +521,9 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 80px;
+    height: 60px;
     background: linear-gradient(transparent, var(--ink));
+    pointer-events: none;
   }
 
   .result-name {
@@ -1987,6 +2028,9 @@ async function startAnalysis() {
     setStep(4);
     const story = await generateBiography(graveData, searchResults, wikiData, locationStr);
 
+    // 5.5 — Fetch Wikipedia portraits (best-effort, doesn't block on failure)
+    const portraits = await fetchWikipediaPortraits(story.name, story.dates);
+
     clearInterval(stepInterval);
     // Use GPS-derived location if available, otherwise fall back to location inferred by Gemini from research
     const finalLocation = locationStr || story.location || null;
@@ -1995,6 +2039,8 @@ async function startAnalysis() {
       image: currentImage,       // Kept for in-session preview only; stripped before save
       _pendingImageBase64: currentImageBase64,  // Used by saveStory to upload to R2
       image_url: null,           // Will be populated after upload
+      portrait_left_url: portraits.left,
+      portrait_right_url: portraits.right,
       location: finalLocation, 
       timestamp: Date.now(),
       gps: currentExifLocation ? { lat: currentExifLocation.lat, lng: currentExifLocation.lng } : null
@@ -2321,6 +2367,93 @@ async function searchWikiTree(graveData) {
 }
 
 // ── GEMINI: GENERATE BIOGRAPHY ───────────────────────────────────
+// ── WIKIPEDIA PORTRAIT SEARCH ────────────────────────────────────
+// Returns up to 2 image URLs from Wikipedia for the given person.
+// Strategy: search Wikipedia for the name + a context word ("grave" or birth
+// year if known), pick the top match, fetch its summary, take the lead image.
+// If the page has multiple images (file-list), grab a second one from the
+// images-on-page list.
+async function fetchWikipediaPortraits(name, dates) {
+  const result = { left: null, right: null };
+  if (!name || name.toLowerCase().includes('unknown')) return result;
+
+  try {
+    // Step 1: search for a matching Wikipedia article
+    // Use the death year as disambiguation when available
+    const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
+    const deathYear = yearMatch && yearMatch.length > 0 ? yearMatch[yearMatch.length - 1] : '';
+    const searchQuery = encodeURIComponent(`${name} ${deathYear}`.trim());
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${searchQuery}&srlimit=3&format=json&origin=*`;
+
+    const searchRes = await fetch(searchUrl);
+    if (!searchRes.ok) throw new Error(`search ${searchRes.status}`);
+    const searchData = await searchRes.json();
+    const hits = searchData?.query?.search || [];
+    if (hits.length === 0) {
+      console.log('🖼️ No Wikipedia article found for', name);
+      return result;
+    }
+
+    // Step 2: pull the summary for the top hit (this includes thumbnail + originalimage)
+    const title = hits[0].title;
+    const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+    const summaryRes = await fetch(summaryUrl);
+    if (!summaryRes.ok) throw new Error(`summary ${summaryRes.status}`);
+    const summary = await summaryRes.json();
+
+    // Lead image — prefer originalimage but fall back to thumbnail
+    const lead = summary?.originalimage?.source || summary?.thumbnail?.source || null;
+    if (lead) {
+      result.left = lead;
+      console.log('🖼️ Wikipedia lead image:', lead);
+    }
+
+    // Step 3 (optional): grab a second image from images-on-page list
+    // Only attempt if we found a lead image so we don't waste a call on nobodies
+    if (lead) {
+      try {
+        const imagesUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=images&titles=${encodeURIComponent(title)}&imlimit=5&format=json&origin=*`;
+        const imagesRes = await fetch(imagesUrl);
+        if (imagesRes.ok) {
+          const imagesData = await imagesRes.json();
+          const pages = imagesData?.query?.pages || {};
+          const firstPage = Object.values(pages)[0];
+          const imageList = firstPage?.images || [];
+          // Filter to actual portrait-like files (skip logos, icons, signatures, maps)
+          const candidates = imageList
+            .map(i => i.title)
+            .filter(t => /\.(jpe?g|png)$/i.test(t))
+            .filter(t => !/logo|icon|signature|map|flag|coat[-_ ]of[-_ ]arms/i.test(t))
+            .filter(t => !lead.includes(encodeURIComponent(t.replace(/^File:/, ''))));
+
+          if (candidates.length > 0) {
+            // Resolve the file title to its actual image URL
+            const secondTitle = candidates[0];
+            const resolveUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(secondTitle)}&prop=imageinfo&iiprop=url&format=json&origin=*`;
+            const resolveRes = await fetch(resolveUrl);
+            if (resolveRes.ok) {
+              const resolveData = await resolveRes.json();
+              const resolvedPages = resolveData?.query?.pages || {};
+              const resolvedPage = Object.values(resolvedPages)[0];
+              const secondUrl = resolvedPage?.imageinfo?.[0]?.url || null;
+              if (secondUrl) {
+                result.right = secondUrl;
+                console.log('🖼️ Wikipedia secondary image:', secondUrl);
+              }
+            }
+          }
+        }
+      } catch (innerErr) {
+        console.warn('🖼️ Secondary image lookup failed:', innerErr.message);
+      }
+    }
+  } catch (err) {
+    console.warn('🖼️ Wikipedia portrait fetch failed:', err.message);
+  }
+
+  return result;
+}
+
 async function generateBiography(graveData, searchResults, wikiData, location) {
   const searchContext = searchResults.length > 0
     ? 'Web research found:\n' + searchResults.map(r => `- ${r.title}: ${r.content}`).join('\n')
@@ -2394,11 +2527,21 @@ Return ONLY valid JSON with these exact fields:
 
 // ── RENDER RESULT ────────────────────────────────────────────────
 function renderResult(story) {
-  // Header image — prefer freshly-scanned in-memory data URL, fall back to R2 URL
+  // Header images — 3 slots: portrait | gravestone | portrait
   const imgContainer = document.getElementById('result-image-container');
-  const imgSrc = story.image || story.image_url || null;
-  if (imgSrc) {
-    imgContainer.innerHTML = `<img src="${imgSrc}" alt="Gravestone" loading="lazy">`;
+  const graveSrc = story.image || story.image_url || null;
+  const leftSrc = story.portrait_left_url || null;
+  const rightSrc = story.portrait_right_url || null;
+
+  if (graveSrc || leftSrc || rightSrc) {
+    const hasPortraits = !!(leftSrc || rightSrc);
+    imgContainer.innerHTML = `
+      <div class="result-image-row ${hasPortraits ? '' : 'solo'}">
+        ${leftSrc ? `<div class="result-image-slot portrait"><img src="${leftSrc}" alt="Portrait" loading="lazy"></div>` : ''}
+        ${graveSrc ? `<div class="result-image-slot gravestone"><img src="${graveSrc}" alt="Gravestone" loading="lazy"></div>` : ''}
+        ${rightSrc ? `<div class="result-image-slot portrait"><img src="${rightSrc}" alt="Portrait" loading="lazy"></div>` : ''}
+      </div>
+    `;
     imgContainer.style.display = 'block';
   } else {
     imgContainer.style.display = 'none';
@@ -3036,6 +3179,8 @@ function storyToRow(story) {
     low_confidence: !!story._lowConfidence,
     is_public: !!story.is_public,
     image_url: story.image_url || null,
+    portrait_left_url: story.portrait_left_url || null,
+    portrait_right_url: story.portrait_right_url || null,
     client_timestamp: story.timestamp || null
   };
 }
@@ -3060,6 +3205,8 @@ function rowToStory(row) {
     _lowConfidence: row.low_confidence,
     is_public: row.is_public,
     image_url: row.image_url || null,
+    portrait_left_url: row.portrait_left_url || null,
+    portrait_right_url: row.portrait_right_url || null,
     _deletedAt: row.deleted_at || null,
     _updatedAt: row.updated_at
   };
@@ -3858,6 +4005,8 @@ async function fetchGlobalStories() {
       _lowConfidence: row.low_confidence,
       is_public: true,
       image_url: row.image_url || null,
+      portrait_left_url: row.portrait_left_url || null,
+      portrait_right_url: row.portrait_right_url || null,
       _contributor: row.contributor_name || 'Anonymous',
       _isGlobal: true
     }));

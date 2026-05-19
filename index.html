@@ -3549,6 +3549,75 @@ async function persistUpdate(story) {
   }
 }
 
+// PUSH local-only stories up to the cloud. Idempotent and safe to call on
+// every sync — this is the retry path the dead `_needsCloudSync` flag always
+// implied but never had. A story is "local-only" if it has no cloud `id`
+// (never inserted) or it's flagged `_needsCloudSync` (a prior insert failed).
+// De-dupes against the cloud by `timestamp` so a partially-succeeded earlier
+// push can't create duplicates. Returns the count actually uploaded.
+async function pushLocalOnly() {
+  if (!currentUser) return 0;
+
+  const candidates = savedStories.filter(s =>
+    (!s.id || s._needsCloudSync) && s.timestamp
+  );
+  if (candidates.length === 0) return 0;
+
+  // Find which of these already exist in the cloud (by timestamp) so a failed
+  // earlier run that DID insert some rows doesn't double-insert them now.
+  const stamps = candidates.map(s => s.timestamp);
+  let existing = new Set();
+  try {
+    const { data, error } = await supabaseClient
+      .from('stories')
+      .select('id, timestamp')
+      .eq('user_id', currentUser.id)
+      .in('timestamp', stamps);
+    if (error) throw error;
+    for (const row of (data || [])) {
+      existing.add(row.timestamp);
+      // Adopt the cloud id locally so future updates target the right row.
+      const local = savedStories.find(s => s.timestamp === row.timestamp);
+      if (local && !local.id) {
+        local.id = row.id;
+        delete local._needsCloudSync;
+      }
+    }
+  } catch (e) {
+    console.warn('☁️ pushLocalOnly dedupe check failed — proceeding cautiously:', e.message);
+  }
+
+  let uploaded = 0;
+  for (const story of candidates) {
+    if (existing.has(story.timestamp)) continue; // already in cloud
+    try {
+      const { data: inserted, error: insErr } = await supabaseClient
+        .from('stories')
+        .insert(storyToRow(story))
+        .select()
+        .single();
+      if (insErr) throw insErr;
+      story.id = inserted.id;
+      story._updatedAt = inserted.updated_at;
+      delete story._needsCloudSync;
+      uploaded++;
+    } catch (e) {
+      // Leave _needsCloudSync set so the NEXT sync retries it. Do not advance
+      // any high-water mark on its behalf.
+      story._needsCloudSync = true;
+      console.warn('☁️ pushLocalOnly: one story failed, will retry next sync:', e.message);
+    }
+  }
+
+  if (uploaded > 0) {
+    persistLocal();
+    renderSavedList();
+    updateHomeMapButton();
+    console.log(`☁️ pushLocalOnly: uploaded ${uploaded} local-only story(s).`);
+  }
+  return uploaded;
+}
+
 // INCREMENTAL SYNC: pull only changes since last sync
 async function syncDelta() {
   if (!currentUser) return { fetched: 0, deleted: 0 };
@@ -3572,6 +3641,9 @@ async function syncDelta() {
 
   if (data.length === 0) {
     console.log('☁️ Already up to date (no changes since', since || 'forever', ')');
+    // Nothing to pull, but still flush any local-only stories upward so a
+    // returning user's stranded saves heal even when there are no deltas.
+    await pushLocalOnly();
     return { fetched: 0, deleted: 0 };
   }
 
@@ -3604,6 +3676,13 @@ async function syncDelta() {
   renderSavedList();
   updateHomeMapButton();
   console.log(`☁️ Delta sync: ${fetched} updated/new, ${deleted} removed`);
+
+  // Always flush local-only stories upward — this is what was missing.
+  // Returning users (lastSync set) previously took a pull-only path, so any
+  // story whose original insert failed (or that was saved as a guest) was
+  // stranded forever. Retrying here means it heals on the next sync.
+  await pushLocalOnly();
+
   return { fetched, deleted };
 }
 
@@ -3629,37 +3708,37 @@ async function syncOnSignIn() {
       const cloudStories = data.map(rowToStory);
       const cloudTimestamps = new Set(cloudStories.map(s => s.timestamp).filter(Boolean));
 
-      // Upload any local stories not already in cloud
-      const toUpload = localStories.filter(s => s.timestamp && !cloudTimestamps.has(s.timestamp));
-      if (toUpload.length > 0) {
-        console.log(`☁️ Uploading ${toUpload.length} local story(s)...`);
-        for (const story of toUpload) {
-          try {
-            const { data: inserted, error: insErr } = await supabaseClient
-              .from('stories')
-              .insert(storyToRow(story))
-              .select()
-              .single();
-            if (insErr) throw insErr;
-            story.id = inserted.id;
-            cloudStories.unshift(rowToStory(inserted));
-          } catch (e) {
-            console.warn('☁️ Failed to upload one story:', e.message);
-          }
+      // Merge cloud stories into the working set, then push local-only ones up
+      // via the shared reusable path (handles dedupe + per-story retry flags).
+      savedStories = cloudStories;
+      // Re-attach any local stories not present in the cloud pull so
+      // pushLocalOnly() can see and upload them.
+      for (const ls of localStories) {
+        if (ls.timestamp && !cloudTimestamps.has(ls.timestamp) &&
+            !savedStories.some(s => s.timestamp === ls.timestamp)) {
+          savedStories.unshift(ls);
         }
       }
+      const uploaded = await pushLocalOnly();
 
-      savedStories = cloudStories;
-      // Mark the high-water mark for future incremental syncs
-      const newest = cloudStories.reduce((max, s) =>
-        !max || (s._updatedAt && s._updatedAt > max) ? s._updatedAt : max, null);
-      if (newest) setLastSync(newest);
-      else setLastSync(new Date().toISOString());
+      // Only advance the high-water mark if every local story made it up.
+      // If any push failed, leaving lastSync unset keeps this branch active so
+      // the next sign-in / tab-focus retries the stragglers instead of
+      // permanently stranding them (the original bug).
+      const stillPending = savedStories.some(s => (!s.id || s._needsCloudSync) && s.timestamp);
+      if (!stillPending) {
+        const newest = savedStories.reduce((max, s) =>
+          !max || (s._updatedAt && s._updatedAt > max) ? s._updatedAt : max, null);
+        if (newest) setLastSync(newest);
+        else setLastSync(new Date().toISOString());
+      } else {
+        console.warn('☁️ Some local stories still pending — NOT advancing high-water mark so they retry.');
+      }
 
       persistLocal();
       renderSavedList();
       updateHomeMapButton();
-      console.log(`☁️ Initial sync complete. ${savedStories.length} story(s) loaded.`);
+      console.log(`☁️ Initial sync complete. ${savedStories.length} story(s) loaded, ${uploaded} uploaded.`);
     } catch (e) {
       console.warn('☁️ Initial sync failed, staying on local cache:', e.message);
     }

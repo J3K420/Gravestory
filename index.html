@@ -2486,25 +2486,79 @@ async function searchWikiTree(graveData) {
       return null;
     }
 
-    // Score each match: closer birth year = better. ±5 year window allowed.
-    let best = matches[0];
+    // Score each match against the queried person.
+    // A match needs name alignment AND at least one date alignment to count.
+    // Records with no BirthDate AND no DeathDate cannot clear the floor
+    // even if WikiTree's own filter surfaced them — they're zero-evidence hits.
+    const queriedFirst = firstName.toLowerCase();
+    const queriedLast  = lastName.toLowerCase();
+    const birthYearNum = birthYear ? parseInt(birthYear, 10) : null;
+    const deathYearNum = deathYear ? parseInt(deathYear, 10) : null;
+
+    let best = null;
     let bestScore = -Infinity;
     for (const m of matches) {
-      const mYear = parseInt((m.BirthDate || '').slice(0, 4), 10);
       let score = 0;
-      if (birthYear && mYear) {
-        const diff = Math.abs(mYear - parseInt(birthYear, 10));
-        if (diff === 0) score = 100;
-        else if (diff <= 2) score = 50;
-        else if (diff <= 5) score = 20;
-        else score = -diff;  // farther → worse
+
+      // — Name alignment (required component) —
+      const mFirst = (m.FirstName || '').toLowerCase();
+      const mLast  = (m.LastNameAtBirth || m.LastNameCurrent || '').toLowerCase();
+      const firstMatch = mFirst && (mFirst === queriedFirst || mFirst.startsWith(queriedFirst) || queriedFirst.startsWith(mFirst));
+      const lastMatch  = mLast  && (mLast  === queriedLast);
+      if (firstMatch) score += 20;
+      if (lastMatch)  score += 20;
+
+      // — Birth year alignment —
+      const mBirthYear = parseInt((m.BirthDate || '').slice(0, 4), 10);
+      let birthAligned = false;
+      if (birthYearNum && mBirthYear) {
+        const diff = Math.abs(mBirthYear - birthYearNum);
+        if (diff === 0)      { score += 100; birthAligned = true; }
+        else if (diff <= 2)  { score += 50;  birthAligned = true; }
+        else if (diff <= 5)  { score += 20;  birthAligned = true; }
+        else                 { score -= diff; }
       }
+
+      // — Death year alignment —
+      const mDeathYear = parseInt((m.DeathDate || '').slice(0, 4), 10);
+      let deathAligned = false;
+      if (deathYearNum && mDeathYear) {
+        const diff = Math.abs(mDeathYear - deathYearNum);
+        if (diff === 0)      { score += 100; deathAligned = true; }
+        else if (diff <= 2)  { score += 50;  deathAligned = true; }
+        else if (diff <= 5)  { score += 20;  deathAligned = true; }
+        else                 { score -= diff; }
+      }
+
       // Slight bonus for records that have an actual birth location filled in
       if (m.BirthLocation) score += 1;
+
+      // Stash the alignment flags so the floor check below can read them
+      m._nameAligned = firstMatch && lastMatch;
+      m._dateAligned = birthAligned || deathAligned;
+
       if (score > bestScore) { bestScore = score; best = m; }
     }
 
-    // Sanity check: if we had a birth year and the best match is more than 10 years off, reject it
+    // — Credibility floor —
+    // Require: last-name match + (birth-year OR death-year alignment).
+    // Without these, the record is "WikiTree returned something for the name filter
+    // but no real biographical fields aligned" — same bug class as the Wikipedia
+    // hits[0] / Linda Lee Cadwell case that surfaced in Session 5.
+    if (!best || !best._nameAligned || !best._dateAligned) {
+      console.log(
+        '🌳 WIKITREE best match below credibility floor — rejecting.',
+        'name aligned:', !!best?._nameAligned,
+        'date aligned:', !!best?._dateAligned,
+        'top candidate:', best?.Name || '(none)',
+        `(${best?.BirthDate || '?'} → ${best?.DeathDate || '?'})`
+      );
+      return null;
+    }
+
+    // Secondary sanity check: if both sides have a birth year and they're >10 years apart, reject.
+    // (Belt-and-suspenders — the floor above already requires date alignment, but keep this
+    //  in case future scoring changes loosen the alignment thresholds.)
     if (birthYear) {
       const bestYear = parseInt((best.BirthDate || '').slice(0, 4), 10);
       if (bestYear && Math.abs(bestYear - parseInt(birthYear, 10)) > 10) {

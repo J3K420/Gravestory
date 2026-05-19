@@ -3671,6 +3671,18 @@ function openCemeteryMap(focusStory = null) {
   const activeScreen = document.querySelector('.screen.active');
   mapPreviousScreen = activeScreen ? activeScreen.id : 'home';
   mapFocusStory = focusStory;
+  // Persist focus state so a reload on #cemetery-map-screen rehydrates the
+  // single-cemetery view instead of falling back to the global map.
+  try {
+    if (focusStory) {
+      const { image, _pendingImageBase64, ...persistable } = focusStory;
+      localStorage.setItem('gs_map_focus', JSON.stringify(persistable));
+    } else {
+      localStorage.removeItem('gs_map_focus');
+    }
+  } catch (e) {
+    console.warn('Could not persist map focus for reload:', e);
+  }
   showScreen('cemetery-map-screen');
   // Give the screen time to fully paint before Leaflet calculates dimensions
   setTimeout(async () => {

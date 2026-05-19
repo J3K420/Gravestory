@@ -4204,8 +4204,12 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
     popupAnchor: [0, -24]
   });
 
-  // Add a marker for each grave. Drag-to-correct is admin-only.
-  const canDrag = isAdmin();
+  // Add a marker for each grave. Drag-to-correct is open to any signed-in
+  // user now that GPS pins are hard-constrained to the cemetery polygon
+  // (handleMarkerDragEnd enforces the boundary on every drop, so a user
+  // can refine within the polygon but can't drag onto a neighbour's lawn).
+  // Global-map markers stay non-draggable — users never edit others' pins.
+  const canDrag = !!currentUser;
   graves.forEach(story => {
     const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGraveIcon(story._lowConfidence), draggable: canDrag, story: story })
       .addTo(leafletMap)
@@ -4220,6 +4224,12 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
           ${buildPopupBio(story)}
         </div>
       `, { maxWidth: 320 });
+    // Personal map only ever holds the signed-in user's own stories
+    // (syncOnSignIn/syncDelta fetch with .eq('user_id', currentUser.id)),
+    // so "owns this story" is guaranteed by what data reaches this screen,
+    // not by a per-marker check. Drag is hard-constrained to the cemetery
+    // polygon inside handleMarkerDragEnd, so opening it to all signed-in
+    // users is safe. Global-map markers remain non-draggable elsewhere.
     if (canDrag) marker.on('dragend', () => handleMarkerDragEnd(marker, story));
     mapMarkers.push(marker);
   });

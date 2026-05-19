@@ -1289,7 +1289,7 @@
 <!-- ═══ CEMETERY MAP SCREEN ═══ -->
 <div id="cemetery-map-screen" class="screen" style="position:relative;">
   <div class="map-header">
-    <button class="map-header-back" onclick="showScreen(mapPreviousScreen || 'home')">← Back</button>
+    <button class="map-header-back" onclick="leaveCemeteryMap()">← Back</button>
     <div class="map-header-title">🗺️ Cemetery Map</div>
     <button onclick="exportCemeteryData()" style="background:none;border:1px solid rgba(201,168,76,0.4);color:var(--gold);font-size:0.75rem;padding:0.3rem 0.6rem;cursor:pointer;font-family:Crimson Pro,serif;">Export</button>
   </div>
@@ -1521,7 +1521,14 @@ function _navigateToHashTarget(target) {
   } else if (target === 'cemetery-map-screen') {
     // openCemeteryMap() handles Leaflet init + invalidateSize. A bare
     // showScreen() here would leave the map container empty.
-    openCemeteryMap();
+    // Rehydrate focus story so a reload on a single-cemetery view stays
+    // narrowed to that cemetery instead of widening to the global map.
+    let focus = null;
+    const savedFocus = localStorage.getItem('gs_map_focus');
+    if (savedFocus) {
+      try { focus = JSON.parse(savedFocus); } catch { /* fall through unfocused */ }
+    }
+    openCemeteryMap(focus);
   } else if (target === 'global-map-screen') {
     openGlobalMap();
   } else {
@@ -3665,6 +3672,14 @@ function buildPopupBio(story) {
     </div>
     <div id="${bioId}" style="display:none;margin-top:0.4rem;width:260px;height:160px;overflow-y:auto;overflow-x:hidden;padding:0.3rem 0.5rem;border:1px solid rgba(201,168,76,0.3);background:rgba(250,245,235,0.6);border-radius:3px;">${bioHtml}</div>
   `;
+}
+
+function leaveCemeteryMap() {
+  // Clear persisted focus so a later open-from-home doesn't accidentally
+  // rehydrate the old single-cemetery view on reload.
+  try { localStorage.removeItem('gs_map_focus'); } catch {}
+  mapFocusStory = null;
+  showScreen(mapPreviousScreen || 'home');
 }
 
 function openCemeteryMap(focusStory = null) {

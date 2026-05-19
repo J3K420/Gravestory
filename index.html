@@ -1083,6 +1083,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
 </head>
 <body>
 
@@ -1608,9 +1609,18 @@ function getDeviceLocation() {
   return new Promise((resolve) => {
     if (!navigator.geolocation) { resolve(null); return; }
     navigator.geolocation.getCurrentPosition(
-      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, source: 'device' }),
-      () => resolve(null),
-      { timeout: 5000 }
+      pos => resolve({
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,   // metres of horizontal uncertainty
+        source: 'device'
+      }),
+      err => { console.log('GPS error:', err); resolve(null); },
+      {
+        enableHighAccuracy: true,  // force the real GPS chip, not wifi/cell triangulation
+        timeout: 15000,            // give the satellite lock time to settle
+        maximumAge: 0              // never accept a cached fix
+      }
     );
   });
 }
@@ -2103,6 +2113,53 @@ async function startAnalysis() {
     clearInterval(stepInterval);
     // Use GPS-derived location if available, otherwise fall back to location inferred by Gemini from research
     const finalLocation = locationStr || story.location || null;
+
+    // ── GPS pin accuracy (Layers 1–3) — applied ONLY here, at capture time ──
+    // Never run this over existing stories; precise Wikipedia-derived pins must
+    // not be re-snapped down to "somewhere in the polygon".
+    let resolvedGps = null;
+    let gpsLowConfidence = false;
+    let gpsSnapped = false;
+    if (currentExifLocation) {
+      const raw = { lat: currentExifLocation.lat, lng: currentExifLocation.lng };
+      const acc = currentExifLocation.accuracy;
+
+      // Layer 1 — reject low-accuracy readings (wifi/cell triangulation, ±50–200m).
+      // EXIF coords have no accuracy field; treat those as trusted (camera wrote them).
+      const accuracyUnreliable = typeof acc === 'number' && acc > 30;
+      if (accuracyUnreliable) {
+        console.log('📍 Device GPS accuracy', Math.round(acc), 'm > 30m — flagging low-confidence');
+        gpsLowConfidence = true;
+      }
+
+      // Layer 2/3 — snap to the cemetery polygon if OSM has one for this spot.
+      try {
+        const boundary = await fetchOSMCemeteryBoundary(raw.lat, raw.lng, false);
+        if (boundary) {
+          const c = constrainToCemetery(raw, boundary, 100);
+          resolvedGps = { lat: +c.lat.toFixed(6), lng: +c.lng.toFixed(6) };
+          gpsSnapped = !!(c.snapped || c.snapped_to_centroid);
+          if (c.snapped_to_centroid) {
+            console.log('📍 GPS was', Math.round(c.original_distance), 'm outside polygon — snapped to centroid');
+            gpsLowConfidence = true;  // centroid fallback is not grave-level accurate
+          } else if (c.snapped) {
+            console.log('📍 GPS nudged ~', Math.round(c.original_distance), 'm onto cemetery boundary');
+          } else {
+            console.log('📍 GPS already inside cemetery polygon — kept as-is');
+          }
+        } else {
+          // Layer 3 — no OSM polygon. Keep raw high-accuracy GPS but flag it.
+          resolvedGps = { lat: +raw.lat.toFixed(6), lng: +raw.lng.toFixed(6) };
+          gpsLowConfidence = true;
+          console.log('📍 No OSM cemetery polygon — keeping raw GPS, flagged low-confidence');
+        }
+      } catch (e) {
+        console.log('📍 Boundary fetch failed during constraint — keeping raw GPS:', e);
+        resolvedGps = { lat: +raw.lat.toFixed(6), lng: +raw.lng.toFixed(6) };
+        gpsLowConfidence = true;
+      }
+    }
+
     currentStory = { 
       ...story, 
       image: currentImage,       // Kept for in-session preview only; stripped before save
@@ -2112,7 +2169,9 @@ async function startAnalysis() {
       portrait_right_url: portraits.right,
       location: finalLocation, 
       timestamp: Date.now(),
-      gps: currentExifLocation ? { lat: currentExifLocation.lat, lng: currentExifLocation.lng } : null
+      gps: resolvedGps,
+      _lowConfidence: gpsLowConfidence || undefined,
+      _snapped: gpsSnapped || undefined
     };
     renderResult(currentStory);
     showScreen('result');
@@ -2905,8 +2964,32 @@ async function deleteSaved(event, index) {
 // ── DRAG-TO-CORRECT GRAVE LOCATION ───────────────────────────────
 async function handleMarkerDragEnd(marker, story) {
   const newPos = marker.getLatLng();
-  const newLat = +newPos.lat.toFixed(6);
-  const newLng = +newPos.lng.toFixed(6);
+  let newLat = +newPos.lat.toFixed(6);
+  let newLng = +newPos.lng.toFixed(6);
+
+  // Hard boundary on drags: a corrected pin must stay INSIDE the cemetery
+  // polygon (zero tolerance — refine within, never drag onto a neighbour's lawn).
+  // Fetch the boundary fresh for the drop point so the constraint is reliable
+  // regardless of which boundary (if any) is currently drawn.
+  try {
+    const boundary = await fetchOSMCemeteryBoundary(newLat, newLng, false);
+    if (boundary) {
+      const c = constrainToCemetery({ lat: newLat, lng: newLng }, boundary, 0);
+      if (c.snapped || c.snapped_to_centroid) {
+        newLat = +c.lat.toFixed(6);
+        newLng = +c.lng.toFixed(6);
+        marker.setLatLng([newLat, newLng]);
+        if (typeof showToast === 'function') {
+          showToast('Pin must stay within the cemetery boundary');
+        } else {
+          console.log('📍 Drag constrained back inside cemetery boundary');
+        }
+      }
+    }
+  } catch (e) {
+    console.log('📍 Drag constraint boundary fetch failed — accepting drop as-is:', e);
+  }
+
   const personLabel = story.name || 'this grave';
   const ok = confirm(`Save corrected location for ${personLabel}?\n\nNew coords: ${newLat}, ${newLng}\n\nThis will be remembered for next time.`);
   if (!ok) {
@@ -3838,6 +3921,66 @@ async function initCemeteryMap() {
 
   // After map loads, fetch nearby cemeteries from OpenStreetMap
   tryShowNearbyCemeteries({ lat: largest.centerLat, lng: largest.centerLng });
+}
+
+// ── SNAP-TO-CEMETERY CONSTRAINT (Turf.js) ───────────────────────
+// Converts the app's [[lat,lng],...] boundary format into a Turf polygon and
+// constrains a point to it. Used ONLY at GPS-capture time and admin-drag time —
+// never as a batch pass over existing stories (that would downgrade pins like
+// Bruce Lee / George Washington whose Wikipedia-derived coords are MORE precise
+// than "somewhere inside the polygon").
+//
+// Returns one of:
+//   { lat, lng, snapped:false }                    — already inside, untouched
+//   { lat, lng, snapped:true, original_distance }  — was near, nudged inward
+//   { lat, lng, snapped_to_centroid:true, ... }    — was far, fell back to centroid
+function constrainToCemetery(point, boundaryPts, toleranceMeters = 100) {
+  // boundaryPts is [[lat,lng],...]; Turf wants [lng,lat] and a closed ring.
+  if (!boundaryPts || boundaryPts.length < 3 || typeof turf === 'undefined') {
+    return { lat: point.lat, lng: point.lng, snapped: false };
+  }
+  const ring = boundaryPts.map(p => [p[1], p[0]]);
+  const first = ring[0], last = ring[ring.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) ring.push([first[0], first[1]]);
+
+  let polygon, turfPoint;
+  try {
+    polygon = turf.polygon([ring]);
+    turfPoint = turf.point([point.lng, point.lat]);
+  } catch (e) {
+    console.log('constrainToCemetery: bad polygon, passing point through:', e);
+    return { lat: point.lat, lng: point.lng, snapped: false };
+  }
+
+  if (turf.booleanPointInPolygon(turfPoint, polygon)) {
+    return { lat: point.lat, lng: point.lng, snapped: false };
+  }
+
+  const polygonLine = turf.polygonToLine(polygon);
+  const nearest = turf.nearestPointOnLine(polygonLine, turfPoint, { units: 'meters' });
+  const distance = nearest.properties.dist;
+
+  if (distance <= toleranceMeters) {
+    // Nudge ~2m inward along the bearing toward the centroid so the pin sits
+    // visibly inside the boundary line, not exactly on it.
+    const centroid = turf.centroid(polygon);
+    const bearing = turf.bearing(nearest, centroid);
+    const inward = turf.destination(nearest, 2 / 1000, bearing, { units: 'kilometers' });
+    return {
+      lat: inward.geometry.coordinates[1],
+      lng: inward.geometry.coordinates[0],
+      snapped: true,
+      original_distance: distance
+    };
+  }
+
+  const centroid = turf.centroid(polygon);
+  return {
+    lat: centroid.geometry.coordinates[1],
+    lng: centroid.geometry.coordinates[0],
+    snapped_to_centroid: true,
+    original_distance: distance
+  };
 }
 
 // ── FETCH OSM CEMETERY OR ESTATE BOUNDARY POLYGON ───────────────

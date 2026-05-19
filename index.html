@@ -3555,36 +3555,52 @@ async function persistUpdate(story) {
 // (never inserted) or it's flagged `_needsCloudSync` (a prior insert failed).
 // De-dupes against the cloud by `timestamp` so a partially-succeeded earlier
 // push can't create duplicates. Returns the count actually uploaded.
+let _pushInFlight = false;
 async function pushLocalOnly() {
   if (!currentUser) return 0;
+  // Re-entrancy guard: this is awaited from first-sync, post-delta, and the
+  // visibilitychange listener. Two overlapping runs would each build the same
+  // id-less candidate list and double-insert. Skip if one is already running.
+  if (_pushInFlight) {
+    console.log('☁️ pushLocalOnly already in flight — skipping concurrent run.');
+    return 0;
+  }
+  _pushInFlight = true;
+  try {
 
   const candidates = savedStories.filter(s =>
     (!s.id || s._needsCloudSync) && s.timestamp
   );
   if (candidates.length === 0) return 0;
 
-  // Find which of these already exist in the cloud (by timestamp) so a failed
-  // earlier run that DID insert some rows doesn't double-insert them now.
-  const stamps = candidates.map(s => s.timestamp);
+  // Find which of these already exist in the cloud so a failed earlier run
+  // that DID insert some rows doesn't double-insert them now. The schema
+  // column is `client_timestamp` (storyToRow writes it, rowToStory reads it)
+  // — querying a bare `timestamp` column errors and silently disables dedupe,
+  // which causes duplicate rows on retry.
+  const stamps = candidates.map(s => s.timestamp).filter(v => v != null);
   let existing = new Set();
-  try {
-    const { data, error } = await supabaseClient
-      .from('stories')
-      .select('id, timestamp')
-      .eq('user_id', currentUser.id)
-      .in('timestamp', stamps);
-    if (error) throw error;
-    for (const row of (data || [])) {
-      existing.add(row.timestamp);
-      // Adopt the cloud id locally so future updates target the right row.
-      const local = savedStories.find(s => s.timestamp === row.timestamp);
-      if (local && !local.id) {
-        local.id = row.id;
-        delete local._needsCloudSync;
+  if (stamps.length > 0) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('stories')
+        .select('id, client_timestamp')
+        .eq('user_id', currentUser.id)
+        .in('client_timestamp', stamps);
+      if (error) throw error;
+      for (const row of (data || [])) {
+        existing.add(row.client_timestamp);
+        // Adopt the cloud id locally so future updates target the right row
+        // and this story is no longer treated as a push candidate.
+        const local = savedStories.find(s => s.timestamp === row.client_timestamp);
+        if (local && !local.id) {
+          local.id = row.id;
+          delete local._needsCloudSync;
+        }
       }
+    } catch (e) {
+      console.warn('☁️ pushLocalOnly dedupe check failed — proceeding cautiously:', e.message);
     }
-  } catch (e) {
-    console.warn('☁️ pushLocalOnly dedupe check failed — proceeding cautiously:', e.message);
   }
 
   let uploaded = 0;
@@ -3616,6 +3632,10 @@ async function pushLocalOnly() {
     console.log(`☁️ pushLocalOnly: uploaded ${uploaded} local-only story(s).`);
   }
   return uploaded;
+
+  } finally {
+    _pushInFlight = false;
+  }
 }
 
 // INCREMENTAL SYNC: pull only changes since last sync

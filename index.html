@@ -2583,6 +2583,35 @@ async function fetchWikipediaPortraits(name, dates) {
 }
 
 async function generateBiography(graveData, searchResults, wikiData, location) {
+  // Confidence floor — the single biggest hallucination vector is asking the
+  // model to write a rich biography when there is nothing to write FROM. If no
+  // web results and no WikiTree record came back, do not call the LLM at all:
+  // return a short biography drawn strictly from the stone itself. The model
+  // cannot invent a life it was never asked to narrate.
+  const hasRealSources = (searchResults && searchResults.length > 0) || (wikiData != null);
+  if (!hasRealSources) {
+    console.log('📜 No real sources — returning stone-only biography, skipping LLM.');
+    const who = graveData.primary_name || graveData.names?.[0] || 'an individual';
+    const bday = graveData.birth_date ? `, born ${graveData.birth_date}` : '';
+    const dday = graveData.death_date ? ` and passed ${graveData.death_date}` : '';
+    const insc = graveData.inscription
+      ? ` Their stone bears the words: "${graveData.inscription}".`
+      : '';
+    return {
+      name: graveData.primary_name || graveData.names?.[0] || 'Unknown',
+      dates: (graveData.birth_date && graveData.death_date)
+        ? `born ${graveData.birth_date} — died ${graveData.death_date}` : '',
+      biography:
+        `This stone marks the life of ${who}${bday}${dday}.${insc} ` +
+        `Beyond what the stone itself records, the available sources do not ` +
+        `yield further verifiable details about this person. What endures here ` +
+        `is the marker they were given and the words chosen to remember them.`,
+      sources: ['Gravestone inscription (primary source)'],
+      source_urls: [''],
+      location: location || ''
+    };
+  }
+
   const searchContext = searchResults.length > 0
     ? 'Web research found:\n' + searchResults.map(r => `- ${r.title}: ${r.content}`).join('\n')
     : 'No additional web results found.';
@@ -2604,18 +2633,18 @@ ${searchContext}
 
 ${wikiContext}
 
-Write a rich, 500-word biography that:
+Write a biography that (aim for up to ~500 words when the sources genuinely support it, much shorter when they do not):
 - Opens with the full name(s), birth and death dates, and a vivid sense of the era they lived in
 - Paints a picture of their world — historical events, cultural shifts, and local context of their lifetime
 - Weaves in known details about family, marriage, faith, community, or relationships
 - Deeply analyzes symbols on the stone — religious imagery (crosses, Divine Mercy, etc.), military emblems, fraternal symbols, and floral carvings all reveal character and belief
-- Considers surname origin and cultural heritage as context (Italian, Irish, Polish, German surnames each carry rich histories)
-- When web research is limited, draws richly on historical context and what the stone's symbols and inscription reveal about who they were
+- If the surname has a well-documented cultural origin, you MAY note that names of this kind are commonly associated with that heritage — but do NOT assert anything about this individual's own background, ancestry, or experiences on the basis of their name
+- When sources are limited, write a SHORTER biography grounded only in what the stone itself and the verified sources actually state — do not extrapolate, speculate, or pad with general historical background to reach a length target
 - Reflects on the inscription or epitaph with depth and compassion
 - If multiple people share the stone, weaves their stories together meaningfully
 - Closes with a warm, dignified reflection on their shared legacy
 - If an inscription seems unusual or sad, approaches it with extra warmth and humanity
-- Never refuses — always produces a full, meaningful biography regardless of available sources
+- Length should follow the evidence: a well-documented life earns a full biography; a sparsely-documented one gets a short, honest one. A brief accurate account builds trust; an invented one destroys it. Never fabricate facts, relationships, events, or characterizations that the sources do not support
 
 For the location field: this MUST be the BURIAL location — where the body lies — NOT where the person was born, lived, died, or was famous. These are often different places. For example: Bruce Lee died in Hong Kong but is buried at Lake View Cemetery in Seattle, Washington. Marilyn Monroe died in Los Angeles and is buried at Westwood Village Memorial Park in Los Angeles — same city. Napoleon died on St. Helena but is buried at Les Invalides in Paris. Always read the research results carefully for words like "buried", "interred", "laid to rest", "grave at", "final resting place", or a cemetery name — these signal burial location. Words like "died in", "born in", "passed away in", or "lived in" are NOT burial location signals. IMPORTANT: if this person is a well-known historical or public figure whose burial place is common knowledge, trust your own knowledge of where they are buried OVER ambiguous search snippets that emphasize their birthplace or deathplace. Search results often over-represent where someone lived or died because that's where most articles about them are written. If a GPS location was provided above, use it exactly. Format as: "Cemetery Name, City, State/Country" (e.g. "St. Casimir Cemetery, Baldwin, Pennsylvania" or "Lake View Cemetery, Seattle, Washington"). For famous figures buried on estates, use the specific tomb/vault name. If the research clearly identifies a burial cemetery, use it. If only a city/region is mentioned as burial place, format as "Cemetery near City, State". If burial location cannot be determined from research, leave it empty — do NOT substitute the death or birth place.
 

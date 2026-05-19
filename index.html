@@ -2515,6 +2515,48 @@ async function searchWikiTree(graveData) {
 // ── GEMINI: GENERATE BIOGRAPHY ───────────────────────────────────
 // ── WIKIPEDIA PORTRAIT SEARCH ────────────────────────────────────
 // Returns up to 2 image URLs from Wikipedia for the given person.
+// Returns true if a Wikipedia image URL's filename is consistent with the
+// queried person, false if it names someone else. Strategy:
+//   1. Extract the basename of the file, decode URL escapes, lowercase.
+//   2. Split into word-tokens.
+//   3. If the filename contains NO recognisable name tokens (e.g. just
+//      "head_shot_001.jpg" or "grave_2020.jpg"), treat as a pass — we can't
+//      prove it's wrong. Better to keep an image than discard everything.
+//   4. If the filename DOES contain name-like tokens (capitalised words in
+//      the original case, or words longer than 3 chars that aren't generic),
+//      at least one of them must be in the queried person's name set.
+function imageFilenameMatchesPerson(imageUrl, queriedNameSet) {
+  if (!imageUrl || !queriedNameSet || queriedNameSet.size === 0) return true;
+  try {
+    const path = imageUrl.split('?')[0];
+    const file = decodeURIComponent(path.substring(path.lastIndexOf('/') + 1))
+      .replace(/\.(jpe?g|png|gif|svg|webp)$/i, '')
+      .toLowerCase();
+
+    // Generic filename tokens that don't signal a person.
+    const GENERIC = new Set([
+      'head','shot','headshot','portrait','photo','photograph','image','img',
+      'pic','picture','grave','tomb','tombstone','cemetery','memorial',
+      'stone','marker','file','wikipedia','commons','cropped','cropped2',
+      'square','wiki','original','default','png','jpg','jpeg'
+    ]);
+
+    const tokens = file.split(/[\s_\-.()]+/).filter(t => t.length > 1);
+    const nameLike = tokens.filter(t => !GENERIC.has(t) && !/^\d+$/.test(t) && t.length >= 3);
+
+    // No name-like tokens at all → can't prove it's wrong, pass.
+    if (nameLike.length === 0) return true;
+
+    // At least one name-like token must be in the queried person's name set.
+    for (const t of nameLike) {
+      if (queriedNameSet.has(t)) return true;
+    }
+    return false;
+  } catch {
+    return true;  // on parse failure, default to permissive
+  }
+}
+
 // Strategy: search Wikipedia for the name + a context word ("grave" or birth
 // year if known), pick the top match, fetch its summary, take the lead image.
 // If the page has multiple images (file-list), grab a second one from the
@@ -2540,8 +2582,36 @@ async function fetchWikipediaPortraits(name, dates) {
       return result;
     }
 
-    // Step 2: pull the summary for the top hit (this includes thumbnail + originalimage)
-    const title = hits[0].title;
+    // Step 2: pick the first hit whose TITLE actually contains the queried
+    // name. Wikipedia's full-text search ranks by snippet relevance, not title
+    // match — so for a name like "Bruce Lee" the top hit can be "Linda Lee
+    // Cadwell" (his wife's article mentions him heavily). Accepting hits[0]
+    // blindly is what surfaced Linda's headshot as Bruce's portrait.
+    //
+    // Rule: every significant word of the queried name (length > 1 — skips
+    // initials like "J.") must appear in the article title, case-insensitive.
+    // Skip honorifics and generation suffixes that may not be on Wikipedia.
+    const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
+    const required = name
+      .toLowerCase()
+      .replace(/[.,'"()]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 1 && !SKIP.has(w));
+
+    let title = null;
+    for (const hit of hits) {
+      const t = (hit.title || '').toLowerCase();
+      if (required.every(w => t.includes(w))) {
+        title = hit.title;
+        break;
+      }
+    }
+    if (!title) {
+      console.log('🖼️ No Wikipedia article title matches', JSON.stringify(name),
+                  '— hits were:', hits.map(h => h.title));
+      return result;
+    }
+    console.log('🖼️ Wikipedia article matched:', title);
     const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
     const summaryRes = await fetch(summaryUrl);
     if (!summaryRes.ok) throw new Error(`summary ${summaryRes.status}`);
@@ -2549,9 +2619,18 @@ async function fetchWikipediaPortraits(name, dates) {
 
     // Lead image — prefer originalimage but fall back to thumbnail
     const lead = summary?.originalimage?.source || summary?.thumbnail?.source || null;
-    if (lead) {
+
+    // Filename sanity check: reject the lead image if its filename contains a
+    // human-name token that isn't part of the queried name (e.g. "Linda_Lee"
+    // returned for a "Bruce Lee" query). This catches infobox spouse photos
+    // and similar wrong-person leads that the article-title match can't.
+    const nameSet = new Set(required);
+    const leadOk = lead ? imageFilenameMatchesPerson(lead, nameSet) : false;
+    if (lead && leadOk) {
       result.left = lead;
       console.log('🖼️ Wikipedia lead image:', lead);
+    } else if (lead) {
+      console.log('🖼️ Rejecting lead image — filename does not match queried name:', lead);
     }
 
     // Step 3 (optional): grab a second image from images-on-page list
@@ -2582,9 +2661,11 @@ async function fetchWikipediaPortraits(name, dates) {
               const resolvedPages = resolveData?.query?.pages || {};
               const resolvedPage = Object.values(resolvedPages)[0];
               const secondUrl = resolvedPage?.imageinfo?.[0]?.url || null;
-              if (secondUrl) {
+              if (secondUrl && imageFilenameMatchesPerson(secondUrl, nameSet)) {
                 result.right = secondUrl;
                 console.log('🖼️ Wikipedia secondary image:', secondUrl);
+              } else if (secondUrl) {
+                console.log('🖼️ Rejecting secondary image — filename mismatch:', secondUrl);
               }
             }
           }

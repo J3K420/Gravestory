@@ -2362,6 +2362,21 @@ async function searchForPerson(graveData, location) {
   if (allNames.length === 0 && graveData.family_name) allNames.push(graveData.family_name);
   if (allNames.length === 0) return [];
 
+  // Strip parenthetical role tags the OCR prompt may attach for disambiguation,
+  // e.g. "George (deceased)" → "George", "Lizzie Knuver (wife)" → "Lizzie Knuver".
+  // Without this, the literal "(deceased)" text leaks into every Tavily query
+  // and poisons the result set. Also collapse any whitespace that leaves behind.
+  for (let i = 0; i < allNames.length; i++) {
+    allNames[i] = allNames[i].replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  // De-dupe in case stripping made two entries identical (e.g. two "George"s with different tags)
+  const _seenNames = new Set();
+  const _cleanNames = [];
+  for (const n of allNames) { if (n && !_seenNames.has(n)) { _seenNames.add(n); _cleanNames.push(n); } }
+  allNames.length = 0;
+  allNames.push(..._cleanNames);
+  if (allNames.length === 0) return [];
+
   const deathYear = graveData.death_date?.match(/\d{4}/)?.[0] || '';
   const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0] || '';
   const loc = location ? location.split(',').slice(0,2).map(s=>s.trim()).join(' ') : '';

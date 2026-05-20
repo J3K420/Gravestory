@@ -278,8 +278,8 @@
   }
 
   /* Stone-as-upload-zone.
-     The whole stone silhouette is the tap target. A chosen photo previews
-     clipped to the stone outline so it reads as an inscription on the stone. */
+     Resting state: the stone silhouette is the tap target.
+     With a photo: the stone hides and the photo shows fully (no clip, no crop). */
   .upload-zone {
     width: 280px;
     height: 290px;
@@ -290,8 +290,24 @@
     margin: 0 auto;
   }
 
+  /* When a photo is loaded, expand to a landscape-friendly box so the photo
+     is actually visible at a useful size. Most phone photos taken at a
+     gravestone are landscape; this aspect ratio shows both orientations well. */
+  .upload-zone.has-photo {
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    aspect-ratio: 4/3;
+    border: 1px solid rgba(201,168,76,0.3);
+    background: rgba(20,15,10,0.5);
+  }
+
   .upload-zone:hover {
     filter: drop-shadow(0 0 14px rgba(201,168,76,0.25));
+  }
+
+  .upload-zone.has-photo:hover {
+    filter: none;
   }
 
   .upload-zone .stone-svg {
@@ -300,21 +316,24 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
+    transition: opacity 0.2s ease;
   }
 
-  /* When a photo is chosen, the <img> is appended and clipped to the stone
-     outline. The path coords below are in the element's pixel space, tied
-     to 280x290. If .upload-zone dimensions change, update this path too.
-     Path: M 87 250 L 87 86 Q 87 36 140 36 Q 193 36 193 86 L 193 250 Z
-     (top: y=36 rounded shoulder; bottom: y=250, just above base ledger) */
+  /* Hide the stone illustration entirely once a photo is in. */
+  .upload-zone.has-photo .stone-svg {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Photo preview: full-rectangle, contained so nothing is cropped, no clip-path. */
   .upload-zone img {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    clip-path: path('M 87 250 L 87 86 Q 87 36 140 36 Q 193 36 193 86 L 193 250 Z');
+    object-fit: contain;
     z-index: 1;
+    background: #0a0907;
   }
 
   .upload-zone-inner {
@@ -2158,6 +2177,7 @@ async function handleImageUpload(input, isLiveCamera = false) {
       img.src = currentImage;
       zone.appendChild(img);
       inner.style.display = 'none';
+      zone.classList.add('has-photo');
 
       document.getElementById('analyze-btn').disabled = false;
       document.getElementById('error-box').style.display = 'none';
@@ -2174,6 +2194,7 @@ async function handleImageUpload(input, isLiveCamera = false) {
       img.src = currentImage;
       zone.appendChild(img);
       inner.style.display = 'none';
+      zone.classList.add('has-photo');
 
       document.getElementById('analyze-btn').disabled = false;
       document.getElementById('error-box').style.display = 'none';
@@ -3658,6 +3679,7 @@ function resetCamera() {
   const existing = zone.querySelector('img');
   if (existing) existing.remove();
   inner.style.display = 'flex';
+  zone.classList.remove('has-photo');
   document.getElementById('analyze-btn').disabled = true;
   document.getElementById('file-input').value = '';
   document.getElementById('camera-input').value = '';
@@ -3673,9 +3695,8 @@ window.showScreen = function(id) {
 
 // ── PHOTO SOURCE MODAL ───────────────────────────────────────────
 function openPhotoSourceModal() {
-  // Don't show the modal if a photo is already loaded — tapping the stone
-  // when it already shows a preview shouldn't open the source picker.
-  if (currentImage) return;
+  // Always opens — tapping a loaded photo re-opens the picker so users
+  // can swap a bad photo without hunting for a button.
   document.getElementById('photo-source-modal').classList.add('active');
 }
 

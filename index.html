@@ -2299,20 +2299,40 @@ async function readGravestone(base64, location) {
 
 ${locationHint}
 
+CRITICAL — DECEASED vs RELATIONS:
+Many gravestones name people other than the deceased. The deceased is the person buried under this stone — usually identified by their name plus a birth/death date or "AT REST" phrase. Other names on the stone are often spouses, parents, or children mentioned in relational phrases.
+
+Watch for relational phrases like:
+- "Beloved Husband of [Name]"
+- "Beloved Wife of [Name]"
+- "Mother of [Name]" / "Father of [Name]" / "Son of" / "Daughter of"
+- "In Memory of [Name], wife of [Name]"
+
+In these cases, the [Name] inside the relational phrase is NOT the deceased — it is a relative. The surname in such a phrase belongs to the relative, not necessarily to the deceased.
+
+EXAMPLE: A stone reading "GEORGE / Beloved Husband of / LIZZIE KNUVER / 1841-1900" means:
+- Deceased: George (first name only — his surname is NOT shown on this stone)
+- Relation: Lizzie Knuver (his wife, surname Knuver)
+- primary_name should be "George" — do NOT fabricate a surname for him
+- family_name should be empty or null — his surname is not visible
+- The full inscription should preserve "Beloved Husband of Lizzie Knuver" verbatim
+
+If the only surname on the stone appears inside a relational phrase, assume it belongs to the relative unless other evidence (e.g. a family plot header, a separate surname banner above the inscription) clearly attaches it to the deceased.
+
 Return ONLY a valid JSON object with these exact fields:
 {
-  "names": ["full name 1", "full name 2"],
-  "primary_name": "the main person's full name",
+  "names": ["every name visible on the stone, with role if relational, e.g. 'George (deceased)', 'Lizzie Knuver (wife)'"],
+  "primary_name": "the deceased's name as shown on the stone — may be first-name-only if no surname is visible for them",
   "birth_date": "date or year if visible",
   "death_date": "date or year if visible",
   "married_date": "if visible",
-  "inscription": "any quote, scripture, or epitaph text",
+  "inscription": "the full epitaph/quote/relational text VERBATIM — preserve all surnames that appear inside relational phrases",
   "symbols": ["list of symbols, emblems, or decorations"],
-  "family_name": "surname",
-  "notes": "any other text or observations"
+  "family_name": "the deceased's surname ONLY IF it is clearly theirs (e.g. shown as a standalone surname banner, or in a family plot context). Leave empty/null if the only surname on the stone appears inside a relational phrase about someone else.",
+  "notes": "any other text, observations, or ambiguity flags — e.g. 'Surname not visible for deceased; KNUVER is the wife's surname'"
 }
 
-If multiple people are on the stone, use the names array. Be precise about dates. Return only JSON.`;
+If multiple deceased people share the stone (e.g. a couple both buried here with both sets of dates), use the names array and pick the most prominent as primary_name. Be precise about dates. Return only JSON.`;
 
   const { data } = await geminiCallWithFallback({
     contents: [{
@@ -2327,7 +2347,7 @@ If multiple people are on the stone, use the names array. Be precise about dates
 
   const text = data.candidates[0].content.parts[0].text;
   console.log('GRAVESTONE RAW:', text);
-  return safeParseJSON(text, {names:[], primary_name:'Unknown', birth_date:'', death_date:'', inscription:'', symbols:[], family_name:'Unknown', notes:''});
+  return safeParseJSON(text, {names:[], primary_name:'Unknown', birth_date:'', death_date:'', inscription:'', symbols:[], family_name:'', notes:''});
 }
 
 // ── TAVILY: WEB SEARCH ───────────────────────────────────────────

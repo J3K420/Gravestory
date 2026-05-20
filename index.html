@@ -2672,6 +2672,28 @@ async function fetchWikipediaPortraits(name, dates) {
   const result = { left: null, right: null };
   if (!name || name.toLowerCase().includes('unknown')) return result;
 
+  // Single-token-name guard: if the deceased's name is just one word
+  // (e.g. "George", "Mary"), Wikipedia search will reliably return a famous
+  // person, monarch, or saint by that name — King George V, Mary Queen of
+  // Scots, etc. The title-match guard below CAN'T disambiguate these,
+  // because every "George Xyz" article title contains "george".
+  //
+  // For these cases we skip the Wikipedia portrait pull entirely. An empty
+  // header is honest; a king's portrait on a random stone is not.
+  //
+  // Skip honorifics/suffixes the same way the title-match guard does, so
+  // "Dr. George" with the "Dr." stripped is still treated as one token.
+  const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
+  const significantTokens = name
+    .toLowerCase()
+    .replace(/[.,'"()]/g, '')
+    .split(/\s+/)
+    .filter(w => w.length > 1 && !SKIP.has(w));
+  if (significantTokens.length < 2) {
+    console.log('🖼️ Skipping Wikipedia portrait — single-token name too generic to disambiguate:', JSON.stringify(name));
+    return result;
+  }
+
   try {
     // Step 1: search for a matching Wikipedia article
     // Use the death year as disambiguation when available

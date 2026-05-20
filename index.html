@@ -1477,6 +1477,10 @@ let currentPhotoFile = null;
 let currentExifLocation = null;
 let currentStory = null;
 let userLocation = null;
+// One-shot bypass for the gravestone pre-verification check.
+// Set true by forceAnalyze() (the "Use it anyway" button on the rejection screen);
+// consumed and reset by startAnalysis() on the next run.
+let _bypassVerification = false;
 let savedStories = JSON.parse(localStorage.getItem('gravestories') || '[]');
 let locationPermission = localStorage.getItem('gs_location_permission'); // 'granted', 'denied', or null
 
@@ -2068,6 +2072,7 @@ function downscaleImage(dataUrl, maxDim, quality) {
 
 // ── LOADING STEPS ────────────────────────────────────────────────
 const steps = [
+  'Checking the photo…',
   'Reading the gravestone…',
   'Detecting location…',
   'Searching historical records…',
@@ -2094,12 +2099,24 @@ function cycleSteps() {
 async function startAnalysis() {
   if (!currentImageBase64) return;
 
+  // Consume the one-shot bypass flag set by "Use it anyway".
+  const skipVerification = _bypassVerification;
+  _bypassVerification = false;
+
   showScreen('loading');
   const stepInterval = cycleSteps();
 
   try {
-    // 1. Get location — prefer EXIF from photo, fall back to device GPS
+    // 0. Pre-verify this is actually a gravestone (unless user bypassed)
     setStep(0);
+    if (!skipVerification) {
+      await verifyIsGravestone(currentImageBase64);
+    } else {
+      console.log('📷 Verification bypassed by user');
+    }
+
+    // 1. Get location — prefer EXIF from photo, fall back to device GPS
+    setStep(1);
     let locationStr = null;
     if (currentExifLocation) {
       locationStr = await reverseGeocode(currentExifLocation.lat, currentExifLocation.lng);
@@ -2110,19 +2127,19 @@ async function startAnalysis() {
     userLocation = locationStr;
 
     // 2. Read gravestone with Gemini Vision
-    setStep(1);
+    setStep(2);
     const graveData = await readGravestone(currentImageBase64, locationStr);
 
     // 3. Search web for more info
-    setStep(2);
+    setStep(3);
     const searchResults = await searchForPerson(graveData, locationStr);
 
     // 4. Search WikiTree
-    setStep(3);
+    setStep(4);
     const wikiData = await searchWikiTree(graveData);
 
     // 5. Generate full biography with Gemini
-    setStep(4);
+    setStep(5);
     const story = await generateBiography(graveData, searchResults, wikiData, locationStr);
 
     // 5.5 — Fetch Wikipedia portraits (best-effort, doesn't block on failure)
@@ -2197,6 +2214,14 @@ async function startAnalysis() {
   } catch (err) {
     clearInterval(stepInterval);
     _origShow('camera');
+
+    // Verification rejection — render the dedicated "this isn't a gravestone"
+    // screen with "Use it anyway" escape hatch, not the generic error box.
+    if (err && err.__verificationRejection) {
+      showVerificationRejection(err.reason);
+      return;
+    }
+
     const errBox = document.getElementById('error-box');
     const message = 'Something went wrong: ' + (err.message || 'Please try again.');
     // Render with a retry button. startAnalysis() reuses currentImageBase64 so the
@@ -2238,6 +2263,64 @@ function retryAnalysis() {
     }
     return;
   }
+  startAnalysis();
+}
+
+// Render the "this doesn't look like a gravestone" rejection screen with two
+// choices: pick a different photo, or override the verification and continue.
+// Reuses #error-box as the container so the layout/spacing match other errors.
+function showVerificationRejection(reason) {
+  const errBox = document.getElementById('error-box');
+  if (!errBox) return;
+  const safeReason = escapeHtml(reason || 'The image does not appear to contain a gravestone.');
+  errBox.innerHTML = `
+    <div style="font-family:'Marcellus',serif;font-size:1rem;color:var(--gold);margin-bottom:0.5rem;letter-spacing:0.04em;">
+      ⚠ This doesn't look like a gravestone
+    </div>
+    <div style="margin-bottom:0.9rem;font-style:italic;opacity:0.85;">${safeReason}</div>
+    <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+      <button onclick="resetCamera()" style="
+        background: rgba(201,168,76,0.15);
+        border: 1px solid rgba(201,168,76,0.6);
+        color: var(--gold);
+        padding: 0.4rem 1.1rem;
+        font-family: 'Marcellus', serif;
+        font-size: 0.85rem;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+        font-style: normal;
+      ">📷 Choose another photo</button>
+      <button onclick="forceAnalyze()" style="
+        background: transparent;
+        border: 1px solid rgba(201,168,76,0.4);
+        color: var(--gold);
+        padding: 0.4rem 1.1rem;
+        font-family: 'Marcellus', serif;
+        font-size: 0.85rem;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+        font-style: normal;
+        opacity: 0.85;
+      ">Use it anyway</button>
+    </div>
+  `;
+  errBox.style.display = 'block';
+}
+
+// Escape hatch from showVerificationRejection. Sets the one-shot bypass flag
+// and re-runs startAnalysis() with the same image. The flag is consumed and
+// reset inside startAnalysis() — it will not leak into subsequent runs.
+function forceAnalyze() {
+  if (!currentImageBase64) {
+    const errBox = document.getElementById('error-box');
+    if (errBox) {
+      errBox.innerHTML = 'Image no longer available — please choose a photo again.';
+      errBox.style.display = 'block';
+    }
+    return;
+  }
+  _bypassVerification = true;
+  document.getElementById('error-box').style.display = 'none';
   startAnalysis();
 }
 
@@ -2289,6 +2372,76 @@ async function geminiCallWithFallback(payload) {
   const data2 = await res2.json().catch(() => ({ error: { message: 'Invalid JSON response from fallback' } }));
   console.log(`✅ Used fallback model: ${FALLBACK}`);
   return { data: data2, model: FALLBACK };
+}
+
+// ── GEMINI: VERIFY GRAVESTONE ────────────────────────────────────
+// Cheap pre-flight check before the full OCR pipeline. Catches uploads of
+// non-gravestones (selfies, screenshots, pets, landscapes) before they
+// poison the search / bio pipeline with garbage names.
+//
+// Throws a structured error { __verificationRejection: true, reason }
+// when is_gravestone === false. startAnalysis() catches this and renders
+// the rejection UI (with a "Use it anyway" escape hatch) instead of the
+// generic error box.
+async function verifyIsGravestone(base64) {
+  const prompt = `Look at this image and decide whether it contains a gravestone, headstone, grave marker, memorial plaque, or cemetery monument.
+
+A gravestone may be:
+- An upright headstone with inscribed text and dates
+- A flat ground-level marker or plaque
+- A weathered, broken, or partially-buried stone
+- A tomb, mausoleum exterior, or memorial monument
+- A photo taken at any angle, in any lighting, including low-quality phone photos
+
+Do NOT reject for:
+- Poor lighting, blur, or partial framing — if a gravestone is visible, accept it
+- Weathered or illegible text — the stone itself is still what's being photographed
+- The presence of grass, flowers, leaves, or other cemetery surroundings
+
+DO reject if the photo is clearly something else:
+- A selfie or photo of a living person
+- A screenshot of text, a website, or an app
+- A pet, plant, food, or object unrelated to memorialization
+- A landscape, building interior, or street scene with no grave marker visible
+
+Return ONLY a valid JSON object with these exact fields:
+{
+  "is_gravestone": true or false,
+  "confidence": "high" or "medium" or "low",
+  "reason": "one short sentence describing what is in the image"
+}
+
+Return only JSON.`;
+
+  const { data } = await geminiCallWithFallback({
+    contents: [{
+      parts: [
+        { text: prompt },
+        { inline_data: { mime_type: 'image/jpeg', data: base64 } }
+      ]
+    }],
+    generationConfig: { temperature: 0.1 }
+  });
+  if (data.error) {
+    // If the verification call itself fails, fail open — don't block the user
+    // on a transient Gemini error. The full OCR call will fail too if the
+    // image is truly broken.
+    console.warn('⚠️ Gravestone verification call failed — proceeding anyway:', data.error.message);
+    return;
+  }
+
+  const text = data.candidates[0].content.parts[0].text;
+  console.log('VERIFY RAW:', text);
+  const parsed = safeParseJSON(text, { is_gravestone: true, confidence: 'low', reason: '' });
+  console.log(`📷 Verification: is_gravestone=${parsed.is_gravestone} confidence=${parsed.confidence} reason="${parsed.reason}"`);
+
+  if (parsed.is_gravestone === false) {
+    const err = new Error('Image does not appear to contain a gravestone');
+    err.__verificationRejection = true;
+    err.reason = parsed.reason || 'The image does not appear to contain a gravestone.';
+    throw err;
+  }
+  // is_gravestone === true (any confidence): proceed.
 }
 
 // ── GEMINI: READ GRAVESTONE ──────────────────────────────────────

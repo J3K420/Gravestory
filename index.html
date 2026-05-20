@@ -2878,7 +2878,7 @@ Write a biography that (aim for up to ~500 words when the sources genuinely supp
 - Paints a picture of their world — historical events, cultural shifts, and local context of their lifetime
 - Weaves in known details about family, marriage, faith, community, or relationships
 - Deeply analyzes symbols on the stone — religious imagery (crosses, Divine Mercy, etc.), military emblems, fraternal symbols, and floral carvings all reveal character and belief
-- If the surname has a well-documented cultural origin, you MAY note that names of this kind are commonly associated with that heritage — but do NOT assert anything about this individual's own background, ancestry, or experiences on the basis of their name
+- If the surname has a well-documented cultural origin, you MAY note that names of this kind are commonly associated with that heritage — but do NOT assert anything about this individual's own background, ancestry, or experiences on the basis of their name. ADDITIONALLY: if "family_name" in the gravestone data is empty, null, or missing, do NOT discuss surname heritage at all — any surname elsewhere in the data (in the inscription, names array, or research results) belongs to a relative, not the deceased, and cannot be used to infer the deceased's heritage.
 - When sources are limited, write a SHORTER biography grounded only in what the stone itself and the verified sources actually state — do not extrapolate, speculate, or pad with general historical background to reach a length target
 - Reflects on the inscription or epitaph with depth and compassion
 - If multiple people share the stone, weaves their stories together meaningfully
@@ -2989,6 +2989,28 @@ function renderResult(story) {
       ? `📍 ${story.location} <span title="Approximate location — no GPS data" style="display:inline-flex;align-items:center;justify-content:center;width:1rem;height:1rem;border-radius:50%;background:rgba(138,126,110,0.3);color:var(--stone);font-size:0.65rem;font-style:normal;cursor:help;margin-left:0.2rem;">?</span>`
       : `📍 ${story.location}`;
     body.appendChild(locTag);
+  }
+
+  // Bio-confidence badge — mirrors the low-confidence map pin pattern.
+  // Fires when the biography is built on thin or no real sources, so the
+  // reader knows to treat the prose as inference rather than research.
+  //
+  // Signals (any one triggers): no source URLs at all; the only source_url
+  // is the empty string the stone-only confidence floor returns; or the
+  // biography prose contains no [N] citation markers (model went unsourced).
+  // Saved bios from older runs that predate citations should NOT trigger
+  // this badge — only fire when story.sources/source_urls were attempted
+  // and came back empty.
+  const _urls = Array.isArray(story.source_urls) ? story.source_urls : [];
+  const _bioBody = story.biography || '';
+  const _hasCitationMarkers = /\[\d+\]/.test(_bioBody);
+  const _allUrlsEmpty = _urls.length === 0 || _urls.every(u => !u || !u.trim());
+  const _thinSources = _allUrlsEmpty || !_hasCitationMarkers;
+  if (_thinSources && _bioBody) {
+    const confBadge = document.createElement('div');
+    confBadge.style.cssText = 'margin:0.6rem 0 0.8rem;padding:0.55rem 0.75rem;border-left:3px solid #a87a2a;background:rgba(168,122,42,0.1);color:#a87a2a;font-size:0.85rem;line-height:1.35;border-radius:0 4px 4px 0;';
+    confBadge.innerHTML = `⚠ <strong>Limited sources found for this person.</strong> The biography below is based largely on what the stone itself records, plus general historical context. It may not reflect verified facts about this individual.`;
+    body.appendChild(confBadge);
   }
 
   // Biography

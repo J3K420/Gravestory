@@ -1,0 +1,58 @@
+  /* ── LOADING SCREEN ── */
+  #loading {
+    align-items: center;
+    justify-content: center;
+    background: #0d0b08;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .loading-symbol {
+    font-size: 4rem;
+    display: block;
+    margin-bottom: 2rem;
+    animation: pulse-fade 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-fade {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+  }
+
+  .loading-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem;
+    color: var(--parchment);
+    margin-bottom: 0.5rem;
+  }
+
+  .loading-step {
+    font-style: italic;
+    color: var(--stone);
+    font-size: 1rem;
+    min-height: 1.5rem;
+    transition: opacity 0.5s ease;
+  }
+
+  .loading-dots {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: 2rem;
+  }
+
+  .loading-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--gold);
+    animation: dot-pulse 1.4s ease-in-out infinite;
+  }
+
+  .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot-pulse {
+    0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1); }
+  }

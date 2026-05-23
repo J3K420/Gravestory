@@ -1,0 +1,218 @@
+  /* ── MAP SCREEN ── */
+  #cemetery-map-screen {
+    background: var(--parchment);
+    color: var(--ink);
+    min-height: 100vh;
+    /* display and flex-direction controlled by .screen / .screen.active */
+  }
+
+  #global-map-screen {
+    background: var(--parchment);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+  #global-map-screen .map-header-title {
+    color: #cfddf2;
+  }
+  #global-map-screen .map-header-back {
+    color: #aabedc;
+  }
+
+  .map-header {
+    background: var(--ink);
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .map-header-title {
+    font-family: 'Playfair Display', serif;
+    color: var(--parchment);
+    font-size: 1.3rem;
+    flex: 1;
+  }
+
+  .map-header-back {
+    background: none;
+    border: none;
+    color: var(--stone);
+    font-size: 1.3rem;
+    cursor: pointer;
+  }
+
+  #leaflet-map {
+    flex: 1;
+    min-height: 400px;
+    width: 100%;
+  }
+
+  .map-footer {
+    background: var(--parchment);
+    padding: 1rem 1.5rem;
+    border-top: 1px solid rgba(138,126,110,0.2);
+  }
+
+  .map-cemetery-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    color: var(--ink);
+    margin-bottom: 0.25rem;
+  }
+
+  /* Perimeter walk overlay */
+  #perimeter-overlay {
+    display: none;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  #perimeter-overlay.active {
+    display: block;
+    pointer-events: all;
+  }
+  #perimeter-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(26,20,16,0.92);
+    padding: 1rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    border-top: 2px solid #ffee00;
+  }
+  #perimeter-status {
+    font-family: 'Playfair Display', serif;
+    color: #ffee00;
+    font-size: 1rem;
+    text-align: center;
+  }
+  #perimeter-point-count {
+    font-size: 0.8rem;
+    color: var(--stone);
+    font-style: italic;
+  }
+  #perimeter-btn-row {
+    display: flex;
+    gap: 0.75rem;
+    width: 100%;
+  }
+  .perimeter-btn {
+    flex: 1;
+    padding: 0.75rem;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  .perimeter-btn-finish {
+    background: #ffee00;
+    color: #1a1410;
+    font-weight: bold;
+  }
+
+  .map-grave-count {
+    font-size: 0.85rem;
+    color: var(--stone);
+    font-style: italic;
+  }
+
+  .map-graves-list {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .map-grave-item {
+    font-size: 0.85rem;
+    color: var(--ink);
+    padding: 0.4rem 0.75rem;
+    background: rgba(138,126,110,0.08);
+    border-left: 2px solid var(--gold);
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .map-grave-item:hover {
+    background: rgba(138,126,110,0.15);
+  }
+
+  .map-grave-item-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.9rem;
+  }
+
+  .map-grave-item-dates {
+    font-size: 0.75rem;
+    color: var(--stone);
+    font-style: italic;
+  }
+
+  /* Result map tab */
+  .result-map-btn {
+    width: calc(100% - 3rem);
+    margin: 0 1.5rem 1rem;
+    padding: 0.75rem;
+    background: transparent;
+    border: 1px solid rgba(138,126,110,0.4);
+    color: var(--stone);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.95rem;
+    font-style: italic;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: none;
+  }
+
+  .result-map-btn:hover {
+    border-color: var(--gold);
+    color: var(--ink);
+  }
+
+  .result-map-btn.visible {
+    display: block;
+  }
+
+  /* Cemetery map nav item */
+  .home-map-btn {
+    margin-top: 1.5rem;
+    background: transparent;
+    border: 1px solid rgba(201,168,76,0.3);
+    color: var(--stone);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.9rem;
+    font-style: italic;
+    padding: 0.6rem 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .home-map-btn:hover {
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+
+  .home-globe-btn {
+    margin-top: 0.75rem;
+    background: transparent;
+    border: 1px solid rgba(170,190,220,0.35);
+    color: #aabedc;
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.9rem;
+    font-style: italic;
+    padding: 0.6rem 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+  .home-globe-btn:hover {
+    border-color: #cfddf2;
+    color: #cfddf2;
+  }

@@ -48,6 +48,10 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
+
+<!-- ── App scripts (Stage 2: leaf modules) ── -->
+<script src="js/config.js"></script>
+<script src="js/util-json.js"></script>
 </head>
 <body>
 
@@ -409,33 +413,6 @@
 
 
 <script>
-// ── CONFIG ──────────────────────────────────────────────────────
-// API keys live server-side in the Cloudflare Worker proxy.
-// Update PROXY_BASE to your deployed Worker URL after running `wrangler deploy`.
-// Example: 'https://gravestory-proxy.YOUR-SUBDOMAIN.workers.dev'
-const PROXY_BASE = 'https://gravestory-proxy.james-gravestory.workers.dev';
-
-// ── SAFE JSON PARSER ─────────────────────────────────────────────
-function safeParseJSON(text, fallback) {
-  fallback = fallback || {};
-  try {
-    var clean = text.replace(/```json|```/gi, '').trim();
-    return JSON.parse(clean);
-  } catch(e1) {
-    try {
-      var match = text.match(/\{[\s\S]*\}/);
-      if (match) return JSON.parse(match[0]);
-    } catch(e2) {
-      try {
-        var clean2 = text.replace(/```json|```/gi, '').trim();
-        var lastBrace = clean2.lastIndexOf('}');
-        if (lastBrace > 0) return JSON.parse(clean2.substring(0, lastBrace + 1));
-      } catch(e3) {}
-    }
-  }
-  return fallback;
-}
-
 // ── STATE ────────────────────────────────────────────────────────
 let currentImage = null;
 let currentImageBase64 = null;

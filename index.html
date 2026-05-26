@@ -54,6 +54,7 @@
 <script src="js/util-json.js"></script>
 <script src="js/grave-cache.js"></script>
 <script src="js/util-image.js"></script>
+<script src="js/api-nominatim.js"></script>
 </head>
 <body>
 
@@ -611,17 +612,6 @@ function getDeviceLocation() {
     );
   });
 }
-
-async function reverseGeocode(lat, lng) {
-  try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`);
-    const data = await res.json();
-    const a = data.address;
-    const parts = [a.city || a.town || a.village || a.county, a.state, a.country].filter(Boolean);
-    return parts.join(', ');
-  } catch { return null; }
-}
-
 
 // Forward geocode a text location string to {lat, lng}
 async function forwardGeocode(locationStr, personName, dates) {

@@ -59,6 +59,7 @@
 <script src="js/api-tavily.js"></script>
 <script src="js/api-wikipedia.js"></script>
 <script src="js/api-gemini.js"></script>
+<script src="js/util-html.js"></script>
 </head>
 <body>
 
@@ -1126,13 +1127,6 @@ async function startAnalysis() {
     `;
     errBox.style.display = 'block';
   }
-}
-
-// Small HTML-escaper for error messages (which may contain quotes / brackets).
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[c]));
 }
 
 // Retry the last analysis with the image still in memory.

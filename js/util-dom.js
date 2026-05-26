@@ -100,9 +100,20 @@ window.addEventListener('popstate', (event) => {
 });
 
 // Kick off initial routing AFTER the synchronous script finishes parsing.
-// Function declarations are hoisted, but `let`/`const` bindings used by
-// those functions (e.g. `mapPreviousScreen` inside openCemeteryMap) are
-// in the Temporal Dead Zone until their declaration line is reached.
-// A 0ms setTimeout pushes restoreScreenFromUrl into the next tick, by
-// which point every let/const further down the file has initialized.
-setTimeout(restoreScreenFromUrl, 0);
+// Two constraints to satisfy here:
+//  1. Function declarations are hoisted, but `let`/`const` bindings used by
+//     those functions (e.g. `mapPreviousScreen` inside openCemeteryMap) are
+//     in the Temporal Dead Zone until their declaration line is reached.
+//     A 0ms setTimeout pushes restoreScreenFromUrl into the next tick, by
+//     which point every let/const further down the inline block has
+//     initialized.
+//  2. showScreen() calls document.getElementById(id) on screen divs that
+//     are parsed later in <body>. Since this script now loads from <head>
+//     (Stage 4 extraction), we must wait for DOMContentLoaded before
+//     scheduling the timeout, or getElementById returns null on initial
+//     hash-restore for any non-home target.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => setTimeout(restoreScreenFromUrl, 0));
+} else {
+  setTimeout(restoreScreenFromUrl, 0);
+}

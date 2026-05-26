@@ -67,6 +67,10 @@
 <script src="js/persistence.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/render-result.js"></script>
+<script src="js/error-render.js"></script>
+<script src="js/photo-modal.js"></script>
+<script src="js/pwa.js"></script>
+<script src="js/auth.js"></script>
 </head>
 <body>
 
@@ -996,79 +1000,6 @@ async function startAnalysis() {
   }
 }
 
-// Retry the last analysis with the image still in memory.
-function retryAnalysis() {
-  const errBox = document.getElementById('error-box');
-  if (errBox) errBox.style.display = 'none';
-  if (!currentImageBase64) {
-    // Image was lost somehow — guide user to re-upload
-    if (errBox) {
-      errBox.innerHTML = 'Image no longer available — please choose a photo again.';
-      errBox.style.display = 'block';
-    }
-    return;
-  }
-  startAnalysis();
-}
-
-// Render the "this doesn't look like a gravestone" rejection screen with two
-// choices: pick a different photo, or override the verification and continue.
-// Reuses #error-box as the container so the layout/spacing match other errors.
-function showVerificationRejection(reason) {
-  const errBox = document.getElementById('error-box');
-  if (!errBox) return;
-  const safeReason = escapeHtml(reason || 'The image does not appear to contain a gravestone.');
-  errBox.innerHTML = `
-    <div style="font-family:'Marcellus',serif;font-size:1rem;color:var(--gold);margin-bottom:0.5rem;letter-spacing:0.04em;">
-      ⚠ This doesn't look like a gravestone
-    </div>
-    <div style="margin-bottom:0.9rem;font-style:italic;opacity:0.85;">${safeReason}</div>
-    <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-      <button onclick="resetCamera()" style="
-        background: rgba(201,168,76,0.15);
-        border: 1px solid rgba(201,168,76,0.6);
-        color: var(--gold);
-        padding: 0.4rem 1.1rem;
-        font-family: 'Marcellus', serif;
-        font-size: 0.85rem;
-        letter-spacing: 0.08em;
-        cursor: pointer;
-        font-style: normal;
-      ">📷 Choose another photo</button>
-      <button onclick="forceAnalyze()" style="
-        background: transparent;
-        border: 1px solid rgba(201,168,76,0.4);
-        color: var(--gold);
-        padding: 0.4rem 1.1rem;
-        font-family: 'Marcellus', serif;
-        font-size: 0.85rem;
-        letter-spacing: 0.08em;
-        cursor: pointer;
-        font-style: normal;
-        opacity: 0.85;
-      ">Use it anyway</button>
-    </div>
-  `;
-  errBox.style.display = 'block';
-}
-
-// Escape hatch from showVerificationRejection. Sets the one-shot bypass flag
-// and re-runs startAnalysis() with the same image. The flag is consumed and
-// reset inside startAnalysis() — it will not leak into subsequent runs.
-function forceAnalyze() {
-  if (!currentImageBase64) {
-    const errBox = document.getElementById('error-box');
-    if (errBox) {
-      errBox.innerHTML = 'Image no longer available — please choose a photo again.';
-      errBox.style.display = 'block';
-    }
-    return;
-  }
-  _bypassVerification = true;
-  document.getElementById('error-box').style.display = 'none';
-  startAnalysis();
-}
-
 function setStep(i) {
   const el = document.getElementById('loading-step');
   if (el) el.textContent = steps[i];
@@ -1299,29 +1230,6 @@ window.showScreen = function(id) {
   _origShow(id);
 };
 
-// ── PHOTO SOURCE MODAL ───────────────────────────────────────────
-function openPhotoSourceModal() {
-  // Always opens — tapping a loaded photo re-opens the picker so users
-  // can swap a bad photo without hunting for a button.
-  document.getElementById('photo-source-modal').classList.add('active');
-}
-
-function closePhotoSourceModal(event) {
-  // If called from the backdrop, only close when the backdrop itself was clicked
-  // (the inner modal stops propagation, so this is just for the explicit Cancel and backdrop).
-  if (event && event.currentTarget !== event.target && event.type === 'click') {
-    // backdrop click landed on backdrop itself — close
-  }
-  document.getElementById('photo-source-modal').classList.remove('active');
-}
-
-function pickPhotoSource(source) {
-  closePhotoSourceModal();
-  const inputId = source === 'camera' ? 'camera-input' : 'file-input';
-  // Defer the click slightly so the modal close animation doesn't race the file picker
-  setTimeout(() => { document.getElementById(inputId).click(); }, 50);
-}
-
 // ── LOCATION PERMISSION ──────────────────────────────────────────
 
 function requestLocationPermission(callback) {
@@ -1356,246 +1264,12 @@ function resetLocationPermission() {
   localStorage.removeItem('gs_location_permission');
 }
 
-// ── PWA SERVICE WORKER ───────────────────────────────────────────
-// Only register service worker when hosted on https:// (not local files)
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  const swCode = `
-    const CACHE = 'gravestory-v12
-';
-    const TILE_CACHE = 'gravestory-tiles-v1';
-    const OFFLINE_URLS = ['/'];
-    self.addEventListener('install', e => {
-      e.waitUntil(
-        caches.open(CACHE).then(c => c.addAll(OFFLINE_URLS))
-      );
-      self.skipWaiting();
-    });
-    self.addEventListener('activate', e => {
-      e.waitUntil(
-        caches.keys().then(keys =>
-          Promise.all(keys.filter(k => k !== CACHE && k !== TILE_CACHE).map(k => caches.delete(k)))
-        )
-      );
-      self.clients.claim();
-    });
-    self.addEventListener('fetch', e => {
-      if (e.request.method !== 'GET') return;
-      const url = e.request.url;
-      // CACHE-FIRST for map tiles — tiles never change, so cache hits should win immediately.
-      // This eliminates pop-in and flicker during zoom/pan because tiles render from disk, not network.
-      const isTile = url.includes('tile.openstreetmap.org') || url.includes('/tile/');
-      if (isTile) {
-        e.respondWith(
-          caches.open(TILE_CACHE).then(cache =>
-            cache.match(e.request).then(cached => {
-              if (cached) return cached;
-              return fetch(e.request).then(r => {
-                if (r.ok) cache.put(e.request, r.clone());
-                return r;
-              });
-            })
-          )
-        );
-        return;
-      }
-      // NETWORK-FIRST for everything else — keep app fresh, fall back to cache offline.
-      e.respondWith(
-        fetch(e.request)
-          .then(r => {
-            const clone = r.clone();
-            caches.open(CACHE).then(c => c.put(e.request, clone));
-            return r;
-          })
-          .catch(() => caches.match(e.request))
-      );
-    });
-  `;
-  const blob = new Blob([swCode], { type: 'application/javascript' });
-  const swUrl = URL.createObjectURL(blob);
-  navigator.serviceWorker.register(swUrl)
-    .then(() => console.log('✅ GraveStory PWA ready'))
-    .catch(err => console.log('SW skipped:', err));
-}
-
-// ── ADD TO HOME SCREEN PROMPT ─────────────────────────────────────
-let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  // Show install banner after a short delay
-  setTimeout(showInstallBanner, 3000);
-});
-
-function showInstallBanner() {
-  if (!deferredPrompt) return;
-  const banner = document.getElementById('install-banner');
-  if (banner) banner.classList.remove('hidden');
-}
-
-function installPWA() {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  deferredPrompt.userChoice.then(choice => {
-    deferredPrompt = null;
-    document.getElementById('install-banner').classList.add('hidden');
-  });
-}
-
-function dismissInstallBanner() {
-  const banner = document.getElementById('install-banner');
-  if (banner) banner.classList.add('hidden');
-  deferredPrompt = null;
-}
-
 // ── INIT ─────────────────────────────────────────────────────────
 renderSavedList();
 updateHomeMapButton();
 checkIOSInstallHint();
 // ── CEMETERY MAP ─────────────────────────────────────────────────
 
-// ── SUPABASE AUTH ──────────────────────────────────────────────
-// PASTE YOUR ANON KEY HERE between the quotes (the public one, safe for client use):
-const SUPABASE_URL = 'https://idbrjonofqrsykqsqpwo.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlkYnJqb25vZnFyc3lrcXNxcHdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3MDYyMTUsImV4cCI6MjA5NDI4MjIxNX0.hF26KwrkhWRy7Z74YnEd6Oqr3brPSOOz9ykRQZOBWiw';
-
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
-  }
-});
-
-let currentUser = null;
-
-// Initialize auth state on page load
-async function initAuth() {
-  const { data: { session } } = await supabaseClient.auth.getSession();
-  currentUser = session?.user || null;
-  if (currentUser) await loadUserPrefs();
-  updateUserMenu();
-
-  // Listen for sign-in / sign-out events
-  supabaseClient.auth.onAuthStateChange(async (event, session) => {
-    const wasSignedOut = !currentUser;
-    currentUser = session?.user || null;
-    updateUserMenu();
-    if (event === 'SIGNED_IN') {
-      console.log('✅ Signed in as', currentUser.email);
-      await loadUserPrefs();
-      await syncOnSignIn();
-      if (wasSignedOut) showScreen('home');
-    }
-    if (event === 'SIGNED_OUT') {
-      console.log('👋 Signed out');
-    }
-  });
-
-  // If we restored an existing session on page load, sync right away
-  if (currentUser) {
-    await syncOnSignIn();
-  }
-}
-
-function updateUserMenu() {
-  const label = document.getElementById('user-menu-label');
-  const dropdown = document.getElementById('user-menu-dropdown');
-  const emailRow = document.getElementById('user-menu-email');
-  if (!label) return;
-
-  if (currentUser) {
-    const name = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Account';
-    label.textContent = name;
-    emailRow.textContent = currentUser.email || '';
-    // Make the button click toggle the dropdown instead of opening auth screen
-    document.getElementById('user-menu-btn').onclick = toggleUserMenu;
-  } else {
-    label.textContent = 'Sign in';
-    dropdown.style.display = 'none';
-    document.getElementById('user-menu-btn').onclick = () => showScreen('auth');
-  }
-}
-
-function toggleUserMenu() {
-  const dropdown = document.getElementById('user-menu-dropdown');
-  if (!currentUser) { showScreen('auth'); return; }
-  dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
-}
-
-// Close the dropdown when clicking outside it
-document.addEventListener('click', (e) => {
-  const menu = document.getElementById('user-menu');
-  if (menu && !menu.contains(e.target)) {
-    const dropdown = document.getElementById('user-menu-dropdown');
-    if (dropdown) dropdown.style.display = 'none';
-  }
-});
-
-async function signInWithGoogle() {
-  // Use a clean URL (no hash or query) so Supabase's redirect fragment doesn't collide
-  const cleanUrl = window.location.origin + window.location.pathname;
-  const { error } = await supabaseClient.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: cleanUrl }
-  });
-  if (error) {
-    document.getElementById('auth-status').textContent = '❌ ' + error.message;
-  }
-}
-
-async function signInWithEmail() {
-  const email = document.getElementById('auth-email').value.trim();
-  const password = document.getElementById('auth-password').value;
-  const status = document.getElementById('auth-status');
-  if (!email || !password) { status.textContent = 'Email and password required'; return; }
-
-  status.textContent = 'Signing in...';
-  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) {
-    status.textContent = '❌ ' + error.message;
-  } else {
-    status.textContent = '✅ Signed in';
-  }
-}
-
-async function signUpWithEmail() {
-  const email = document.getElementById('auth-email').value.trim();
-  const password = document.getElementById('auth-password').value;
-  const status = document.getElementById('auth-status');
-  if (!email || !password) { status.textContent = 'Email and password required'; return; }
-  if (password.length < 6) { status.textContent = 'Password must be at least 6 characters'; return; }
-
-  status.textContent = 'Creating account...';
-  const { data, error } = await supabaseClient.auth.signUp({ email, password });
-  if (error) {
-    status.textContent = '❌ ' + error.message;
-  } else if (data.user && !data.session) {
-    status.textContent = '✅ Check your email to verify your account';
-  } else {
-    status.textContent = '✅ Account created — signing in...';
-  }
-}
-
-async function signOut() {
-  // Wipe sync state and local cache BEFORE Supabase fires its SIGNED_OUT event
-  // so the next sign-in (possibly as a different user) starts clean.
-  const userId = currentUser?.id;
-  if (userId) {
-    localStorage.removeItem(`gs_last_sync_${userId}`);
-  }
-  localStorage.removeItem('gravestories');
-
-  await supabaseClient.auth.signOut();
-
-  // Wipe in-memory state too
-  savedStories = [];
-  document.getElementById('user-menu-dropdown').style.display = 'none';
-  renderSavedList();
-  updateHomeMapButton();
-}
-
-// Run auth init on page load
-window.addEventListener('DOMContentLoaded', initAuth);
 
 // When the user returns to the tab/app after being away, pull deltas
 document.addEventListener('visibilitychange', () => {

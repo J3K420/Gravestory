@@ -71,6 +71,7 @@
 <script src="js/photo-modal.js"></script>
 <script src="js/pwa.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/home-screen.js"></script>
 </head>
 <body>
 
@@ -1100,44 +1101,6 @@ function checkIOSInstallHint() {
   if (isIOS() && !isInStandaloneMode()) {
     hint.style.display = 'block';
   }
-}
-
-function renderSavedList() {
-  const list = document.getElementById('saved-list');
-  if (savedStories.length === 0) {
-    list.innerHTML = '<p class="empty-saved">Your saved stories will appear here</p>';
-    return;
-  }
-
-  list.innerHTML = savedStories.map((s, i) => `
-    <div class="saved-card" style="display:flex;align-items:center;gap:0.5rem;">
-      <div style="flex:1;min-width:0;cursor:pointer;" onclick="loadSaved(${i})">
-        <div class="saved-card-name">${s.name || 'Unknown'}</div>
-        <div class="saved-card-date">${s.dates || ''}</div>
-      </div>
-      <span style="color:var(--gold);opacity:0.5;cursor:pointer;" onclick="loadSaved(${i})">→</span>
-      <button onclick="deleteSaved(event, ${i})" title="Delete story"
-        style="background:none;border:none;color:rgba(139,58,42,0.6);font-size:1.1rem;cursor:pointer;padding:0.25rem 0.4rem;flex-shrink:0;line-height:1;border-radius:3px;"
-        onmouseover="this.style.color='#8b3a2a';this.style.background='rgba(139,58,42,0.1)'"
-        onmouseout="this.style.color='rgba(139,58,42,0.6)';this.style.background='none'">✕</button>
-    </div>
-  `).join('');
-}
-
-function loadSaved(index) {
-  currentStory = savedStories[index];
-  renderResult(currentStory);
-  showScreen('result');
-}
-
-async function deleteSaved(event, index) {
-  event.stopPropagation(); // prevent card click
-  const story = savedStories[index];
-  if (!confirm(`Delete story for ${story.name || 'this person'}?`)) return;
-  savedStories.splice(index, 1);
-  renderSavedList();
-  updateHomeMapButton();
-  await persistDelete(story);
 }
 
 // ── DRAG-TO-CORRECT GRAVE LOCATION ───────────────────────────────

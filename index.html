@@ -77,6 +77,8 @@
 <script src="js/map-utils.js"></script>
 <script src="js/map-cemetery.js"></script>
 <script src="js/map-global.js"></script>
+<script src="js/loading-ui.js"></script>
+<script src="js/misc-handlers.js"></script>
 </head>
 <body>
 
@@ -832,31 +834,6 @@ async function handleImageUpload(input, isLiveCamera = false) {
 }
 
 
-// ── LOADING STEPS ────────────────────────────────────────────────
-const steps = [
-  'Checking the photo…',
-  'Reading the gravestone…',
-  'Detecting location…',
-  'Searching historical records…',
-  'Consulting genealogy archives…',
-  'Searching for obituaries…',
-  'Weaving the story together…',
-  'Almost ready…'
-];
-
-function cycleSteps() {
-  let i = 0;
-  return setInterval(() => {
-    const el = document.getElementById('loading-step');
-    el.style.opacity = 0;
-    setTimeout(() => {
-      i = Math.min(i + 1, steps.length - 1);
-      el.textContent = steps[i];
-      el.style.opacity = 1;
-    }, 300);
-  }, 2800);
-}
-
 // ── MAIN ANALYSIS ────────────────────────────────────────────────
 async function startAnalysis() {
   if (!currentImageBase64) return;
@@ -1006,11 +983,6 @@ async function startAnalysis() {
   }
 }
 
-function setStep(i) {
-  const el = document.getElementById('loading-step');
-  if (el) el.textContent = steps[i];
-}
-
 // ── RESET CAMERA ─────────────────────────────────────────────────
 function resetCamera() {
   currentImage = null;
@@ -1040,26 +1012,6 @@ window.showScreen = function(id) {
 renderSavedList();
 updateHomeMapButton();
 checkIOSInstallHint();
-
-// Export cemetery data as JSON
-function exportCemeteryData() {
-  const mapped = savedStories.filter(s => s.gps);
-  if (mapped.length === 0) { alert('No GPS data to export yet.'); return; }
-  const data = mapped.map(s => ({
-    name: s.name,
-    dates: s.dates,
-    lat: s.gps.lat,
-    lng: s.gps.lng,
-    location: s.location
-  }));
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'gravestory-cemetery-data.json';
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 </script>
 </body>

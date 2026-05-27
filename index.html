@@ -73,6 +73,7 @@
 <script src="js/auth.js"></script>
 <script src="js/home-screen.js"></script>
 <script src="js/save-actions.js"></script>
+<script src="js/location-permission.js"></script>
 </head>
 <body>
 
@@ -1096,40 +1097,6 @@ window.showScreen = function(id) {
   if (id === 'camera') resetCamera();
   _origShow(id);
 };
-
-// ── LOCATION PERMISSION ──────────────────────────────────────────
-
-function requestLocationPermission(callback) {
-  // If already decided, respect the saved preference
-  if (locationPermission === 'granted') { callback(true); return; }
-  if (locationPermission === 'denied') { callback(false); return; }
-  // First time — show the modal
-  window._locationPermissionCallback = callback;
-  document.getElementById('location-permission-modal').classList.remove('hidden');
-}
-
-function handleLocationPermission(allowed) {
-  document.getElementById('location-permission-modal').classList.add('hidden');
-  locationPermission = allowed ? 'granted' : 'denied';
-  localStorage.setItem('gs_location_permission', locationPermission);
-  if (window._locationPermissionCallback) {
-    window._locationPermissionCallback(allowed);
-    window._locationPermissionCallback = null;
-  }
-}
-
-function showPrivacyInfo() {
-  document.getElementById('privacy-modal').classList.remove('hidden');
-}
-
-function closePrivacyInfo() {
-  document.getElementById('privacy-modal').classList.add('hidden');
-}
-
-function resetLocationPermission() {
-  locationPermission = null;
-  localStorage.removeItem('gs_location_permission');
-}
 
 // ── INIT ─────────────────────────────────────────────────────────
 renderSavedList();

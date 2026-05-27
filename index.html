@@ -74,6 +74,7 @@
 <script src="js/home-screen.js"></script>
 <script src="js/save-actions.js"></script>
 <script src="js/location-permission.js"></script>
+<script src="js/map-utils.js"></script>
 </head>
 <body>
 
@@ -1108,50 +1109,6 @@ checkIOSInstallHint();
 let leafletMap = null;
 
 let mapMarkers = [];
-
-// Group graves into cemeteries by proximity (within ~500 meters)
-function groupGravesByCemetery(stories) {
-  const cemeteries = [];
-  const storiesWithGPS = stories.filter(s => s.gps);
-
-  storiesWithGPS.forEach(story => {
-    let added = false;
-    for (const cem of cemeteries) {
-      const dist = getDistanceMeters(
-        story.gps.lat, story.gps.lng,
-        cem.centerLat, cem.centerLng
-      );
-      if (dist < 500) {
-        cem.graves.push(story);
-        // Recalculate center
-        cem.centerLat = cem.graves.reduce((s,g) => s + g.gps.lat, 0) / cem.graves.length;
-        cem.centerLng = cem.graves.reduce((s,g) => s + g.gps.lng, 0) / cem.graves.length;
-        added = true;
-        break;
-      }
-    }
-    if (!added) {
-      cemeteries.push({
-        id: Date.now() + Math.random(),
-        centerLat: story.gps.lat,
-        centerLng: story.gps.lng,
-        graves: [story]
-      });
-    }
-  });
-  return cemeteries;
-}
-
-// Haversine distance in meters between two GPS points
-function getDistanceMeters(lat1, lng1, lat2, lng2) {
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
-    Math.sin(dLng/2) * Math.sin(dLng/2);
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
 
 // Open cemetery map screen
 let mapPreviousScreen = 'home';

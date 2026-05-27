@@ -72,6 +72,7 @@
 <script src="js/pwa.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/home-screen.js"></script>
+<script src="js/save-actions.js"></script>
 </head>
 <body>
 
@@ -1006,103 +1007,6 @@ function setStep(i) {
   if (el) el.textContent = steps[i];
 }
 
-// ── SAVE STORY ───────────────────────────────────────────────────
-async function saveStory() {
-  if (!currentStory) return;
-
-  // Guard against double-saving the same story
-  if (currentStory.timestamp && savedStories.some(s => s.timestamp === currentStory.timestamp)) {
-    const btn = document.getElementById('save-btn');
-    btn.textContent = '✓ Saved';
-    btn.className = 'action-btn action-save saved';
-    return;
-  }
-
-  // Apply default visibility from user prefs (signed-in users only)
-  if (currentUser) {
-    const vis = userPrefs.default_visibility || 'prompt';
-    if (vis === 'public') currentStory.is_public = true;
-    else if (vis === 'private') currentStory.is_public = false;
-  }
-
-  const btn = document.getElementById('save-btn');
-
-  // Upload the image to R2 before saving (only if we have pending base64 and no URL yet)
-  if (currentStory._pendingImageBase64 && !currentStory.image_url) {
-    btn.textContent = '☁ Uploading…';
-    const url = await uploadImageToR2(currentStory._pendingImageBase64, 'image/jpeg');
-    if (url) {
-      currentStory.image_url = url;
-      console.log('☁️ Image uploaded:', url);
-    } else {
-      console.warn('☁️ Image upload failed — saving story without image');
-    }
-    // Always clear the in-memory base64 after attempting upload
-    delete currentStory._pendingImageBase64;
-  }
-
-  // Strip the data URL `image` field so it doesn't bloat localStorage
-  // The image_url will be used to render the image from R2 on subsequent loads.
-  if (currentStory.image && currentStory.image.startsWith('data:')) {
-    delete currentStory.image;
-  }
-
-  savedStories.unshift(currentStory);
-  if (savedStories.length > 500) savedStories = savedStories.slice(0, 500);
-  updateHomeMapButton();
-
-  btn.textContent = '✓ Saved';
-  btn.className = 'action-btn action-save saved';
-
-  // Re-render to show the visibility toggle now that the story is in savedStories.
-  // Done BEFORE awaiting persistSave so the UI updates even if the cloud write
-  // is slow or hangs — savedStories.unshift above is enough to make the saved
-  // row resolvable; the cloud insert just adds story.id and _updatedAt later.
-  renderResult(currentStory);
-
-  await persistSave(currentStory);
-}
-
-// ── SHARE STORY ──────────────────────────────────────────────────
-async function shareStory() {
-  if (!currentStory) return;
-  const text = `${currentStory.name}\n${currentStory.dates}\n\n${currentStory.biography?.slice(0, 300)}...\n\nShared from GraveStory`;
-
-  if (navigator.share) {
-    try {
-      await navigator.share({ title: `GraveStory: ${currentStory.name}`, text });
-    } catch (e) { copyToClipboard(text); }
-  } else {
-    copyToClipboard(text);
-  }
-}
-
-function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    alert('Story copied to clipboard!');
-  }).catch(() => {
-    alert('Could not copy — try selecting and copying the text manually.');
-  });
-}
-
-// ── SAVED STORIES ────────────────────────────────────────────────
-function isIOS() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-}
-
-function isInStandaloneMode() {
-  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-}
-
-function checkIOSInstallHint() {
-  const hint = document.getElementById('ios-install-hint');
-  if (!hint) return;
-  // Show hint on iOS Safari if not already installed as PWA
-  if (isIOS() && !isInStandaloneMode()) {
-    hint.style.display = 'block';
-  }
-}
-
 // ── DRAG-TO-CORRECT GRAVE LOCATION ───────────────────────────────
 async function handleMarkerDragEnd(marker, story) {
   const newPos = marker.getLatLng();
@@ -1233,13 +1137,6 @@ updateHomeMapButton();
 checkIOSInstallHint();
 // ── CEMETERY MAP ─────────────────────────────────────────────────
 
-
-// When the user returns to the tab/app after being away, pull deltas
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && currentUser) {
-    syncDelta();
-  }
-});
 
 let leafletMap = null;
 

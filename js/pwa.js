@@ -109,3 +109,29 @@ function dismissInstallBanner() {
   if (banner) banner.classList.add('hidden');
   deferredPrompt = null;
 }
+
+// ── iOS INSTALL HINT (folded in Stage 8) ─────────────────────────────
+// Detects iOS Safari that hasn't been added to the Home Screen yet,
+// and reveals the #ios-install-hint element. Called once at app init
+// from the inline INIT block in index.html. Folded here from inline
+// rather than getting its own ios-install.js module — it belongs
+// logically with the PWA install plumbing above. Public API:
+//   - isIOS(), isInStandaloneMode(), checkIOSInstallHint()
+// ── iOS INSTALL HINT ───────────────────────────────────────────────
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+function isInStandaloneMode() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+}
+
+function checkIOSInstallHint() {
+  const hint = document.getElementById('ios-install-hint');
+  if (!hint) return;
+  // Show hint on iOS Safari if not already installed as PWA
+  if (isIOS() && !isInStandaloneMode()) {
+    hint.style.display = 'block';
+  }
+}
+

@@ -129,3 +129,18 @@ async function syncOnSignIn() {
     await syncDelta();
   }
 }
+
+// ── VISIBILITY SYNC GLUE (folded in Stage 8) ────────────────────────
+// LOAD-TIME SIDE EFFECT: registers a document-level visibilitychange
+// listener. Folded here from inline rather than getting its own
+// sync-glue.js module — the listener's sole purpose is to call
+// syncDelta() (defined above) whenever the tab regains visibility.
+// currentUser is read at callback time (lazy ref to auth.js), so
+// script load order doesn't matter for this glue.
+// When the user returns to the tab/app after being away, pull deltas
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && currentUser) {
+    syncDelta();
+  }
+});
+

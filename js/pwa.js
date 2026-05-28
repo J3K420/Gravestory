@@ -6,8 +6,7 @@
 //
 // Stage-4 timing-lesson audit: this module runs in <head>, before
 // HTML parsing reaches <body>. Verified safe:
-//   - The SW registration does no DOM reads at load time (only
-//     navigator.serviceWorker.register with a blob URL).
+//   - The SW registration does no DOM reads at load time.
 //   - The beforeinstallprompt listener registers on window; the
 //     event itself only fires after the page is fully loaded by
 //     browser guarantee, and the only DOM read (#install-banner)
@@ -20,62 +19,10 @@
 //     until the browser fires it).
 
 // ── PWA SERVICE WORKER ───────────────────────────────────────────
-// Only register service worker when hosted on https:// (not local files)
+// Browsers reject blob: URLs for SW registration (security restriction),
+// so the SW lives in sw.js at the repo root and is registered by path.
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  const swCode = `
-    const CACHE = 'gravestory-v12
-';
-    const TILE_CACHE = 'gravestory-tiles-v1';
-    const OFFLINE_URLS = ['/'];
-    self.addEventListener('install', e => {
-      e.waitUntil(
-        caches.open(CACHE).then(c => c.addAll(OFFLINE_URLS))
-      );
-      self.skipWaiting();
-    });
-    self.addEventListener('activate', e => {
-      e.waitUntil(
-        caches.keys().then(keys =>
-          Promise.all(keys.filter(k => k !== CACHE && k !== TILE_CACHE).map(k => caches.delete(k)))
-        )
-      );
-      self.clients.claim();
-    });
-    self.addEventListener('fetch', e => {
-      if (e.request.method !== 'GET') return;
-      const url = e.request.url;
-      // CACHE-FIRST for map tiles — tiles never change, so cache hits should win immediately.
-      // This eliminates pop-in and flicker during zoom/pan because tiles render from disk, not network.
-      const isTile = url.includes('tile.openstreetmap.org') || url.includes('/tile/');
-      if (isTile) {
-        e.respondWith(
-          caches.open(TILE_CACHE).then(cache =>
-            cache.match(e.request).then(cached => {
-              if (cached) return cached;
-              return fetch(e.request).then(r => {
-                if (r.ok) cache.put(e.request, r.clone());
-                return r;
-              });
-            })
-          )
-        );
-        return;
-      }
-      // NETWORK-FIRST for everything else — keep app fresh, fall back to cache offline.
-      e.respondWith(
-        fetch(e.request)
-          .then(r => {
-            const clone = r.clone();
-            caches.open(CACHE).then(c => c.put(e.request, clone));
-            return r;
-          })
-          .catch(() => caches.match(e.request))
-      );
-    });
-  `;
-  const blob = new Blob([swCode], { type: 'application/javascript' });
-  const swUrl = URL.createObjectURL(blob);
-  navigator.serviceWorker.register(swUrl)
+  navigator.serviceWorker.register('./sw.js')
     .then(() => console.log('✅ GraveStory PWA ready'))
     .catch(err => console.log('SW skipped:', err));
 }
@@ -134,4 +81,3 @@ function checkIOSInstallHint() {
     hint.style.display = 'block';
   }
 }
-

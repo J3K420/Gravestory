@@ -1,11 +1,8 @@
 const CACHE = 'gravestory-v12';
 const TILE_CACHE = 'gravestory-tiles-v1';
-const OFFLINE_URLS = ['/'];
-
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(OFFLINE_URLS))
-  );
+  // No pre-cache list — network-first fetch handler caches everything on visit.
+  // Pre-caching '/' fails on subpath deployments (e.g. GitHub Pages /Gravestory/).
   self.skipWaiting();
 });
 

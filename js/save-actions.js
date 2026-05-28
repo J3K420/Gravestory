@@ -82,6 +82,13 @@ async function saveStory() {
   renderResult(currentStory);
 
   await persistSave(currentStory);
+
+  // Re-render the visibility controls now that persistSave has resolved and
+  // story.id is set. Without this, any "Share publicly" click that fired
+  // during the cloud insert would have hit the `!story.id` guard in
+  // persistUpdate and been silently dropped — leaving is_public=false in the DB
+  // even though the toggle appeared to work.
+  renderVisibilityControls(currentStory, true);
 }
 
 // ── SHARE STORY ──────────────────────────────────────────────────

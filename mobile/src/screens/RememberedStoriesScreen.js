@@ -18,15 +18,16 @@ const SORT_MODES = [
   { key: 'cemetery', label: 'Cemetery' },
 ];
 
-function cemeteryName(story) {
-  if (!story.location) return '';
-  return story.location.split(',')[0].trim().toLowerCase();
+function getCemeteryName(story) {
+  if (!story.location) return 'Unknown Cemetery';
+  return story.location.split(',')[0].trim();
 }
 
 export default function RememberedStoriesScreen({ navigation }) {
   const [stories, setStories] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [sortBy, setSortBy] = useState('recent');
+  const [expandedCemeteries, setExpandedCemeteries] = useState(new Set());
 
   useFocusEffect(
     useCallback(() => {
@@ -46,13 +47,39 @@ export default function RememberedStoriesScreen({ navigation }) {
     const copy = [...stories];
     if (sortBy === 'name') {
       copy.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    } else if (sortBy === 'cemetery') {
-      copy.sort((a, b) => cemeteryName(a).localeCompare(cemeteryName(b)));
     } else {
       copy.sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
     }
     return copy;
   }, [stories, sortBy]);
+
+  const cemeteryGroups = useMemo(() => {
+    if (sortBy !== 'cemetery') return null;
+    const map = new Map();
+    for (const story of stories) {
+      const key = getCemeteryName(story);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(story);
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, list]) => ({
+        name,
+        stories: [...list].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0)),
+      }));
+  }, [stories, sortBy]);
+
+  function toggleCemetery(name) {
+    setExpandedCemeteries(prev => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  }
+
+  function isCemeteryExpanded(name, count) {
+    return count <= 5 || expandedCemeteries.has(name);
+  }
 
   function confirmDelete(story) {
     Alert.alert(
@@ -71,6 +98,32 @@ export default function RememberedStoriesScreen({ navigation }) {
           },
         },
       ]
+    );
+  }
+
+  function StoryCard({ story, i }) {
+    return (
+      <View key={story.timestamp ?? i} style={styles.savedCard}>
+        <View style={styles.savedAvatar}>
+          <Headstone size={17} color={colors.ash} />
+        </View>
+        <TouchableOpacity
+          style={styles.savedCardMain}
+          onPress={() => navigation.navigate('Result', { story })}
+        >
+          <Text style={styles.savedName}>{story.name || 'Unknown'}</Text>
+          <Text style={styles.savedDates}>{story.dates || ''}</Text>
+        </TouchableOpacity>
+        {story.is_public && <Text style={styles.publicBadge}>public</Text>}
+        <Text style={styles.savedArrow}>›</Text>
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={() => confirmDelete(story)}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={styles.deleteBtnText}>✕</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
@@ -113,33 +166,38 @@ export default function RememberedStoriesScreen({ navigation }) {
               Tap Scan on the home screen to photograph your first gravestone
             </Text>
           </View>
+
+        ) : sortBy === 'cemetery' ? (
+          cemeteryGroups?.map(group => {
+            const collapsible = group.stories.length > 5;
+            const expanded = isCemeteryExpanded(group.name, group.stories.length);
+            return (
+              <View key={group.name} style={styles.cemeteryGroup}>
+                <TouchableOpacity
+                  style={styles.cemeteryHeader}
+                  onPress={() => collapsible && toggleCemetery(group.name)}
+                  activeOpacity={collapsible ? 0.7 : 1}
+                >
+                  <View style={styles.cemeteryHeaderLeft}>
+                    <Text style={styles.cemeteryName}>{group.name}</Text>
+                    <View style={styles.cemeteryBadge}>
+                      <Text style={styles.cemeteryCount}>{group.stories.length}</Text>
+                    </View>
+                  </View>
+                  {collapsible && (
+                    <Text style={styles.cemeteryChevron}>{expanded ? '▾' : '▸'}</Text>
+                  )}
+                </TouchableOpacity>
+                {expanded && group.stories.map((story, i) => (
+                  <StoryCard key={story.timestamp ?? i} story={story} i={i} />
+                ))}
+              </View>
+            );
+          })
+
         ) : (
           sortedStories.map((story, i) => (
-            <View key={story.timestamp ?? i} style={styles.savedCard}>
-              <View style={styles.savedAvatar}>
-                <Headstone size={17} color={colors.ash} />
-              </View>
-              <TouchableOpacity
-                style={styles.savedCardMain}
-                onPress={() => navigation.navigate('Result', { story })}
-              >
-                <Text style={styles.savedName}>{story.name || 'Unknown'}</Text>
-                {sortBy === 'cemetery' && story.location ? (
-                  <Text style={styles.savedDates}>{story.location.split(',')[0].trim()}</Text>
-                ) : (
-                  <Text style={styles.savedDates}>{story.dates || ''}</Text>
-                )}
-              </TouchableOpacity>
-              {story.is_public && <Text style={styles.publicBadge}>public</Text>}
-              <Text style={styles.savedArrow}>›</Text>
-              <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => confirmDelete(story)}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={styles.deleteBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
+            <StoryCard key={story.timestamp ?? i} story={story} i={i} />
           ))
         )}
       </ScrollView>
@@ -199,6 +257,26 @@ const styles = StyleSheet.create({
     textAlign: 'center', opacity: 0.6, maxWidth: 260,
   },
 
+  /* Cemetery grouping */
+  cemeteryGroup: { marginBottom: 16 },
+  cemeteryHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10, paddingHorizontal: 4,
+    borderBottomWidth: 1, borderBottomColor: colors.line,
+    marginBottom: 8,
+  },
+  cemeteryHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cemeteryName: {
+    color: colors.parchment, fontSize: 15, fontFamily: fonts.title, letterSpacing: 0.5,
+  },
+  cemeteryBadge: {
+    backgroundColor: colors.stone2, borderWidth: 1, borderColor: colors.line,
+    borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2,
+  },
+  cemeteryCount: { color: colors.ash, fontSize: 11, fontFamily: fonts.body },
+  cemeteryChevron: { color: colors.flame, fontSize: 18, fontFamily: fonts.body },
+
+  /* Story cards */
   savedCard: {
     flexDirection: 'row', alignItems: 'center',
     borderWidth: 1, borderColor: colors.line,

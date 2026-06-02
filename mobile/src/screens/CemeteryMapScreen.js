@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, Callout, Polygon } from 'react-native-maps';
+import MapView, { Marker, Polygon } from 'react-native-maps';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory } from '../lib/sync';
 import { supabase } from '../lib/supabase';
@@ -125,6 +125,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
   const [mappedStories, setMappedStories] = useState([]);
   const [geocoding, setGeocoding] = useState(true);
   const [boundaryCoords, setBoundaryCoords] = useState([]);
+  const [selectedStory, setSelectedStory] = useState(null);
 
   useEffect(() => {
     resolveStories();
@@ -269,6 +270,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
           ref={mapRef}
           style={styles.map}
           initialRegion={DEFAULT_REGION}
+          onPress={() => setSelectedStory(null)}
         >
           {boundaryCoords.length > 0 && (
             <Polygon
@@ -285,30 +287,13 @@ export default function CemeteryMapScreen({ navigation, route }) {
               coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}
               draggable
               onDragEnd={e => handleDragEnd(story, e.nativeEvent.coordinate)}
+              onPress={() => setSelectedStory(story)}
             >
-              {/* Custom dark-gothic marker */}
               <View style={styles.markerOuter}>
                 <View style={[styles.markerInner, story._lowConfidence && styles.markerLowConf]}>
                   <Text style={styles.markerCross}>✝</Text>
                 </View>
               </View>
-
-              {/* Tap callout → navigate to story */}
-              <Callout onPress={() => navigation.navigate('Result', { story })}>
-                <View style={styles.callout}>
-                  <Text style={styles.calloutName}>{story.name || 'Unknown'}</Text>
-                  {!!story.dates && (
-                    <Text style={styles.calloutDates}>{story.dates}</Text>
-                  )}
-                  {!!story.location && (
-                    <Text style={styles.calloutLocation}>{story.location}</Text>
-                  )}
-                  {story._lowConfidence && (
-                    <Text style={styles.calloutWarn}>⚠ approximate location</Text>
-                  )}
-                  <Text style={styles.calloutAction}>Tap to view story →</Text>
-                </View>
-              </Callout>
             </Marker>
           ))}
         </MapView>
@@ -317,6 +302,33 @@ export default function CemeteryMapScreen({ navigation, route }) {
           <View style={styles.geocodingBadge}>
             <ActivityIndicator size="small" color={GOLD} style={{ marginRight: 8 }} />
             <Text style={styles.geocodingText}>Locating…</Text>
+          </View>
+        )}
+
+        {/* Floating callout — replaces <Callout> which is unreliable on Android */}
+        {selectedStory && (
+          <View style={styles.floatingCallout}>
+            <TouchableOpacity style={styles.calloutDismiss} onPress={() => setSelectedStory(null)}>
+              <Text style={styles.calloutDismissText}>✕</Text>
+            </TouchableOpacity>
+            <Text style={styles.calloutName}>{selectedStory.name || 'Unknown'}</Text>
+            {!!selectedStory.dates && (
+              <Text style={styles.calloutDates}>{selectedStory.dates}</Text>
+            )}
+            {!!selectedStory.location && (
+              <Text style={styles.calloutLocation}>{selectedStory.location}</Text>
+            )}
+            {selectedStory._lowConfidence && (
+              <Text style={styles.calloutWarn}>⚠ approximate location</Text>
+            )}
+            <View style={styles.calloutButtons}>
+              <TouchableOpacity
+                style={styles.calloutBtn}
+                onPress={() => { setSelectedStory(null); navigation.navigate('Result', { story: selectedStory }); }}
+              >
+                <Text style={styles.calloutBtnText}>→ Go to bio</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -396,12 +408,25 @@ const styles = StyleSheet.create({
   markerLowConf: { borderColor: colors.ember, opacity: 0.8 },
   markerCross: { color: GOLD, fontSize: 15 },
 
-  callout: { minWidth: 160, maxWidth: 260, padding: 10 },
-  calloutName: { fontWeight: '700', fontSize: 15, marginBottom: 2, color: '#1a1410' },
-  calloutDates: { fontSize: 13, color: '#666', fontStyle: 'italic', marginBottom: 2 },
-  calloutLocation: { fontSize: 12, color: '#888', marginBottom: 4 },
-  calloutWarn: { fontSize: 11, color: '#a87a2a', marginBottom: 4 },
-  calloutAction: { fontSize: 12, color: '#8a6f3a', fontWeight: '600' },
+  floatingCallout: {
+    position: 'absolute', top: 12, left: 12, right: 12,
+    backgroundColor: 'rgba(20,16,11,0.96)',
+    borderWidth: 1, borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: 14,
+  },
+  calloutDismiss: { position: 'absolute', top: 10, right: 12 },
+  calloutDismissText: { color: colors.ashDim, fontSize: 16 },
+  calloutName: { color: PARCHMENT, fontSize: 16, fontFamily: fonts.name, marginBottom: 3, paddingRight: 24 },
+  calloutDates: { color: colors.ash, fontSize: 13, fontFamily: fonts.serifItalic, marginBottom: 2 },
+  calloutLocation: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, marginBottom: 6 },
+  calloutWarn: { color: colors.ember, fontSize: 11, fontFamily: fonts.body, marginBottom: 6 },
+  calloutButtons: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  calloutBtn: {
+    borderWidth: 1, borderColor: GOLD,
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.sm,
+  },
+  calloutBtnText: { color: GOLD, fontSize: 13, fontFamily: fonts.sansBold },
 
   panel: {
     height: 220, backgroundColor: colors.stone,

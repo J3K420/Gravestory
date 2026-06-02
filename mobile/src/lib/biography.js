@@ -76,20 +76,24 @@ Write a biography that (aim for up to ~500 words when the sources genuinely supp
 - Opens with the full name(s), birth and death dates, and a vivid sense of the era they lived in
 - Paints a picture of their world — historical events, cultural shifts, and local context of their lifetime
 - Weaves in known details about family, marriage, faith, community, or relationships
-- Deeply analyzes symbols on the stone — religious imagery, military emblems, fraternal symbols, and floral carvings all reveal character and belief
-- If the surname has a well-documented cultural origin, you MAY note that names of this kind are commonly associated with that heritage — but do NOT assert anything about this individual's own background on the basis of their name. ADDITIONALLY: if "family_name" in the gravestone data is empty, null, or missing, do NOT discuss surname heritage at all.
-- When sources are limited, write a SHORTER biography grounded only in what the stone itself and the verified sources actually state
-- **EXCEPTION — well-documented historical figures**: If the gravestone data, inscription, or search results unambiguously identify a person of major historical significance (a head of state, president, monarch, general, or other figure extensively documented in historical record), you MUST write a full, rich biography drawing on well-established historical facts. Cite such facts as '[Historical record]' in the sources list. The anti-fabrication rule protects private individuals — it does NOT mean minimal coverage for George Washington or Abraham Lincoln. A two-paragraph biography for a founding father is a failure.
+- Deeply analyzes symbols on the stone — religious imagery (crosses, Divine Mercy, etc.), military emblems, fraternal symbols, and floral carvings all reveal character and belief
+- If the surname has a well-documented cultural origin, you MAY note that names of this kind are commonly associated with that heritage — but do NOT assert anything about this individual's own background, ancestry, or experiences on the basis of their name. ADDITIONALLY: if "family_name" in the gravestone data is empty, null, or missing, do NOT discuss surname heritage at all — any surname elsewhere in the data (in the inscription, names array, or research results) belongs to a relative, not the deceased, and cannot be used to infer the deceased's heritage.
+- When sources are limited, write a SHORTER biography grounded only in what the stone itself and the verified sources actually state — do not extrapolate, speculate, or pad with general historical background to reach a length target
+- **EXCEPTION — well-documented historical figures**: If the gravestone data, inscription, or search results unambiguously identify a person of major historical significance (a head of state, president, monarch, general, founding father, or other figure whose life is extensively documented in the historical record), you MUST write a full, rich biography drawing on well-established historical facts. Cite such facts as '[Historical record]' in the sources list. The anti-fabrication rule is there to protect private individuals whose lives are undocumented — it does NOT mean you should write a minimal biography for George Washington, Abraham Lincoln, Napoleon, or Marie Curie. A two-paragraph biography for the first President of the United States is a failure. Use your knowledge of well-established history to give them the account their legacy deserves.
 - Reflects on the inscription or epitaph with depth and compassion
-- Length should follow the evidence: a well-documented life earns a full biography; a sparsely-documented one gets a short, honest one. Never fabricate facts about private individuals.
+- If multiple people share the stone, weaves their stories together meaningfully
+- Closes with a warm, dignified reflection on their shared legacy
+- If an inscription seems unusual or sad, approaches it with extra warmth and humanity
+- Length should follow the evidence: a well-documented life earns a full biography; a sparsely-documented one gets a short, honest one. A brief accurate account builds trust; an invented one destroys it. Never fabricate facts, relationships, events, or characterizations that are not in the sources or well-established historical record
 
 CITATIONS — required when sources are present:
-- After EACH specific factual claim drawn from a numbered source above, append the bracketed source number, e.g. "Lee was buried at Lake View Cemetery [2]."
-- Cite ONLY claims actually supported by that numbered source
-- Do NOT cite gravestone-inscription claims
-- If no numbered source supports a claim, do NOT invent a citation
+- After EACH specific factual claim drawn from a numbered source above, append the bracketed source number, e.g. "Lee was buried at Lake View Cemetery in Seattle [2]." Multiple sources for one claim: "[2][4]"
+- Cite ONLY claims actually supported by that numbered source — do not attach a citation to a sentence the source does not back up
+- Do NOT cite gravestone-inscription claims (the stone is shown to the reader directly); cite only claims that came from research
+- Prefer citing [BillionGraves — GPS-verified transcription] and [Chronicling America — public-domain newspaper] sources when they support a claim; they are higher-credibility than generic web
+- If no numbered source supports a claim, do NOT invent a citation — and consider whether the claim itself should be removed
 
-For the location field: this MUST be the BURIAL location — where the body lies — NOT where the person was born, lived, or died. Read research results carefully for words like "buried", "interred", "laid to rest", "grave at", "final resting place". Format as: "Cemetery Name, City, State/Country". If burial location cannot be determined, leave it empty.
+For the location field: this MUST be the BURIAL location — where the body lies — NOT where the person was born, lived, died, or was famous. These are often different places. For example: Bruce Lee died in Hong Kong but is buried at Lake View Cemetery in Seattle, Washington. Marilyn Monroe died in Los Angeles and is buried at Westwood Village Memorial Park in Los Angeles — same city. Napoleon died on St. Helena but is buried at Les Invalides in Paris. Always read the research results carefully for words like "buried", "interred", "laid to rest", "grave at", "final resting place", or a cemetery name — these signal burial location. Words like "died in", "born in", "passed away in", or "lived in" are NOT burial location signals. IMPORTANT: if this person is a well-known historical or public figure whose burial place is common knowledge, trust your own knowledge of where they are buried OVER ambiguous search snippets that emphasize their birthplace or deathplace. Search results often over-represent where someone lived or died because that's where most articles about them are written. If a GPS location was provided above, use it exactly. Format as: "Cemetery Name, City, State/Country" (e.g. "St. Casimir Cemetery, Baldwin, Pennsylvania" or "Lake View Cemetery, Seattle, Washington"). For famous figures buried on estates, use the specific tomb/vault name. If the research clearly identifies a burial cemetery, use it. If only a city/region is mentioned as burial place, format as "Cemetery near City, State". If burial location cannot be determined from research, leave it empty — do NOT substitute the death or birth place.
 
 Return ONLY valid JSON with these exact fields:
 {
@@ -101,7 +105,7 @@ Return ONLY valid JSON with these exact fields:
   "location": "Cemetery Name, City, State — as specific as possible, empty string if unknown"
 }
 
-The "sources" and "source_urls" arrays MUST be index-aligned to the [N] markers used. Only include sources you actually cited.`;
+CRITICAL: the "sources" and "source_urls" arrays MUST be index-aligned to the [N] markers used in the biography. sources[0] / source_urls[0] is what "[1]" in the text points to, sources[1] / source_urls[1] is "[2]", and so on. Only include sources you actually cited with a marker. If no citations were used (e.g. nothing in the biography came from web research), return empty arrays for both.`;
 
   const data = await geminiText({
     contents: [{ parts: [{ text: prompt }] }],

@@ -89,6 +89,40 @@ function parseAgeAtDeath(graveData) {
   return null;
 }
 
+// Maps symbol keywords (lowercased) to extra Tavily query suffixes.
+// Each entry fires one additional query per matched symbol group, using the
+// primary name as the subject, so we find fraternal records and service rolls.
+const SYMBOL_QUERIES = {
+  'gar':                  ['"Grand Army Republic" veteran obituary'],
+  'grand army':           ['"Grand Army Republic" veteran obituary'],
+  'civil war':            ['Civil War veteran soldier obituary'],
+  'masonic':              ['Freemason Mason lodge member'],
+  'freemason':            ['Freemason Mason lodge member'],
+  'square and compass':   ['Freemason Mason lodge member'],
+  'odd fellows':          ['"Odd Fellows" IOOF member'],
+  'ioof':                 ['"Odd Fellows" IOOF member'],
+  'rebekah':              ['"Daughters of Rebekah" IOOF'],
+  'elks':                 ['"Order of Elks" BPOE member'],
+  'bpoe':                 ['"Order of Elks" BPOE member'],
+  'knights of columbus':  ['"Knights of Columbus" Catholic'],
+  'eastern star':         ['"Order of the Eastern Star" OES'],
+  'oes':                  ['"Order of the Eastern Star" OES'],
+  'vfw':                  ['"Veterans of Foreign Wars" veteran'],
+  'american legion':      ['"American Legion" veteran'],
+  'spanish american':     ['"Spanish-American War" veteran'],
+  'world war i':          ['World War I veteran obituary'],
+  'world war 1':          ['World War I veteran obituary'],
+  'wwi':                  ['World War I veteran obituary'],
+  'world war ii':         ['World War II veteran obituary'],
+  'world war 2':          ['World War II veteran obituary'],
+  'wwii':                 ['World War II veteran obituary'],
+  'navy':                 ['United States Navy veteran sailor'],
+  'marine':               ['United States Marine Corps veteran'],
+  'air force':            ['United States Air Force veteran'],
+  'infantry':             ['infantry soldier veteran obituary'],
+  'cavalry':              ['cavalry soldier veteran obituary'],
+};
+
 export async function searchForPerson(graveData, location) {
   const allNames = [];
   if (graveData.names?.length > 0) {
@@ -116,6 +150,14 @@ export async function searchForPerson(graveData, location) {
       if (!variantSeen.has(v)) { variantSeen.add(v); allVariants.push(v); }
     });
   });
+
+  // Include OCR alternate readings when name confidence is not high
+  if (graveData.name_confidence !== 'high' && graveData.alternate_names?.length > 0) {
+    graveData.alternate_names.slice(0, 2).forEach(alt => {
+      const clean = (alt || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+      if (clean && !variantSeen.has(clean)) { variantSeen.add(clean); allVariants.push(clean); }
+    });
+  }
 
   const deathYear = graveData.death_date?.match(/\d{4}/)?.[0] || '';
   const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0] || '';
@@ -161,6 +203,20 @@ export async function searchForPerson(graveData, location) {
   if (!effectiveDeath && !effectiveBirth && inscr.length > 30) {
     const phrase = inscr.slice(0, 55).replace(/"/g, '').trim();
     queries.unshift(`"${phrase}"`);
+  }
+
+  // Symbol-guided queries: each recognised emblem/affiliation generates one
+  // targeted query that routes the search toward the right record repositories.
+  if (graveData.symbols?.length > 0) {
+    const symbolStr = graveData.symbols.join(' ').toLowerCase();
+    const primaryVar = allVariants[0] || '';
+    for (const [key, suffixes] of Object.entries(SYMBOL_QUERIES)) {
+      if (symbolStr.includes(key)) {
+        suffixes.forEach(suffix => {
+          if (primaryVar) queries.push(`"${primaryVar}" ${suffix}`);
+        });
+      }
+    }
   }
 
   const results = [];

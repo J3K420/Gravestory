@@ -123,8 +123,10 @@ Return ONLY a valid JSON object with these exact fields:
   "death_date": "date or year if visible",
   "married_date": "if visible",
   "inscription": "the full epitaph/quote/relational text VERBATIM — preserve all surnames that appear inside relational phrases",
-  "symbols": ["list of symbols, emblems, or decorations"],
+  "symbols": ["list of symbols, emblems, or decorations — be specific: 'GAR Grand Army of the Republic emblem', 'Masonic square and compass', 'Odd Fellows three links', etc."],
   "family_name": "the deceased's surname ONLY IF it is clearly theirs (e.g. shown as a standalone surname banner, or in a family plot context). Leave empty/null if the only surname on the stone appears inside a relational phrase about someone else.",
+  "name_confidence": "high if the name is clearly legible, medium if partially weathered or ambiguous, low if significantly uncertain",
+  "alternate_names": ["if name_confidence is medium or low, list 1-2 plausible alternate readings of primary_name due to weathering or OCR ambiguity — otherwise empty array"],
   "notes": "any other text, observations, or ambiguity flags"
 }
 
@@ -141,5 +143,6 @@ If multiple deceased people share the stone, use the names array and pick the mo
   return safeParseJSON(text, {
     names: [], primary_name: 'Unknown', birth_date: '', death_date: '',
     inscription: '', symbols: [], family_name: '', notes: '',
+    name_confidence: 'high', alternate_names: [],
   });
 }

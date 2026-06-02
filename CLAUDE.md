@@ -180,6 +180,12 @@ Built for one-handed use in a cemetery. Service worker caches the app shell (`gr
 
 - **Historical figures biography exception** — `generateBiography` explicitly instructs Gemini that the anti-fabrication rule applies to private individuals only. For clearly identified major historical figures (presidents, monarchs, generals, etc.) the model MUST write a full biography drawing on well-established historical record, cited as `[Historical record]`. A two-paragraph biography for George Washington is considered a failure. Applies to both `js/biography.js` and `mobile/src/lib/biography.js`.
 
+- **Mobile Wikipedia portraits return an array** — `fetchWikipediaPortraits` in `mobile/src/lib/api-wikipedia.js` returns `string[]` (up to 5 local file URIs), not the `{ left, right }` object used by the web version. Each URL is downloaded and resized to an 800px JPEG via `expo-image-manipulator` so React Native always gets a local `file://` URI it can decode. `ResultScreen` uses `normalizePortraits()` to handle both the old `{ left, right }` format (stored in older saved stories) and the new array format.
+
+- **Mobile map callout is a floating overlay, not `<Callout>`** — `react-native-maps` `<Callout onPress>` with custom child Views silently swallows touch events on Android. `CemeteryMapScreen` uses a state-driven `View` overlaid on the map instead. Tapping a marker sets `selectedStory` state; tapping the map or the ✕ button dismisses it. The overlay includes a "▼ Read bio" toggle that expands the first two biography paragraphs inline. Do not replace this with `<Callout>`.
+
+- **Portrait retry after bio resolves full name** — `CameraScreen` fetches Wikipedia portraits in the parallel step using `graveData.primary_name`. When the stone shows only a surname (e.g. "HOUDINI"), the single-token guard fires and returns empty. After `generateBiography` resolves the full name, `CameraScreen` retries by splitting `bioResult.name` on `" and "` and calling `fetchWikipediaPortraits` for each part. This is why portraits appear for stones with surname-only inscriptions.
+
 ---
 
 ## React Native mobile app (Expo)
@@ -248,7 +254,7 @@ mobile/
       api-gemini.js             — verifyIsGravestone, readGravestone (ES module)
       api-tavily.js             — searchForPerson (ES module)
       api-wikitree.js           — searchWikiTree (ES module)
-      api-wikipedia.js          — fetchWikipediaPortraits (ES module, adds User-Agent header)
+      api-wikipedia.js          — fetchWikipediaPortraits (ES module, adds User-Agent header). Returns array of up to 5 local JPEG URIs (resized via expo-image-manipulator). imageFilenameMatchesPerson uses substring containment + strips Wikimedia "NNNpx-" thumbnail prefix so CamelCase and thumbnail filenames match correctly.
       biography.js              — generateBiography (ES module)
       api-nominatim.js          — forwardGeocode: full parity with web — multi-query fallback, geographic context filter, strict/fuzzy cemetery matching, US state low-confidence flag, two-pass Overpass grave-node search, AsyncStorage grave cache. Signature: forwardGeocode(locationStr, personName, dates)
       grave-cache.js            — AsyncStorage-backed grave coordinate cache (30-day TTL). graveCacheKey, readGraveCache, writeGraveCache. Port of web grave-cache.js (localStorage → AsyncStorage).
@@ -258,13 +264,13 @@ mobile/
     screens/
       HomeScreen.js             — Home: GravestoneLogo (size=240), scan button, map buttons with SVG icons, "Remembered Stories" scroll button, saved list with headstone avatar cards. Delta sync on focus. Auth state change listener clears list on SIGNED_OUT.
       AuthScreen.js             — Email/password + Google OAuth (expo-web-browser). GravestoneLogo header, Fraunces title, HankenGrotesk inputs/buttons.
-      CameraScreen.js           — Photo picker → GPS capture → full pipeline → forwardGeocode refinement → R2 upload → cloud save → Result. Flickering gravestone SVG tap zone (375×410); tapping opens bottom-sheet picker. Candle flicker loading animation. forwardGeocode called after biography to refine GPS using graveData.primary_name.
-      ResultScreen.js           — Biography (Fraunces serif), gravestone photo, portraits, inscription, sources. Action chip row: Map / Share / Public toggle. Scan Again + Delete buttons.
+      CameraScreen.js           — Photo picker → GPS capture → full pipeline → forwardGeocode refinement → R2 upload → cloud save → Result. Flickering gravestone SVG tap zone (375×410); tapping opens bottom-sheet picker. Candle flicker loading animation. forwardGeocode called after biography to refine GPS using graveData.primary_name. Portrait retry: if fetchWikipediaPortraits returns empty (single-token OCR name), retries after bio resolves full name; splits bioResult.name on " and " and tries each person individually so combined names like "Harry Houdini and Bess Houdini" don't break the Wikipedia title-match guard.
+      ResultScreen.js           — Biography (Fraunces serif), full-width paging FlatList image carousel at top (gravestone photo first, then Wikipedia portraits), inscription, sources. normalizePortraits() handles both old { left, right } and new array portrait formats for backward compat. Action chip row: Map / Share / Public toggle. Scan Again + Delete buttons.
       SettingsScreen.js         — Display name, default visibility toggle, account info, sign out. Grouped sections, gradient save button.
-      CemeteryMapScreen.js      — react-native-maps: grave markers, callouts, draggable pin correction, bottom list, OSM boundary polygon. loadStories/saveStories always called with userId from session.
+      CemeteryMapScreen.js      — react-native-maps: grave markers, floating overlay callout (NOT <Callout> — Android unreliable), "Read bio" pull-down (first 2 bio paragraphs), draggable pin correction, bottom list, OSM boundary polygon. loadStories/saveStories always called with userId from session.
       GlobalMapScreen.js        — Community map: public stories from Supabase RPC, silver markers, guest banner. Globe icon header.
     components/
-      GravestoneLogo.js         — Animated SVG gravestone logo (flicker effect); accepts animate={false} for static rendering
+      GravestoneLogo.js         — Animated SVG gravestone logo; accepts animate={false} for static rendering. Two independent animation loops: (1) flicker — alternates slow candle-waver phases (400–600ms), burst of rapid blinks, and long near-out dims; (2) sweeping shimmer — AnimatedG translates a tilted gradient Rect left→right every ~4s, clipped to the stone silhouette via ClipPath.
       Icons.js                  — SVG icon set: CandleMark, Headstone, MapStack, Globe, ShareIcon, Pin. All accept size + color props.
 ```
 
@@ -282,12 +288,13 @@ mobile/
 2. GPS source: EXIF coords from the photo if present; device GPS fallback only for **camera shots** (not library picks — device location would be wrong for historical photos)
 3. `verifyIsGravestone(base64)` — throws `{ __verificationRejection: true }` → rejection UI
 4. `readGravestone(base64)` — Gemini OCR → structured JSON
-5. Parallel: `searchForPerson` + `searchWikiTree` + `fetchWikipediaPortraits`
+5. Parallel: `searchForPerson` + `searchWikiTree` + `fetchWikipediaPortraits` (using `graveData.primary_name`; may return empty if stone shows only a surname)
 6. `generateBiography` — Gemini narrative or stone-only fallback
-7. `forwardGeocode(bioResult.location, graveData.primary_name, bioResult.dates)` — refines GPS to cemetery center or precise grave node via Nominatim + Overpass. Falls back to EXIF/device GPS if null. Sets `_lowConfidence` on state mismatch.
-8. Read `user.user_metadata.default_public` → set `story.is_public`
-9. Save to user-scoped AsyncStorage key → `cloudSaveStory` (if signed in) → `uploadGravestoneImage` → `cloudUpdateStory` with `image_url`
-10. Navigate to ResultScreen
+7. **Portrait retry** — if step 5 returned no portraits, split `bioResult.name` on `" and "` and call `fetchWikipediaPortraits` for each part until one succeeds. This handles stones where the OCR returns only a surname (e.g. "HOUDINI") but the bio resolves "Harry Houdini".
+8. `forwardGeocode(bioResult.location, graveData.primary_name, bioResult.dates)` — refines GPS to cemetery center or precise grave node via Nominatim + Overpass. Falls back to EXIF/device GPS if null. Sets `_lowConfidence` on state mismatch.
+9. Read `user.user_metadata.default_public` → set `story.is_public`
+10. Save to user-scoped AsyncStorage key → `cloudSaveStory` (if signed in) → `uploadGravestoneImage` → `cloudUpdateStory` with `image_url`
+11. Navigate to ResultScreen
 
 ### Google OAuth (mobile)
 

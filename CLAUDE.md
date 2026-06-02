@@ -74,7 +74,7 @@ js/
   loading-ui.js          — setLoadingStep: updates loading text during pipeline
   photo-modal.js         — Photo source modal (camera vs library)
   location-permission.js — Location permission modal + privacy info modal
-  home-screen.js         — renderSavedList, loadSaved, deleteSaved
+  home-screen.js         — renderSavedList, loadSaved, deleteSaved. Saved list now lives on the #remembered-stories screen; renderSavedList() is called by showScreen() when navigating there.
   home-screen.append.js  — updateHomeMapButton
   map-utils.js           — groupGravesByCemetery, getDistanceMeters
   map-cemetery.js        — Per-user cemetery map (Leaflet, drag-to-correct, OSM boundary)
@@ -171,6 +171,8 @@ Built for one-handed use in a cemetery. Service worker caches the app shell (`gr
 - **Nearby cemeteries** — `fetchNearbyCemeteries` uses a 5km radius and only `landuse=cemetery` / `amenity=grave_yard` on ways and relations. Unnamed elements (no `name` tag) are filtered out — they clutter the map with useless "Unnamed Cemetery" entries.
 
 - **Soft-delete sync** — deletes propagate to other devices via `deleted_at` in the delta sync, not through missing rows.
+
+- **Remembered Stories screen (web)** — saved stories no longer render inline on the home screen. The home screen has a "Remembered Stories" nav button that calls `showScreen('remembered-stories')`. The `#remembered-stories` div contains the `#saved-list` element; `renderSavedList()` is called by `showScreen()` when that screen becomes active. `'remembered-stories'` is in `VALID_SCREENS` so `#remembered-stories` is a valid hash-routable destination.
 
 - **Mobile per-user storage isolation** — `loadStories(userId)` / `saveStories(stories, userId)` in `mobile/src/lib/storage.js` use key `gs_stories_${userId}` for signed-in users and `gs_stories_guest` for guests. Every call site (HomeScreen, CameraScreen, CemeteryMapScreen, ResultScreen, sync.js) must pass the userId from `supabase.auth.getSession()`. Never call these functions without a userId argument — that silently reads the guest bucket.
 
@@ -275,13 +277,14 @@ mobile/
       map-utils.js              — getDistanceMeters, groupGravesByCemetery (ES module)
       sync.js                   — storyToRow/rowToStory, cloudSaveStory/Update/Delete, syncDelta, syncOnSignIn, pushLocalOnly. syncOnSignIn always does a full cloud pull (not delta) — cloud is authoritative, local stories only kept if no cloud id (unsynced).
     screens/
-      HomeScreen.js             — Home: GravestoneLogo (size=240), scan button, map buttons with SVG icons, "Remembered Stories" scroll button, saved list with headstone avatar cards. Delta sync on focus. Auth state change listener clears list on SIGNED_OUT.
-      AuthScreen.js             — Email/password + Google OAuth (expo-web-browser). GravestoneLogo header, Fraunces title, HankenGrotesk inputs/buttons.
-      CameraScreen.js           — Photo picker → GPS capture → full pipeline → forwardGeocode refinement → R2 upload → cloud save → Result. Flickering gravestone SVG tap zone (375×410); tapping opens bottom-sheet picker. Candle flicker loading animation. reverseGeocode fires in parallel with verifyIsGravestone to build locationHint from EXIF/device GPS; locationHint is threaded into readGravestone, searchForPerson, searchWikiTree, and generateBiography. Shows Alert if graveData.multiple_subjects === true. Parallel step fires searchForPerson + searchWikiTree + fetchWikipediaPortraits + fetchWikipediaArticleSummary; all four results threaded into generateBiography. forwardGeocode called after biography to refine GPS using graveData.primary_name. Portrait retry: if fetchWikipediaPortraits returns empty (single-token OCR name), retries after bio resolves full name; splits bioResult.name on " and " and tries each person individually so combined names like "Harry Houdini and Bess Houdini" don't break the Wikipedia title-match guard.
-      ResultScreen.js           — Biography (Fraunces serif), full-width paging FlatList image carousel at top (gravestone photo first, then Wikipedia portraits), inscription, sources. normalizePortraits() handles both old { left, right } and new array portrait formats for backward compat. Action chip row: Map / Share / Public toggle. Scan Again + Delete buttons.
-      SettingsScreen.js         — Display name, default visibility toggle, account info, sign out. Grouped sections, gradient save button.
-      CemeteryMapScreen.js      — react-native-maps: grave markers, floating overlay callout (NOT <Callout> — Android unreliable), "Read bio" pull-down (first 2 bio paragraphs), draggable pin correction, bottom list, OSM boundary polygon. loadStories/saveStories always called with userId from session.
-      GlobalMapScreen.js        — Community map: public stories from Supabase RPC, silver markers, guest banner. Globe icon header.
+      HomeScreen.js             — Home: GravestoneLogo (size=240), scan button, map buttons with SVG icons, "Remembered Stories" nav button (navigates to RememberedStoriesScreen). No saved list inline — list lives on RememberedStoriesScreen. Runs syncDelta on every focus; syncOnSignIn on SIGNED_IN auth event. Pull-to-refresh triggers syncDelta.
+      RememberedStoriesScreen.js — Dedicated saved-stories screen. Sort bar with three pill options: Recent (newest-first by timestamp), Name (A→Z), Cemetery (A→Z grouped by first location segment). In Cemetery mode stories are grouped under collapsible cemetery headers: cemeteries with ≤5 stories always expanded; >5 stories collapsed by default with a count badge and ▸/▾ chevron — tap header to expand inline. Pull-to-refresh reloads from AsyncStorage.
+      AuthScreen.js             — Email/password + Google OAuth (expo-web-browser). GravestoneLogo header, Fraunces title, HankenGrotesk inputs/buttons. Pull-to-refresh clears form fields and status message.
+      CameraScreen.js           — Photo picker → GPS capture → full pipeline → forwardGeocode refinement → R2 upload → cloud save → Result. Flickering gravestone SVG tap zone (375×410); tapping opens bottom-sheet picker. Candle flicker loading animation. reverseGeocode fires in parallel with verifyIsGravestone to build locationHint from EXIF/device GPS; locationHint is threaded into readGravestone, searchForPerson, searchWikiTree, and generateBiography. Shows Alert if graveData.multiple_subjects === true. Parallel step fires searchForPerson + searchWikiTree + fetchWikipediaPortraits + fetchWikipediaArticleSummary; all four results threaded into generateBiography. forwardGeocode called after biography to refine GPS using graveData.primary_name. Portrait retry: if fetchWikipediaPortraits returns empty (single-token OCR name), retries after bio resolves full name; splits bioResult.name on " and " and tries each person individually so combined names like "Harry Houdini and Bess Houdini" don't break the Wikipedia title-match guard. Pull-to-refresh clears rejected/error state back to idle.
+      ResultScreen.js           — Biography (Fraunces serif), full-width paging FlatList image carousel at top (gravestone photo first, then Wikipedia portraits), inscription, sources. normalizePortraits() handles both old { left, right } and new array portrait formats for backward compat. Action chip row: Map / Share / Public toggle. Scan Again + Delete buttons. Pull-to-refresh re-reads the story from AsyncStorage to pick up synced changes.
+      SettingsScreen.js         — Display name, default visibility toggle, account info, sign out. Grouped sections, gradient save button. Pull-to-refresh re-fetches the session to reload profile metadata.
+      CemeteryMapScreen.js      — react-native-maps: grave markers, floating overlay callout (NOT <Callout> — Android unreliable), "Read bio" pull-down (first 2 bio paragraphs), draggable pin correction, bottom list, OSM boundary polygon. loadStories/saveStories always called with userId from session. Pull-to-refresh on the bottom grave list re-runs resolveStories.
+      GlobalMapScreen.js        — Community map: public stories from Supabase RPC, silver markers, guest banner. Globe icon header. 5-minute module-level cache (_cache/_cacheTime/_cacheUserId). Pull-to-refresh busts the cache and re-fetches.
     components/
       GravestoneLogo.js         — Animated SVG gravestone logo; accepts animate={false} for static rendering. Two independent animation loops: (1) flicker — alternates slow candle-waver phases (400–600ms), burst of rapid blinks, and long near-out dims; (2) sweeping shimmer — AnimatedG translates a tilted gradient Rect left→right every ~4s, clipped to the stone silhouette via ClipPath.
       Icons.js                  — SVG icon set: CandleMark, Headstone, MapStack, Globe, ShareIcon, Pin. All accept size + color props.
@@ -294,6 +297,7 @@ mobile/
 - `SafeAreaProvider` wraps the entire app in `App.js`
 - All API calls use same `PROXY_BASE` as web — same Cloudflare Worker handles both
 - `console.warn` (not `console.log`) for pipeline debug output — New Architecture (bridgeless) only forwards warns to DevTools
+- **Pull-to-refresh** — every screen's primary `ScrollView` has a `RefreshControl` tinted `colors.flame`. Use `tintColor` (iOS) + `colors` array (Android). Each screen's `onRefresh` does the most meaningful action for that screen (see screen descriptions above).
 
 ### Mobile pipeline (CameraScreen.js)
 

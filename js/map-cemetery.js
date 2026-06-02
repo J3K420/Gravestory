@@ -377,6 +377,47 @@ function constrainToCemetery(point, boundaryPts, toleranceMeters = 100) {
   };
 }
 
+// ── STITCH OUTER-RING WAYS INTO A SINGLE ORDERED POLYGON ────────
+// Overpass returns relation member ways in arbitrary order. Each way's
+// endpoint must connect to the next way's start (or its reverse).
+// Without this, concatenating ways straight produces crossed-line polygons.
+function stitchOuterRing(ways) {
+  if (ways.length === 0) return [];
+  if (ways.length === 1) return ways[0];
+
+  const EPS = 1e-6;
+  const close = (a, b) => Math.abs(a[0] - b[0]) < EPS && Math.abs(a[1] - b[1]) < EPS;
+
+  const remaining = ways.map(w => w.slice()); // shallow clone each way
+  const ring = remaining.shift();
+
+  while (remaining.length > 0) {
+    const tail = ring[ring.length - 1];
+    let joined = false;
+    for (let i = 0; i < remaining.length; i++) {
+      const w = remaining[i];
+      if (close(w[0], tail)) {
+        ring.push(...w.slice(1));
+        remaining.splice(i, 1);
+        joined = true;
+        break;
+      }
+      if (close(w[w.length - 1], tail)) {
+        ring.push(...w.slice(0, -1).reverse());
+        remaining.splice(i, 1);
+        joined = true;
+        break;
+      }
+    }
+    if (!joined) {
+      // Gap in ring (e.g. inner islands misclassified as outer) — append remainder as-is
+      for (const w of remaining) ring.push(...w);
+      break;
+    }
+  }
+  return ring;
+}
+
 // ── FETCH OSM CEMETERY OR ESTATE BOUNDARY POLYGON ───────────────
 async function fetchOSMCemeteryBoundary(lat, lng, skipEstateFallback = false) {
   // Pass 1 — look for a cemetery boundary at/around this location.
@@ -401,18 +442,20 @@ async function fetchOSMCemeteryBoundary(lat, lng, skipEstateFallback = false) {
     const data = await res.json();
 
     // Build candidates from both ways (el.geometry) and relations (el.members[].geometry).
-    // Overpass `out geom` puts geometry on the element for ways but inside members for
-    // relations — large cemeteries like Inglewood Park Cemetery are mapped as relations,
-    // so skipping them caused a tiny sub-way to be drawn as the boundary instead.
+    // Relations need their outer-ring ways stitched in order — Overpass returns them in
+    // arbitrary sequence, and naively concatenating them produces crossed lines.
     const candidates = [];
     for (const el of (data.elements || [])) {
       if (el.geometry && el.geometry.length > 2) {
         candidates.push({ pts: el.geometry.map(pt => [pt.lat, pt.lon]), isRelation: false });
       } else if (el.type === 'relation' && el.members) {
-        const outerPts = el.members
+        const outerWays = el.members
           .filter(m => m.role === 'outer' && m.geometry?.length)
-          .flatMap(m => m.geometry.map(pt => [pt.lat, pt.lon]));
-        if (outerPts.length > 2) candidates.push({ pts: outerPts, isRelation: true });
+          .map(m => m.geometry.map(pt => [pt.lat, pt.lon]));
+        if (outerWays.length > 0) {
+          const stitched = stitchOuterRing(outerWays);
+          if (stitched.length > 2) candidates.push({ pts: stitched, isRelation: true });
+        }
       }
     }
 

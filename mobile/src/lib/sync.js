@@ -243,7 +243,7 @@ export async function syncOnSignIn(user) {
   const since = await getLastSync(user.id);
   let stories = await loadStories(user.id);
 
-  if (!since) {
+  if (!since || stories.length === 0) {
     // First sign-in on this device — pull everything
     try {
       const { data, error } = await supabase

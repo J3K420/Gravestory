@@ -117,7 +117,7 @@ export default function ResultScreen({ navigation, route }) {
               keyExtractor={(_, i) => String(i)}
               renderItem={({ item }) => (
                 <View style={styles.carouselSlide}>
-                  <Image source={{ uri: item.uri }} style={styles.carouselImage} resizeMode="cover" />
+                  <Image source={{ uri: item.uri }} style={styles.carouselImage} resizeMode="contain" />
                   <View style={styles.carouselLabelBadge}>
                     <Text style={styles.carouselLabelText}>{item.label}</Text>
                   </View>
@@ -244,8 +244,8 @@ const styles = StyleSheet.create({
 
   // Break out of the 24px horizontal padding so carousel spans full screen width
   carouselOuter: { marginHorizontal: -24, marginBottom: 24 },
-  carouselSlide: { width: SCREEN_W, height: 260, position: 'relative' },
-  carouselImage: { width: SCREEN_W, height: 260 },
+  carouselSlide: { width: SCREEN_W, height: 320, position: 'relative', backgroundColor: colors.ink },
+  carouselImage: { width: SCREEN_W, height: 320 },
   carouselLabelBadge: {
     position: 'absolute', bottom: 10, left: 12,
     backgroundColor: 'rgba(20,16,11,0.72)',

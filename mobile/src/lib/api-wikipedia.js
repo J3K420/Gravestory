@@ -38,13 +38,19 @@ function imageFilenameMatchesPerson(imageUrl, queriedNameSet) {
       'square','wiki','original','default','png','jpg','jpeg'
     ]);
 
-    const tokens = file.split(/[\s_\-.()]+/).filter(t => t.length > 1);
+    // Strip Wikimedia thumbnail size prefix ("800px-OriginalName" → "OriginalName")
+    const stripped = file.replace(/^\d+px-/, '');
+    const tokens = stripped.split(/[\s_\-.()]+/).filter(t => t.length > 1);
     const nameLike = tokens.filter(t => !GENERIC.has(t) && !/^\d+$/.test(t) && t.length >= 3);
 
     if (nameLike.length === 0) return true;
 
+    // Use substring containment in both directions so CamelCase tokens like
+    // "houdinichains" or "harryhoudini" still match nameSet entries "houdini"/"harry".
     for (const t of nameLike) {
-      if (queriedNameSet.has(t)) return true;
+      for (const name of queriedNameSet) {
+        if (t === name || t.includes(name) || name.includes(t)) return true;
+      }
     }
     return false;
   } catch {

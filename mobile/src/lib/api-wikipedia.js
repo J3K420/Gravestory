@@ -77,12 +77,18 @@ export async function fetchWikipediaPortraits(name, dates) {
 
     const images = [];
 
-    const lead = summary?.originalimage?.source || summary?.thumbnail?.source || null;
+    // Prefer thumbnail over originalimage: Wikipedia's thumbnail is always a
+    // web-safe JPEG regardless of the source format (TIFF, SVG, etc.), and is
+    // appropriately sized for mobile. originalimage can be 4000+ px / multi-MB
+    // TIFFs that React Native decodes as a black rectangle.
+    const lead = summary?.thumbnail?.source || summary?.originalimage?.source || null;
     if (lead && imageFilenameMatchesPerson(lead, nameSet)) {
       images.push(lead);
     }
 
-    // Fetch up to 4 secondary images in parallel
+    // Fetch up to 4 secondary images in parallel.
+    // Use iiurlwidth=800 so Wikipedia serves a sized JPEG thumbnail — this
+    // converts TIFFs/SVGs/PNGs to a safe format and caps the file size.
     try {
       const imagesUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=images&titles=${encodeURIComponent(title)}&imlimit=15&format=json&origin=*`;
       const imagesRes = await fetch(imagesUrl, { headers: WIKI_HEADERS });
@@ -94,19 +100,23 @@ export async function fetchWikipediaPortraits(name, dates) {
 
         const candidates = imageList
           .map(i => i.title)
-          .filter(t => /\.(jpe?g|png)$/i.test(t))
+          .filter(t => /\.(jpe?g|png|tiff?|svg)$/i.test(t))
           .filter(t => !/logo|icon|signature|map|flag|coat[-_ ]of[-_ ]arms|birth|death|burial|gravesite/i.test(t))
           .filter(t => lead ? !lead.includes(encodeURIComponent(t.replace(/^File:/, ''))) : true)
           .slice(0, 4);
 
         const resolved = await Promise.allSettled(
           candidates.map(async (candidate) => {
-            const resolveUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(candidate)}&prop=imageinfo&iiprop=url&format=json&origin=*`;
+            const resolveUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(candidate)}&prop=imageinfo&iiprop=url|thumbnail&iiurlwidth=800&format=json&origin=*`;
             const resolveRes = await fetch(resolveUrl, { headers: WIKI_HEADERS });
             if (!resolveRes.ok) return null;
             const resolveData = await resolveRes.json();
             const resolvedPage = Object.values(resolveData?.query?.pages || {})[0];
-            const url = resolvedPage?.imageinfo?.[0]?.url || null;
+            // thumburl is the width-constrained JPEG; fall back to url for formats
+            // Wikipedia won't thumbnail (already JPEG/PNG under the size limit)
+            const url = resolvedPage?.imageinfo?.[0]?.thumburl
+                     || resolvedPage?.imageinfo?.[0]?.url
+                     || null;
             return (url && imageFilenameMatchesPerson(url, nameSet)) ? url : null;
           })
         );

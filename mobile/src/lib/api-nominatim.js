@@ -1,8 +1,6 @@
 import { graveCacheKey, readGraveCache, writeGraveCache } from './grave-cache';
-import { PROXY_BASE } from './config';
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
-const OVERPASS  = `${PROXY_BASE}/overpass`;
 const HEADERS   = { 'User-Agent': 'GraveStory/1.0 (mobile)' };
 
 const US_STATE_LOOKUP = {
@@ -144,81 +142,40 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
     if (cached) return { ...cached, isCemetery: true, lowConfidence };
   }
 
-  // ── Two-pass Overpass grave-node search ───────────────────────────
-  if (personName) {
+  // ── Nominatim name search within cemetery bbox ───────────────────
+  // Overpass is blocked on mobile (all mirrors return 403/406 to Cloudflare
+  // Worker IPs and to React Native's HTTP stack). Use Nominatim /search with
+  // viewbox+bounded=1 instead — finds OSM-tagged grave/memorial nodes by name.
+  if (personName && cemeteryCoords.bbox) {
     const nameTokens = personName.toLowerCase()
       .split(/[\s,().]+/)
       .filter(t => t.length > 2 && !['and', 'the', 'née', 'nee', 'von', 'van', 'de'].includes(t));
 
-    let bestMatch = null;
-    let bestScore = 0;
-    let bestFromTagged = false;
-
-    // Pass 1 — tagged nodes/ways within 1000m
-    try {
-      const { lat: lat1, lng: lng1 } = cemeteryCoords;
-      const overpassQuery = `
-        [out:json][timeout:20];
-        (
-          node[name][historic~"^(memorial|tomb|grave|monument|mausoleum)$"](around:1000,${lat1},${lng1});
-          way[name][historic~"^(memorial|tomb|grave|monument|mausoleum)$"](around:1000,${lat1},${lng1});
-          node[name][tourism=attraction](around:1000,${lat1},${lng1});
-          way[name][tourism=attraction](around:1000,${lat1},${lng1});
-          node[name][cemetery=grave](around:1000,${lat1},${lng1});
-          way[name][cemetery=grave](around:1000,${lat1},${lng1});
-          node[name][memorial](around:1000,${lat1},${lng1});
-          way[name][memorial](around:1000,${lat1},${lng1});
-          node[name][building~"^(tomb|mausoleum|chapel)$"](around:1000,${lat1},${lng1});
-          way[name][building~"^(tomb|mausoleum|chapel)$"](around:1000,${lat1},${lng1});
-        );
-        out center;
-      `;
-      const res1 = await fetch(OVERPASS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: overpassQuery }) });
-      if (res1.ok) {
-        const d1 = await res1.json();
-        for (const el of (d1.elements || [])) {
-          if (!el.tags?.name) continue;
-          const score = nameTokens.filter(t => el.tags.name.toLowerCase().includes(t)).length;
-          if (score > bestScore) { bestScore = score; bestMatch = el; bestFromTagged = true; }
-        }
-      }
-    } catch (e) { console.warn('Overpass pass 1 failed:', e.message); }
-
-    const minTagged = Math.max(nameTokens.length === 1 ? 1 : 2, Math.ceil(nameTokens.length * 0.75));
-
-    // Pass 2 — any named node within Nominatim bounding box (100% match required)
-    if (bestScore < minTagged && cemeteryCoords.bbox) {
+    if (nameTokens.length > 0) {
       try {
+        // Expand bbox by ~100m so graves near the edge aren't clipped.
         const [s, n, w, e] = cemeteryCoords.bbox.map(Number);
-        const bboxQuery = `
-          [out:json][timeout:15];
-          (
-            node[name](${s},${w},${n},${e});
-            way[name](${s},${w},${n},${e});
-          );
-          out center;
-        `;
-        const res2 = await fetch(OVERPASS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: bboxQuery }) });
-        if (res2.ok) {
-          const d2 = await res2.json();
-          for (const el of (d2.elements || [])) {
-            if (!el.tags?.name) continue;
-            const score = nameTokens.filter(t => el.tags.name.toLowerCase().includes(t)).length;
-            if (score > bestScore) { bestScore = score; bestMatch = el; bestFromTagged = false; }
+        const pad = 0.001;
+        const viewbox = `${w - pad},${s - pad},${e + pad},${n + pad}`;
+        const url = `${NOMINATIM}/search?q=${encodeURIComponent(personName)}&format=json&viewbox=${viewbox}&bounded=1&limit=10`;
+        const res = await fetch(url, { headers: HEADERS });
+        if (res.ok) {
+          const data = await res.json();
+          let bestMatch = null;
+          let bestScore = 0;
+          for (const r of (data || [])) {
+            const dn = (r.display_name || '').toLowerCase();
+            const score = nameTokens.filter(t => dn.includes(t)).length;
+            if (score > bestScore) { bestScore = score; bestMatch = r; }
+          }
+          const threshold = Math.max(nameTokens.length === 1 ? 1 : 2, Math.ceil(nameTokens.length * 0.75));
+          if (bestMatch && bestScore >= threshold) {
+            const coords = { lat: parseFloat(bestMatch.lat), lng: parseFloat(bestMatch.lon) };
+            if (cacheKey) await writeGraveCache(cacheKey, coords, bestMatch.display_name, bestScore);
+            return { ...coords, isCemetery: true, lowConfidence };
           }
         }
-      } catch (e) { console.warn('Overpass pass 2 failed:', e.message); }
-    }
-
-    const threshold = bestFromTagged ? minTagged : nameTokens.length;
-    if (bestMatch && bestScore >= threshold) {
-      const lat = bestMatch.lat ?? bestMatch.center?.lat;
-      const lng = bestMatch.lon ?? bestMatch.center?.lon;
-      if (lat && lng) {
-        const coords = { lat, lng };
-        if (cacheKey) await writeGraveCache(cacheKey, coords, bestMatch.tags.name, bestScore);
-        return { ...coords, isCemetery: true, lowConfidence };
-      }
+      } catch (e) { console.warn('Nominatim name search failed:', e.message); }
     }
   }
 

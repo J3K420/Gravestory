@@ -5,12 +5,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { colors, fonts, radius } from '../lib/theme';
 
 export default function SettingsScreen({ navigation }) {
-  const [user, setUser] = useState(null);
-  const [displayName, setDisplayName] = useState('');
+  const [user, setUser]                 = useState(null);
+  const [displayName, setDisplayName]   = useState('');
   const [defaultPublic, setDefaultPublic] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]             = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -42,7 +43,11 @@ export default function SettingsScreen({ navigation }) {
   }
 
   const provider = user?.app_metadata?.provider;
-  const providerLabel = provider === 'google' ? 'Google' : provider === 'email' ? 'Email / password' : provider || '—';
+  const providerLabel = provider === 'google'
+    ? 'Google'
+    : provider === 'email'
+      ? 'Email / password'
+      : provider || '—';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -50,7 +55,7 @@ export default function SettingsScreen({ navigation }) {
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Account</Text>
 
         {user ? (
@@ -60,9 +65,9 @@ export default function SettingsScreen({ navigation }) {
               <Text style={styles.sectionLabel}>Account Info</Text>
               <View style={styles.infoRow}>
                 <Text style={styles.infoKey}>Email</Text>
-                <Text style={styles.infoVal}>{user.email}</Text>
+                <Text style={styles.infoVal} numberOfLines={1}>{user.email}</Text>
               </View>
-              <View style={[styles.infoRow, styles.infoRowLast]}>
+              <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
                 <Text style={styles.infoKey}>Sign-in</Text>
                 <Text style={styles.infoVal}>{providerLabel}</Text>
               </View>
@@ -76,8 +81,9 @@ export default function SettingsScreen({ navigation }) {
                 value={displayName}
                 onChangeText={setDisplayName}
                 placeholder="Your name"
-                placeholderTextColor="rgba(138,126,110,0.4)"
+                placeholderTextColor={colors.ashDim}
                 autoCorrect={false}
+                keyboardAppearance="dark"
               />
             </View>
 
@@ -96,20 +102,20 @@ export default function SettingsScreen({ navigation }) {
                 <Switch
                   value={defaultPublic}
                   onValueChange={setDefaultPublic}
-                  trackColor={{ false: 'rgba(138,126,110,0.3)', true: 'rgba(201,168,76,0.6)' }}
-                  thumbColor={defaultPublic ? GOLD : '#888'}
+                  trackColor={{ false: colors.line, true: 'rgba(242,182,92,0.5)' }}
+                  thumbColor={defaultPublic ? colors.flame : colors.ashDim}
                 />
               </View>
             </View>
 
-            {/* Save button */}
-            <TouchableOpacity style={styles.saveBtn} onPress={saveProfile} disabled={saving}>
+            {/* Save */}
+            <TouchableOpacity onPress={saveProfile} disabled={saving} activeOpacity={0.88} style={styles.saveBtn}>
               {saving
-                ? <ActivityIndicator color={GOLD} />
+                ? <ActivityIndicator color={colors.onFlame} />
                 : <Text style={styles.saveBtnText}>Save Changes</Text>}
             </TouchableOpacity>
 
-            <View style={styles.divider} />
+            <View style={styles.separator} />
 
             {/* Sign out */}
             <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
@@ -124,68 +130,63 @@ export default function SettingsScreen({ navigation }) {
   );
 }
 
-const GOLD      = '#c9a84c';
-const INK       = '#0d0b08';
-const PARCHMENT = '#e8d4a0';
-const STONE     = 'rgba(138,126,110,0.7)';
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: INK },
+  container: { flex: 1, backgroundColor: colors.ink },
   back: { padding: 24, paddingBottom: 0 },
-  backText: { color: 'rgba(201,168,76,0.6)', fontSize: 15 },
-  content: { padding: 24, paddingTop: 16 },
-  title: { color: PARCHMENT, fontSize: 24, fontWeight: '700', letterSpacing: 1, marginBottom: 28 },
+  backText: { color: colors.ashDim, fontSize: 15, fontFamily: fonts.body },
+  scroll: { padding: 24, paddingTop: 16, paddingBottom: 48 },
+
+  title: {
+    color: colors.parchment, fontSize: 28, fontFamily: fonts.title,
+    letterSpacing: 0.5, marginBottom: 28,
+  },
 
   section: {
-    marginBottom: 28,
-    borderWidth: 1, borderColor: 'rgba(201,168,76,0.15)',
-    backgroundColor: 'rgba(245,240,232,0.04)',
-    borderRadius: 2,
-    overflow: 'hidden',
+    marginBottom: 20,
+    borderWidth: 1, borderColor: colors.line,
+    backgroundColor: colors.stone2,
+    borderRadius: radius.sm, overflow: 'hidden',
   },
   sectionLabel: {
-    color: STONE, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase',
+    color: colors.ashDim, fontSize: 10, letterSpacing: 2.5,
+    textTransform: 'uppercase', fontFamily: fonts.body,
     paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8,
   },
 
   infoRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderTopWidth: 1, borderTopColor: 'rgba(201,168,76,0.08)',
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: colors.line,
   },
-  infoRowLast: {},
-  infoKey: { color: STONE, fontSize: 13 },
-  infoVal: { color: PARCHMENT, fontSize: 13 },
+  infoKey: { color: colors.ash, fontSize: 13, fontFamily: fonts.body },
+  infoVal: { color: colors.parchment, fontSize: 13, fontFamily: fonts.name, flex: 1, textAlign: 'right' },
 
   input: {
-    color: PARCHMENT, fontSize: 15,
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderTopWidth: 1, borderTopColor: 'rgba(201,168,76,0.08)',
+    color: colors.parchment, fontSize: 15, fontFamily: fonts.name,
+    paddingHorizontal: 14, paddingVertical: 13,
+    borderTopWidth: 1, borderTopColor: colors.line,
   },
 
   toggleRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 14, paddingVertical: 12,
-    borderTopWidth: 1, borderTopColor: 'rgba(201,168,76,0.08)',
+    borderTopWidth: 1, borderTopColor: colors.line,
   },
   toggleTextGroup: { flex: 1, marginRight: 12 },
-  toggleLabel: { color: PARCHMENT, fontSize: 14, marginBottom: 3 },
-  toggleDesc: { color: STONE, fontSize: 12, fontStyle: 'italic', lineHeight: 16 },
+  toggleLabel: { color: colors.parchment, fontSize: 14, marginBottom: 3, fontFamily: fonts.body },
+  toggleDesc: { color: colors.ash, fontSize: 12, fontFamily: fonts.bodyItalic, lineHeight: 17 },
 
-  saveBtn: {
-    borderWidth: 1, borderColor: GOLD,
-    paddingVertical: 14, borderRadius: 2, marginBottom: 24,
-    alignItems: 'center',
-  },
-  saveBtnText: { color: GOLD, fontSize: 15, letterSpacing: 1.5 },
+  saveBtn: { paddingVertical: 15, borderRadius: radius.md, alignItems: 'center', backgroundColor: colors.flame, marginBottom: 24 },
+  saveBtnText: { color: colors.onFlame, fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.5 },
 
-  divider: { height: 1, backgroundColor: 'rgba(201,168,76,0.12)', marginBottom: 24 },
+  separator: { height: 1, backgroundColor: colors.line, marginBottom: 24 },
 
   signOutBtn: {
-    borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
-    paddingVertical: 14, borderRadius: 2,
+    borderWidth: 1, borderColor: colors.line,
+    backgroundColor: colors.stone2,
+    paddingVertical: 15, borderRadius: radius.sm, alignItems: 'center',
   },
-  signOutText: { color: STONE, textAlign: 'center', letterSpacing: 1.5 },
+  signOutText: { color: colors.ash, fontSize: 14, fontFamily: fonts.body, letterSpacing: 0.5 },
 
-  notSignedIn: { color: STONE, fontStyle: 'italic', textAlign: 'center', marginTop: 32 },
+  notSignedIn: { color: colors.ash, fontFamily: fonts.bodyItalic, textAlign: 'center', marginTop: 32 },
 });

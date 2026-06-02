@@ -66,12 +66,11 @@ export async function cloudSaveStory(story, user) {
       .single();
     if (error) throw error;
     const saved = { ...story, id: data.id, _updatedAt: data.updated_at };
-    // Update the saved copy in AsyncStorage
-    const stories = await loadStories();
+    const stories = await loadStories(user.id);
     const idx = stories.findIndex(s => s.timestamp === story.timestamp);
     if (idx >= 0) {
       stories[idx] = saved;
-      await saveStories(stories);
+      await saveStories(stories, user.id);
     }
     await setLastSync(user.id, data.updated_at);
     return saved;
@@ -93,11 +92,11 @@ export async function cloudUpdateStory(story, user) {
       .single();
     if (error) throw error;
     const updated = { ...story, _updatedAt: data.updated_at };
-    const stories = await loadStories();
+    const stories = await loadStories(user.id);
     const idx = stories.findIndex(s => s.id === story.id);
     if (idx >= 0) {
       stories[idx] = updated;
-      await saveStories(stories);
+      await saveStories(stories, user.id);
     }
     await setLastSync(user.id, data.updated_at);
     return updated;
@@ -184,7 +183,7 @@ async function pushLocalOnly(user, stories) {
     if (latestUpdatedAt) {
       await setLastSync(user.id, latestUpdatedAt);
     }
-    await saveStories(stories);
+    await saveStories(stories, user.id);
     return stories;
   } finally {
     _pushInFlight = false;
@@ -212,10 +211,9 @@ export async function syncDelta(user) {
     return null;
   }
 
-  let stories = await loadStories();
+  let stories = await loadStories(user.id);
 
   if (data.length === 0) {
-    // Nothing new from cloud, but still push any stranded local-only stories
     stories = await pushLocalOnly(user, stories);
     return stories;
   }
@@ -232,9 +230,8 @@ export async function syncDelta(user) {
     }
   }
 
-  // Newest row's updated_at becomes the new high-water mark
   await setLastSync(user.id, data[0].updated_at);
-  await saveStories(stories);
+  await saveStories(stories, user.id);
   stories = await pushLocalOnly(user, stories);
   return stories;
 }
@@ -244,7 +241,7 @@ export async function syncDelta(user) {
 export async function syncOnSignIn(user) {
   if (!user) return null;
   const since = await getLastSync(user.id);
-  let stories = await loadStories();
+  let stories = await loadStories(user.id);
 
   if (!since) {
     // First sign-in on this device — pull everything
@@ -271,7 +268,7 @@ export async function syncOnSignIn(user) {
           merged.unshift(ls);
         }
       }
-      await saveStories(merged);
+      await saveStories(merged, user.id);
       stories = merged;
       stories = await pushLocalOnly(user, stories);
 

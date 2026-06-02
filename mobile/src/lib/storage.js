@@ -1,19 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const STORIES_KEY = 'gravestories';
+const storyKey = (userId) => userId ? `gs_stories_${userId}` : 'gs_stories_guest';
 
-export async function loadStories() {
+export async function loadStories(userId = null) {
   try {
-    const raw = await AsyncStorage.getItem(STORIES_KEY);
+    const raw = await AsyncStorage.getItem(storyKey(userId));
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-export async function saveStories(stories) {
+export async function saveStories(stories, userId = null) {
   try {
-    await AsyncStorage.setItem(STORIES_KEY, JSON.stringify(stories));
+    await AsyncStorage.setItem(storyKey(userId), JSON.stringify(stories));
   } catch (e) {
     console.warn('Storage write failed:', e.message);
   }

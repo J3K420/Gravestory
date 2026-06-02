@@ -9,11 +9,12 @@ import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory } from '../lib/sync';
 import { supabase } from '../lib/supabase';
 import { forwardGeocode } from '../lib/api-nominatim';
+import { colors, fonts, radius } from '../lib/theme';
 
-const GOLD     = '#c9a84c';
-const INK      = '#0d0b08';
-const PARCHMENT = '#e8d4a0';
-const STONE    = 'rgba(138,126,110,0.7)';
+const GOLD      = colors.flame;
+const INK       = colors.ink;
+const PARCHMENT = colors.parchment;
+const STONE     = colors.ash;
 
 // ── BOUNDARY HELPERS ─────────────────────────────────────────────
 
@@ -368,37 +369,28 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(201,168,76,0.15)',
   },
   backSide: { width: 80 },
-  backText: { color: 'rgba(201,168,76,0.7)', fontSize: 15 },
-  headerTitle: { color: PARCHMENT, fontSize: 16, letterSpacing: 1, fontWeight: '600' },
+  backText: { color: colors.ashDim, fontSize: 15, fontFamily: fonts.body },
+  headerTitle: { color: PARCHMENT, fontSize: 16, fontFamily: fonts.name, letterSpacing: 0.3 },
 
   mapContainer: { flex: 1, position: 'relative' },
   map: { flex: 1 },
 
   geocodingBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(13,11,8,0.88)',
-    borderWidth: 1,
-    borderColor: 'rgba(201,168,76,0.35)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
+    position: 'absolute', top: 12, right: 12,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(20,16,11,0.9)',
+    borderWidth: 1, borderColor: colors.line,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.sm,
   },
-  geocodingText: { color: PARCHMENT, fontSize: 12, letterSpacing: 0.5 },
+  geocodingText: { color: PARCHMENT, fontSize: 12, fontFamily: fonts.body, letterSpacing: 0.5 },
 
   markerOuter: { alignItems: 'center' },
   markerInner: {
-    backgroundColor: 'rgba(13,11,8,0.92)',
-    borderWidth: 1.5,
-    borderColor: GOLD,
-    borderRadius: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(20,16,11,0.92)',
+    borderWidth: 1.5, borderColor: GOLD,
+    borderRadius: 4, paddingHorizontal: 7, paddingVertical: 4,
   },
-  markerLowConf: { borderColor: '#a87a2a', opacity: 0.8 },
+  markerLowConf: { borderColor: colors.ember, opacity: 0.8 },
   markerCross: { color: GOLD, fontSize: 15 },
 
   callout: { minWidth: 160, maxWidth: 260, padding: 10 },
@@ -409,47 +401,33 @@ const styles = StyleSheet.create({
   calloutAction: { fontSize: 12, color: '#8a6f3a', fontWeight: '600' },
 
   panel: {
-    height: 220,
-    backgroundColor: 'rgba(13,11,8,0.97)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(201,168,76,0.2)',
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 8,
+    height: 220, backgroundColor: colors.stone,
+    borderTopWidth: 1, borderTopColor: colors.line,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8,
   },
   panelTitle: {
-    color: STONE, fontSize: 11, letterSpacing: 2,
-    textTransform: 'uppercase', marginBottom: 8,
+    color: colors.ashDim, fontSize: 10, letterSpacing: 3,
+    textTransform: 'uppercase', fontFamily: fonts.body, marginBottom: 10,
   },
-  panelDivider: { height: 1, backgroundColor: 'rgba(201,168,76,0.15)', marginBottom: 10 },
+  panelDivider: { height: 1, backgroundColor: colors.line, marginBottom: 10 },
   graveList: { flex: 1 },
 
   graveItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(201,168,76,0.08)',
-    gap: 8,
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.line, gap: 8,
   },
   graveItemMain: { flex: 1 },
-  graveName: { color: PARCHMENT, fontSize: 14, fontWeight: '600' },
-  graveDates: { color: STONE, fontSize: 12, fontStyle: 'italic', marginTop: 1 },
+  graveName: { color: PARCHMENT, fontSize: 14, fontFamily: fonts.name },
+  graveDates: { color: STONE, fontSize: 12, fontFamily: fonts.bodyItalic, marginTop: 1 },
 
   storyBtn: {
-    borderWidth: 1,
-    borderColor: 'rgba(201,168,76,0.35)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 3,
+    borderWidth: 1, borderColor: colors.line,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.sm,
   },
-  storyBtnText: { color: GOLD, fontSize: 12 },
+  storyBtnText: { color: GOLD, fontSize: 12, fontFamily: fonts.body },
 
   emptyText: {
-    color: STONE,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginTop: 8,
+    color: STONE, fontFamily: fonts.bodyItalic,
+    textAlign: 'center', lineHeight: 22, marginTop: 8,
   },
 });

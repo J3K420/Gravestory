@@ -5,31 +5,19 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Callout } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
+import { colors, fonts, radius } from '../lib/theme';
+import { Globe } from '../components/Icons';
 
-const GOLD     = '#c9a84c';
-const INK      = '#0d0b08';
-const PARCHMENT = '#e8d4a0';
-const STONE    = 'rgba(138,126,110,0.7)';
-const SILVER   = '#aabedc';
-
-// World view — map will fit to markers after load
-const DEFAULT_REGION = {
-  latitude: 30,
-  longitude: -20,
-  latitudeDelta: 110,
-  longitudeDelta: 130,
-};
-
+const DEFAULT_REGION = { latitude: 30, longitude: -20, latitudeDelta: 110, longitudeDelta: 130 };
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-// Module-level cache (survives screen unmount within the same app session)
 let _cache = null;
 let _cacheTime = 0;
-let _cacheUserId = null; // 'guest' or the user's id
+let _cacheUserId = null;
 
 export default function GlobalMapScreen({ navigation }) {
   const mapRef = useRef(null);
-  const [user, setUser] = useState(null);
+  const [user, setUser]       = useState(null);
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,31 +36,22 @@ export default function GlobalMapScreen({ navigation }) {
       setLoading(false);
       return;
     }
-
     setLoading(true);
     try {
       const limit = currentUser ? 500 : 50;
       const { data, error } = await supabase.rpc('global_public_stories', { p_limit: limit });
       if (error) throw error;
-
       const mapped = (data || [])
         .filter(row => row.latitude != null && row.longitude != null)
         .map(row => ({
           id: row.id,
           timestamp: row.client_timestamp || new Date(row.created_at).getTime(),
-          name: row.name,
-          dates: row.dates,
-          biography: row.biography,
-          location: row.location,
-          inscription: row.inscription,
-          symbols: row.symbols,
-          family_name: row.family_name,
-          notes: row.notes,
-          sources: row.sources,
-          source_urls: row.source_urls,
+          name: row.name, dates: row.dates, biography: row.biography,
+          location: row.location, inscription: row.inscription, symbols: row.symbols,
+          family_name: row.family_name, notes: row.notes,
+          sources: row.sources, source_urls: row.source_urls,
           gps: { lat: row.latitude, lng: row.longitude },
-          userCorrected: row.user_corrected,
-          _lowConfidence: row.low_confidence,
+          userCorrected: row.user_corrected, _lowConfidence: row.low_confidence,
           is_public: true,
           image_url: row.image_url || null,
           portrait_left_url: row.portrait_left_url || null,
@@ -80,14 +59,11 @@ export default function GlobalMapScreen({ navigation }) {
           _contributor: row.contributor_name || 'Anonymous',
           _isGlobal: true,
         }));
-
       _cache = mapped;
       _cacheTime = Date.now();
       _cacheUserId = cacheKey;
-
       setStories(mapped);
       setLoading(false);
-
       if (mapped.length > 0) {
         setTimeout(() => {
           if (mapped.length === 1) {
@@ -126,18 +102,21 @@ export default function GlobalMapScreen({ navigation }) {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backSide}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerSide}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Community Map</Text>
-        <View style={styles.backSide} />
+        <View style={styles.headerCenter}>
+          <Globe size={16} color={colors.flame} />
+          <Text style={styles.headerTitle}>Community Map</Text>
+        </View>
+        <View style={styles.headerSide} />
       </View>
 
       {/* Guest banner */}
       {!user && (
         <TouchableOpacity style={styles.guestBanner} onPress={() => navigation.navigate('Auth')}>
           <Text style={styles.guestBannerText}>
-            Guest view · showing 50 most recent · tap to sign in for 500
+            Guest view · 50 most recent · Sign in for 500
           </Text>
         </TouchableOpacity>
       )}
@@ -146,17 +125,12 @@ export default function GlobalMapScreen({ navigation }) {
       <View style={styles.mapContainer}>
         <MapView ref={mapRef} style={styles.map} initialRegion={DEFAULT_REGION}>
           {stories.map((story, i) => (
-            <Marker
-              key={story.id ?? i}
-              coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}
-            >
-              {/* Silver marker — visually distinct from the gold personal pins */}
+            <Marker key={story.id ?? i} coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}>
               <View style={styles.markerOuter}>
                 <View style={[styles.markerInner, story._lowConfidence && styles.markerLowConf]}>
                   <Text style={styles.markerCross}>✝</Text>
                 </View>
               </View>
-
               <Callout onPress={() => navigation.navigate('Result', { story })}>
                 <View style={styles.callout}>
                   <Text style={styles.calloutName}>{story.name || 'Unknown'}</Text>
@@ -172,7 +146,7 @@ export default function GlobalMapScreen({ navigation }) {
 
         {loading && (
           <View style={styles.loadingBadge}>
-            <ActivityIndicator size="small" color={GOLD} style={{ marginRight: 8 }} />
+            <ActivityIndicator size="small" color={colors.flame} style={{ marginRight: 8 }} />
             <Text style={styles.loadingText}>Loading…</Text>
           </View>
         )}
@@ -180,7 +154,7 @@ export default function GlobalMapScreen({ navigation }) {
 
       {/* Bottom panel */}
       <View style={styles.panel}>
-        <Text style={styles.panelTitle}>✦ {panelTitle}</Text>
+        <Text style={styles.panelTitle}>{panelTitle}</Text>
         <View style={styles.panelDivider} />
         <ScrollView style={styles.graveList} showsVerticalScrollIndicator={false}>
           {stories.length === 0 && !loading ? (
@@ -210,23 +184,25 @@ export default function GlobalMapScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: INK },
+  container: { flex: 1, backgroundColor: colors.ink },
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(201,168,76,0.15)',
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: colors.line,
+    backgroundColor: colors.stone,
   },
-  backSide: { width: 80 },
-  backText: { color: 'rgba(201,168,76,0.7)', fontSize: 15 },
-  headerTitle: { color: PARCHMENT, fontSize: 16, letterSpacing: 1, fontWeight: '600' },
+  headerSide: { width: 80 },
+  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  backText: { color: colors.ashDim, fontSize: 15, fontFamily: fonts.body },
+  headerTitle: { color: colors.parchment, fontSize: 16, fontFamily: fonts.name, letterSpacing: 0.3 },
 
   guestBanner: {
-    backgroundColor: 'rgba(170,190,220,0.1)',
-    borderBottomWidth: 1, borderBottomColor: 'rgba(170,190,220,0.2)',
-    paddingHorizontal: 16, paddingVertical: 8,
+    backgroundColor: 'rgba(170,190,220,0.07)',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(170,190,220,0.15)',
+    paddingHorizontal: 16, paddingVertical: 9,
   },
-  guestBannerText: { color: SILVER, fontSize: 12, textAlign: 'center', letterSpacing: 0.5 },
+  guestBannerText: { color: colors.silver, fontSize: 12, fontFamily: fonts.body, textAlign: 'center', letterSpacing: 0.3 },
 
   mapContainer: { flex: 1, position: 'relative' },
   map: { flex: 1 },
@@ -234,21 +210,20 @@ const styles = StyleSheet.create({
   loadingBadge: {
     position: 'absolute', top: 12, right: 12,
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(13,11,8,0.88)',
-    borderWidth: 1, borderColor: 'rgba(170,190,220,0.35)',
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 4,
+    backgroundColor: 'rgba(20,16,11,0.9)',
+    borderWidth: 1, borderColor: colors.line,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.sm,
   },
-  loadingText: { color: PARCHMENT, fontSize: 12, letterSpacing: 0.5 },
+  loadingText: { color: colors.parchment, fontSize: 12, fontFamily: fonts.body, letterSpacing: 0.5 },
 
-  // Silver-tinted markers for community stories
   markerOuter: { alignItems: 'center' },
   markerInner: {
     backgroundColor: 'rgba(30,40,55,0.92)',
-    borderWidth: 1.5, borderColor: SILVER,
+    borderWidth: 1.5, borderColor: colors.silver,
     borderRadius: 4, paddingHorizontal: 7, paddingVertical: 4,
   },
   markerLowConf: { borderColor: '#7a8a9a', opacity: 0.75 },
-  markerCross: { color: SILVER, fontSize: 15 },
+  markerCross: { color: colors.silver, fontSize: 15 },
 
   callout: { minWidth: 160, maxWidth: 260, padding: 10 },
   calloutName: { fontWeight: '700', fontSize: 15, marginBottom: 2, color: '#1a1410' },
@@ -258,35 +233,35 @@ const styles = StyleSheet.create({
   calloutAction: { fontSize: 12, color: '#3d5a85', fontWeight: '600' },
 
   panel: {
-    height: 220,
-    backgroundColor: 'rgba(13,11,8,0.97)',
-    borderTopWidth: 1, borderTopColor: 'rgba(170,190,220,0.2)',
+    height: 220, backgroundColor: colors.stone,
+    borderTopWidth: 1, borderTopColor: colors.line,
     paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8,
   },
   panelTitle: {
-    color: STONE, fontSize: 11, letterSpacing: 2,
-    textTransform: 'uppercase', marginBottom: 8,
+    color: colors.ashDim, fontSize: 10, letterSpacing: 3,
+    textTransform: 'uppercase', fontFamily: fonts.body, marginBottom: 10,
   },
-  panelDivider: { height: 1, backgroundColor: 'rgba(170,190,220,0.15)', marginBottom: 10 },
+  panelDivider: { height: 1, backgroundColor: colors.line, marginBottom: 10 },
   graveList: { flex: 1 },
 
   graveItem: {
     flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(170,190,220,0.08)',
+    paddingVertical: 9,
+    borderBottomWidth: 1, borderBottomColor: colors.line,
     gap: 8,
   },
   graveItemMain: { flex: 1 },
-  graveName: { color: PARCHMENT, fontSize: 14, fontWeight: '600' },
-  graveDates: { color: STONE, fontSize: 12, fontStyle: 'italic', marginTop: 1 },
+  graveName: { color: colors.parchment, fontSize: 14, fontFamily: fonts.name },
+  graveDates: { color: colors.ash, fontSize: 12, fontFamily: fonts.bodyItalic, marginTop: 1 },
 
   storyBtn: {
-    borderWidth: 1, borderColor: 'rgba(170,190,220,0.35)',
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 3,
+    borderWidth: 1, borderColor: 'rgba(170,190,220,0.25)',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.sm,
   },
-  storyBtnText: { color: SILVER, fontSize: 12 },
+  storyBtnText: { color: colors.silver, fontSize: 12, fontFamily: fonts.body },
 
   emptyText: {
-    color: STONE, fontStyle: 'italic', textAlign: 'center', lineHeight: 22, marginTop: 8,
+    color: colors.ash, fontFamily: fonts.bodyItalic,
+    textAlign: 'center', lineHeight: 22, marginTop: 8,
   },
 });

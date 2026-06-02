@@ -9,6 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
+import { colors, fonts, radius } from '../lib/theme';
 import { verifyIsGravestone, readGravestone } from '../lib/api-gemini';
 import { searchForPerson } from '../lib/api-tavily';
 import { searchWikiTree } from '../lib/api-wikitree';
@@ -146,8 +147,9 @@ export default function CameraScreen({ navigation }) {
       };
 
       // Save locally first so the story is always accessible offline
-      const existing = await loadStories();
-      await saveStories([story, ...existing]);
+      const uid = session?.user?.id ?? null;
+      const existing = await loadStories(uid);
+      await saveStories([story, ...existing], uid);
 
       // Attempt cloud save, then R2 image upload, if signed in
       if (session?.user) {
@@ -370,22 +372,17 @@ async function getDeviceGps() {
   }
 }
 
-const GOLD     = '#c9a84c';
-const INK      = '#0d0b08';
-const PARCHMENT = '#e8d4a0';
-const STONE    = 'rgba(138,126,110,0.7)';
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: INK },
+  container: { flex: 1, backgroundColor: colors.ink },
   back: { padding: 24, paddingBottom: 0 },
-  backText: { color: 'rgba(201,168,76,0.6)', fontSize: 15 },
+  backText: { color: 'rgba(201,168,76,0.6)', fontSize: 15, fontFamily: fonts.body },
   scroll: { alignItems: 'center', padding: 24, paddingTop: 48 },
   title: {
-    color: PARCHMENT, fontSize: 26, fontWeight: '700',
+    color: colors.parchment, fontSize: 26, fontFamily: fonts.title,
     letterSpacing: 1, marginBottom: 10, textAlign: 'center',
   },
   subtitle: {
-    color: STONE, fontStyle: 'italic', textAlign: 'center',
+    color: colors.ash, fontFamily: fonts.bodyItalic, textAlign: 'center',
     lineHeight: 22, marginBottom: 8, fontSize: 14,
   },
   stoneZone: {
@@ -401,24 +398,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stoneText: {
-    color: STONE, fontStyle: 'italic',
+    color: colors.ash, fontFamily: fonts.bodyItalic,
     fontSize: 16, textAlign: 'center',
-    marginTop: 10, opacity: 0.9,
-    letterSpacing: 1,
+    marginTop: 10, opacity: 0.9, letterSpacing: 1,
   },
 
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
+  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
   sheet: {
-    backgroundColor: '#1a1410',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(201,168,76,0.3)',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingBottom: 36,
-    paddingHorizontal: 24,
+    backgroundColor: colors.stone,
+    borderTopWidth: 1, borderTopColor: 'rgba(201,168,76,0.3)',
+    borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg,
+    paddingBottom: 36, paddingHorizontal: 24,
   },
   sheetHandle: {
     width: 40, height: 4, borderRadius: 2,
@@ -426,42 +416,53 @@ const styles = StyleSheet.create({
     alignSelf: 'center', marginTop: 12, marginBottom: 20,
   },
   sheetTitle: {
-    color: PARCHMENT, fontSize: 13, letterSpacing: 2,
-    textTransform: 'uppercase', marginBottom: 16, opacity: 0.6,
+    color: colors.parchment, fontSize: 13, letterSpacing: 2,
+    fontFamily: fonts.body, textTransform: 'uppercase', marginBottom: 16, opacity: 0.6,
   },
   sheetOption: {
     borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
     paddingVertical: 16, paddingHorizontal: 16,
-    marginBottom: 10, borderRadius: 2,
+    marginBottom: 10, borderRadius: radius.sm,
   },
   sheetOptionText: {
-    color: GOLD, fontSize: 16, letterSpacing: 1, textAlign: 'center',
+    color: colors.flame, fontSize: 16, letterSpacing: 1,
+    textAlign: 'center', fontFamily: fonts.body,
   },
-  sheetCancel: {
-    paddingVertical: 14, marginTop: 4,
-  },
+  sheetCancel: { paddingVertical: 14, marginTop: 4 },
   sheetCancelText: {
-    color: STONE, fontSize: 15, textAlign: 'center', fontStyle: 'italic',
+    color: colors.ash, fontSize: 15, textAlign: 'center', fontFamily: fonts.bodyItalic,
   },
 
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  loadingTitle: { color: PARCHMENT, fontSize: 22, fontWeight: '700', letterSpacing: 0.5, marginTop: 20, marginBottom: 6, textAlign: 'center' },
-  loadingStep: { color: STONE, fontStyle: 'italic', fontSize: 15, letterSpacing: 0.5, marginBottom: 28, textAlign: 'center' },
+  loadingTitle: {
+    color: colors.parchment, fontSize: 22, fontFamily: fonts.title,
+    letterSpacing: 0.5, marginTop: 20, marginBottom: 6, textAlign: 'center',
+  },
+  loadingStep: {
+    color: colors.ash, fontFamily: fonts.bodyItalic,
+    fontSize: 15, letterSpacing: 0.5, marginBottom: 28, textAlign: 'center',
+  },
   dotsRow: { flexDirection: 'row', gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(201,168,76,0.2)' },
-  dotActive: { backgroundColor: GOLD },
+  dotActive: { backgroundColor: colors.flame },
 
   rejectedBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  rejectedTitle: { color: PARCHMENT, fontSize: 22, fontWeight: '700', marginBottom: 12 },
-  rejectedReason: { color: STONE, fontStyle: 'italic', textAlign: 'center', lineHeight: 22, marginBottom: 36 },
+  rejectedTitle: {
+    color: colors.parchment, fontSize: 22, fontFamily: fonts.title, marginBottom: 12,
+  },
+  rejectedReason: {
+    color: colors.ash, fontFamily: fonts.bodyItalic,
+    textAlign: 'center', lineHeight: 22, marginBottom: 36,
+  },
   tryAnyway: {
     borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
-    paddingHorizontal: 32, paddingVertical: 14, borderRadius: 2, marginBottom: 12, width: '100%',
+    paddingHorizontal: 32, paddingVertical: 14, borderRadius: radius.sm,
+    marginBottom: 12, width: '100%',
   },
-  tryAnywayText: { color: STONE, textAlign: 'center', letterSpacing: 1 },
+  tryAnywayText: { color: colors.ash, textAlign: 'center', letterSpacing: 1, fontFamily: fonts.body },
   retryBtn: {
-    borderWidth: 1, borderColor: GOLD,
-    paddingHorizontal: 32, paddingVertical: 14, borderRadius: 2, width: '100%',
+    borderWidth: 1, borderColor: colors.flame,
+    paddingHorizontal: 32, paddingVertical: 14, borderRadius: radius.sm, width: '100%',
   },
-  retryText: { color: GOLD, textAlign: 'center', letterSpacing: 1 },
+  retryText: { color: colors.flame, textAlign: 'center', letterSpacing: 1, fontFamily: fonts.body },
 });

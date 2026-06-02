@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
   StyleSheet, StatusBar, Alert,
@@ -8,14 +8,17 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
 import { syncOnSignIn, syncDelta, cloudDeleteStory } from '../lib/sync';
+import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
+import { Headstone, MapStack, Globe } from '../components/Icons';
 
 export default function HomeScreen({ navigation }) {
   const [user, setUser] = useState(null);
   const [stories, setStories] = useState([]);
   const [storiesLoaded, setStoriesLoaded] = useState(false);
+  const scrollRef = useRef(null);
+  const [savedSectionY, setSavedSectionY] = useState(0);
 
-  // Auth listener: sync from cloud when the user signs in
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -28,22 +31,21 @@ export default function HomeScreen({ navigation }) {
           if (updated) setStories(updated);
         });
       }
+      if (event === 'SIGNED_OUT') {
+        loadStories(null).then(guestStories => setStories(guestStories));
+      }
     });
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // On every focus: reload local stories, then pull cloud delta if signed in
   useFocusEffect(
     useCallback(() => {
       let active = true;
       async function refresh() {
-        const local = await loadStories();
-        if (active) {
-          setStories(local);
-          setStoriesLoaded(true);
-        }
-
         const { data: { session } } = await supabase.auth.getSession();
+        const uid = session?.user?.id ?? null;
+        const local = await loadStories(uid);
+        if (active) { setStories(local); setStoriesLoaded(true); }
         if (session?.user && active) {
           const synced = await syncDelta(session.user);
           if (synced && active) setStories(synced);
@@ -69,11 +71,9 @@ export default function HomeScreen({ navigation }) {
           onPress: async () => {
             const updated = stories.filter(s => s.timestamp !== story.timestamp);
             setStories(updated);
-            await saveStories(updated);
             const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-              await cloudDeleteStory(story, session.user);
-            }
+            await saveStories(updated, session?.user?.id ?? null);
+            if (session?.user) await cloudDeleteStory(story, session.user);
           },
         },
       ]
@@ -82,9 +82,8 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0d0b08" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.ink} />
 
-      {/* User menu */}
       <TouchableOpacity
         style={styles.userBtn}
         onPress={() => navigation.navigate(user ? 'Settings' : 'Auth')}
@@ -92,7 +91,8 @@ export default function HomeScreen({ navigation }) {
         <Text style={styles.userBtnText}>{displayName ?? 'Sign in'}</Text>
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll}>
+
         {/* Logo */}
         <View style={styles.logoArea}>
           <GravestoneLogo size={180} />
@@ -102,11 +102,8 @@ export default function HomeScreen({ navigation }) {
 
         <View style={styles.divider} />
 
-        {/* Scan button */}
-        <TouchableOpacity
-          style={styles.scanBtn}
-          onPress={() => navigation.navigate('Camera')}
-        >
+        {/* Primary scan CTA */}
+        <TouchableOpacity onPress={() => navigation.navigate('Camera')} activeOpacity={0.88} style={styles.scanBtn}>
           <Text style={styles.scanBtnText}>✦ Scan a Gravestone ✦</Text>
         </TouchableOpacity>
 
@@ -116,24 +113,28 @@ export default function HomeScreen({ navigation }) {
 
         {/* Map buttons */}
         <View style={styles.mapRow}>
-          <TouchableOpacity
-            style={styles.mapBtn}
-            onPress={() => navigation.navigate('CemeteryMap')}
-          >
+          <TouchableOpacity style={styles.mapBtn} onPress={() => navigation.navigate('CemeteryMap')}>
+            <MapStack size={15} color={colors.ash} />
             <Text style={styles.mapBtnText}>My Map</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.mapBtn, styles.mapBtnCommunity]}
-            onPress={() => navigation.navigate('GlobalMap')}
-          >
-            <Text style={styles.mapBtnText}>Community Map</Text>
+          <TouchableOpacity style={[styles.mapBtn, styles.mapBtnCommunity]} onPress={() => navigation.navigate('GlobalMap')}>
+            <Globe size={15} color={colors.silver} />
+            <Text style={[styles.mapBtnText, { color: colors.silver }]}>Community Map</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Saved stories */}
-        <View style={styles.savedSection}>
-          <Text style={styles.savedLabel}>✦ Remembered Stories</Text>
+        {/* Saved stories scroll button */}
+        <TouchableOpacity
+          style={styles.savedBtn}
+          onPress={() => scrollRef.current?.scrollTo({ y: savedSectionY, animated: true })}
+        >
+          <Text style={styles.savedBtnText}>✦ Remembered Stories</Text>
+        </TouchableOpacity>
+
+        {/* Saved stories section */}
+        <View style={styles.savedSection} onLayout={e => setSavedSectionY(e.nativeEvent.layout.y)}>
+          <Text style={styles.savedLabel}>Remembered Stories</Text>
+
           {storiesLoaded && stories.length === 0 ? (
             <View style={styles.emptyState}>
               <GravestoneLogo size={80} animate={false} />
@@ -143,6 +144,9 @@ export default function HomeScreen({ navigation }) {
           ) : (
             stories.map((story, i) => (
               <View key={story.timestamp ?? i} style={styles.savedCard}>
+                <View style={styles.savedAvatar}>
+                  <Headstone size={17} color={colors.ash} />
+                </View>
                 <TouchableOpacity
                   style={styles.savedCardMain}
                   onPress={() => navigation.navigate('Result', { story })}
@@ -168,74 +172,89 @@ export default function HomeScreen({ navigation }) {
   );
 }
 
-const GOLD     = '#c9a84c';
-const INK      = '#0d0b08';
-const PARCHMENT = '#e8d4a0';
-const STONE    = 'rgba(138,126,110,0.7)';
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: INK },
+  container: { flex: 1, backgroundColor: colors.ink },
   scroll: { alignItems: 'center', padding: 24, paddingBottom: 48 },
+
   userBtn: {
     position: 'absolute', top: 56, right: 16, zIndex: 10,
-    borderWidth: 1, borderColor: 'rgba(201,168,76,0.4)',
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 4,
-    backgroundColor: 'rgba(20,15,10,0.6)',
+    borderWidth: 1, borderColor: colors.line,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.sm,
+    backgroundColor: colors.stone,
   },
-  userBtnText: { color: GOLD, fontSize: 14 },
+  userBtnText: { color: colors.flame, fontSize: 13, fontFamily: fonts.body },
+
   logoArea: { marginTop: 80, marginBottom: 32, alignItems: 'center' },
   logoTitle: {
-    fontSize: 42, color: PARCHMENT, letterSpacing: 2, marginBottom: 8,
-    fontWeight: '700',
+    fontSize: 42, color: colors.parchment, letterSpacing: 1, marginBottom: 8,
+    fontFamily: fonts.title,
   },
-  logoSubtitle: { fontSize: 14, color: STONE, fontStyle: 'italic', letterSpacing: 2 },
-  divider: {
-    width: 120, height: 1, marginVertical: 24,
-    backgroundColor: GOLD, opacity: 0.5,
+  logoSubtitle: {
+    fontSize: 13, color: colors.ash, fontFamily: fonts.bodyItalic, letterSpacing: 0.5,
   },
+
+  divider: { width: 120, height: 1, marginVertical: 24, backgroundColor: colors.flame, opacity: 0.4 },
+
   scanBtn: {
-    borderWidth: 1, borderColor: GOLD,
-    paddingHorizontal: 32, paddingVertical: 16, borderRadius: 2,
+    width: '100%', paddingVertical: 16, paddingHorizontal: 32, borderRadius: radius.md,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.flame,
   },
-  scanBtnText: { color: GOLD, fontSize: 16, letterSpacing: 2 },
+  scanBtnText: {
+    color: colors.onFlame, fontSize: 16, letterSpacing: 1.5, fontFamily: fonts.sansBold,
+  },
+
   desc: {
-    color: STONE, fontStyle: 'italic', marginTop: 20,
+    color: colors.ash, fontFamily: fonts.bodyItalic, marginTop: 20,
     textAlign: 'center', lineHeight: 22, maxWidth: 280,
   },
-  mapRow: {
-    flexDirection: 'row', gap: 10, marginTop: 16, width: '100%',
-  },
+
+  mapRow: { flexDirection: 'row', gap: 10, marginTop: 16, width: '100%' },
   mapBtn: {
-    flex: 1,
-    borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
-    paddingVertical: 14, borderRadius: 2,
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderWidth: 1, borderColor: colors.line,
+    backgroundColor: colors.stone2,
+    paddingVertical: 13, borderRadius: radius.sm,
   },
-  mapBtnCommunity: {
-    borderColor: 'rgba(170,190,220,0.3)',
+  mapBtnCommunity: { borderColor: 'rgba(170,190,220,0.2)' },
+  mapBtnText: { color: colors.ash, fontSize: 13, fontFamily: fonts.body },
+
+  savedBtn: {
+    marginTop: 16, width: '100%',
+    borderWidth: 1, borderColor: colors.line,
+    backgroundColor: colors.stone2,
+    paddingVertical: 14, borderRadius: radius.sm,
   },
-  mapBtnText: { color: STONE, fontSize: 14, letterSpacing: 1, textAlign: 'center' },
+  savedBtnText: { color: colors.flame, fontSize: 13, letterSpacing: 2, textAlign: 'center', fontFamily: fonts.body },
+
   savedSection: { marginTop: 40, width: '100%' },
   savedLabel: {
-    color: STONE, fontSize: 11, letterSpacing: 3,
+    color: colors.ashDim, fontSize: 10, letterSpacing: 3, fontFamily: fonts.body,
     textTransform: 'uppercase', marginBottom: 12, textAlign: 'center',
   },
+
   emptyState: { alignItems: 'center', paddingVertical: 32 },
-  emptyTitle: { color: PARCHMENT, fontSize: 18, marginTop: 16, marginBottom: 8 },
-  emptySaved: { color: STONE, fontStyle: 'italic', textAlign: 'center', opacity: 0.6, maxWidth: 260 },
+  emptyTitle: { color: colors.parchment, fontSize: 18, marginTop: 16, marginBottom: 8, fontFamily: fonts.title },
+  emptySaved: { color: colors.ash, fontFamily: fonts.bodyItalic, textAlign: 'center', opacity: 0.6, maxWidth: 260 },
+
   savedCard: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(201,168,76,0.15)',
-    padding: 14, marginBottom: 8,
-    backgroundColor: 'rgba(245,240,232,0.04)',
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: colors.line,
+    padding: 11, marginBottom: 10, borderRadius: radius.sm,
+    backgroundColor: colors.stone2, gap: 11,
+  },
+  savedAvatar: {
+    width: 34, height: 34, borderRadius: 9,
+    backgroundColor: colors.stone,
+    alignItems: 'center', justifyContent: 'center',
   },
   savedCardMain: { flex: 1, paddingVertical: 2 },
-  savedName: { color: PARCHMENT, fontSize: 15, marginBottom: 2 },
-  savedDates: { color: STONE, fontSize: 13, fontStyle: 'italic' },
+  savedName: { color: colors.parchment, fontSize: 15, marginBottom: 2, fontFamily: fonts.name },
+  savedDates: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.bodyItalic },
   publicBadge: {
-    color: 'rgba(170,190,220,0.7)', fontSize: 10, letterSpacing: 1,
-    textTransform: 'uppercase', marginRight: 8,
+    color: colors.silver, fontSize: 10, letterSpacing: 1, fontFamily: fonts.body,
+    textTransform: 'uppercase', marginRight: 4,
   },
-  savedArrow: { color: GOLD, fontSize: 22 },
-  deleteBtn: { paddingLeft: 14 },
-  deleteBtnText: { color: 'rgba(200,80,60,0.55)', fontSize: 16, fontWeight: '600' },
+  savedArrow: { color: colors.flame, fontSize: 20 },
+  deleteBtn: { paddingLeft: 12 },
+  deleteBtnText: { color: colors.dangerDim, fontSize: 15, fontFamily: fonts.body },
 });

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Animated, ScrollView, Alert,
+  Animated, ScrollView, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Rect, Path, Line, Circle } from 'react-native-svg';
@@ -31,6 +31,7 @@ export default function CameraScreen({ navigation }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [rejected, setRejected] = useState(null);
   const [pipelineError, setPipelineError] = useState(null);
+  const [showPicker, setShowPicker] = useState(false);
 
   const stoneOpacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
@@ -221,20 +222,44 @@ export default function CameraScreen({ navigation }) {
     );
   }
 
-  function showSourcePicker() {
-    Alert.alert(
-      'Choose Photo Source',
-      null,
-      [
-        { text: 'Take Photo', onPress: () => pickAndAnalyze(true) },
-        { text: 'Choose from Library', onPress: () => pickAndAnalyze(false) },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  }
-
   return (
     <SafeAreaView style={styles.container}>
+      {/* Bottom sheet photo source picker */}
+      <Modal
+        transparent
+        animationType="slide"
+        visible={showPicker}
+        onRequestClose={() => setShowPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.sheetBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowPicker(false)}
+        />
+        <View style={styles.sheet}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>Choose Photo Source</Text>
+          <TouchableOpacity
+            style={styles.sheetOption}
+            onPress={() => { setShowPicker(false); pickAndAnalyze(true); }}
+          >
+            <Text style={styles.sheetOptionText}>✦ Take Photo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.sheetOption}
+            onPress={() => { setShowPicker(false); pickAndAnalyze(false); }}
+          >
+            <Text style={styles.sheetOptionText}>Choose from Library</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.sheetCancel}
+            onPress={() => setShowPicker(false)}
+          >
+            <Text style={styles.sheetCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
@@ -243,7 +268,7 @@ export default function CameraScreen({ navigation }) {
         <Text style={styles.title}>Photograph the Stone</Text>
         <Text style={styles.subtitle}>Frame the gravestone clearly for best results</Text>
 
-        <TouchableOpacity style={styles.stoneZone} onPress={showSourcePicker} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.stoneZone} onPress={() => setShowPicker(true)} activeOpacity={0.85}>
           <Animated.View style={{ opacity: stoneOpacity }}>
             <Svg width={220} height={240} viewBox="0 0 100 100" fill="none" strokeWidth={1.5}>
               <Defs>
@@ -380,6 +405,43 @@ const styles = StyleSheet.create({
     fontSize: 16, textAlign: 'center',
     marginTop: 10, opacity: 0.9,
     letterSpacing: 1,
+  },
+
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  sheet: {
+    backgroundColor: '#1a1410',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(201,168,76,0.3)',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 36,
+    paddingHorizontal: 24,
+  },
+  sheetHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: 'rgba(201,168,76,0.4)',
+    alignSelf: 'center', marginTop: 12, marginBottom: 20,
+  },
+  sheetTitle: {
+    color: PARCHMENT, fontSize: 13, letterSpacing: 2,
+    textTransform: 'uppercase', marginBottom: 16, opacity: 0.6,
+  },
+  sheetOption: {
+    borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
+    paddingVertical: 16, paddingHorizontal: 16,
+    marginBottom: 10, borderRadius: 2,
+  },
+  sheetOptionText: {
+    color: GOLD, fontSize: 16, letterSpacing: 1, textAlign: 'center',
+  },
+  sheetCancel: {
+    paddingVertical: 14, marginTop: 4,
+  },
+  sheetCancelText: {
+    color: STONE, fontSize: 15, textAlign: 'center', fontStyle: 'italic',
   },
 
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },

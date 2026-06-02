@@ -673,10 +673,8 @@ async function fetchNearbyCemeteries(lat, lng) {
       (
         way[landuse=cemetery](around:${radius},${lat},${lng});
         way[amenity=grave_yard](around:${radius},${lat},${lng});
-        node[historic=cemetery](around:${radius},${lat},${lng});
-        way[landuse=cemetery][historic](around:${radius},${lat},${lng});
-        node["abandoned:landuse"=cemetery](around:${radius},${lat},${lng});
-        way["abandoned:landuse"=cemetery](around:${radius},${lat},${lng});
+        relation[landuse=cemetery](around:${radius},${lat},${lng});
+        relation[amenity=grave_yard](around:${radius},${lat},${lng});
       );
       out center tags;
     `;

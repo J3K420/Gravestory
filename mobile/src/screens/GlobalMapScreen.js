@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Callout } from 'react-native-maps';
@@ -17,9 +17,10 @@ let _cacheUserId = null;
 
 export default function GlobalMapScreen({ navigation }) {
   const mapRef = useRef(null);
-  const [user, setUser]       = useState(null);
-  const [stories, setStories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser]         = useState(null);
+  const [stories, setStories]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -83,6 +84,14 @@ export default function GlobalMapScreen({ navigation }) {
       console.warn('GlobalMapScreen fetch failed:', e.message);
       setLoading(false);
     }
+  }
+
+  async function onRefresh() {
+    setRefreshing(true);
+    _cache = null;
+    const { data: { session } } = await supabase.auth.getSession();
+    await fetchStories(session?.user ?? null);
+    setRefreshing(false);
   }
 
   function flyTo(story) {
@@ -156,7 +165,11 @@ export default function GlobalMapScreen({ navigation }) {
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>{panelTitle}</Text>
         <View style={styles.panelDivider} />
-        <ScrollView style={styles.graveList} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.graveList}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+        >
           {stories.length === 0 && !loading ? (
             <Text style={styles.emptyText}>
               No public stories yet.{'\n'}Share one of yours from its bio page to be first on the map.

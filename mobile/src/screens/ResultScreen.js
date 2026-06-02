@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Linking, Share, Image, Alert, FlatList, Dimensions,
+  Linking, Share, Image, Alert, FlatList, Dimensions, RefreshControl,
 } from 'react-native';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -25,12 +25,22 @@ export default function ResultScreen({ navigation, route }) {
   const [sharing, setSharing]           = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [refreshing, setRefreshing]     = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
   }, []);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const all = await loadStories(session?.user?.id ?? null);
+    const fresh = all.find(s => s.timestamp === story?.timestamp);
+    if (fresh) setStory(fresh);
+    setRefreshing(false);
+  }
 
   if (!story) {
     return (
@@ -104,7 +114,10 @@ export default function ResultScreen({ navigation, route }) {
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+      >
 
         {/* Image carousel — gravestone photo + portrait images */}
         {carouselImages.length > 0 && (

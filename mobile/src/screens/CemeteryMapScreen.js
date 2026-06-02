@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, RefreshControl,
   ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -127,10 +127,17 @@ export default function CemeteryMapScreen({ navigation, route }) {
   const [boundaryCoords, setBoundaryCoords] = useState([]);
   const [selectedStory, setSelectedStory] = useState(null);
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     resolveStories();
   }, []);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await resolveStories();
+    setRefreshing(false);
+  }
 
   async function resolveStories() {
     setGeocoding(true);
@@ -362,7 +369,11 @@ export default function CemeteryMapScreen({ navigation, route }) {
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>{panelTitle}</Text>
         <View style={styles.panelDivider} />
-        <ScrollView style={styles.graveList} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.graveList}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+        >
           {mappedStories.length === 0 && !geocoding ? (
             <Text style={styles.emptyText}>
               Scan gravestones on-site to build your map.{'\n'}

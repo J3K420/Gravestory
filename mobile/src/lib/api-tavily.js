@@ -1,54 +1,5 @@
 import { PROXY_BASE } from './config';
-
-// Period engravings used heavy abbreviation; common nicknames also differ from
-// formal names. Each entry maps the short/informal form (lowercase) to the full
-// formal name so we can generate additional query variants.
-const EXPAND = {
-  // Masculine abbreviations (period engraving conventions)
-  'wm': 'William', 'geo': 'George', 'thos': 'Thomas', 'jno': 'John',
-  'chas': 'Charles', 'jas': 'James', 'robt': 'Robert', 'benj': 'Benjamin',
-  'edw': 'Edward', 'sam': 'Samuel', 'nathl': 'Nathaniel', 'bart': 'Bartholomew',
-  'richd': 'Richard', 'nichs': 'Nicholas', 'danl': 'Daniel', 'josph': 'Joseph',
-  // Masculine nicknames
-  'bill': 'William', 'billy': 'William', 'will': 'William',
-  'bob': 'Robert', 'rob': 'Robert',
-  'tom': 'Thomas', 'tommy': 'Thomas',
-  'jim': 'James', 'jimmy': 'James',
-  'dick': 'Richard', 'rich': 'Richard',
-  'charlie': 'Charles', 'chuck': 'Charles',
-  'ed': 'Edward', 'eddie': 'Edward', 'ned': 'Edward',
-  'jack': 'John', 'johnny': 'John',
-  'fred': 'Frederick', 'freddy': 'Frederick',
-  'ben': 'Benjamin',
-  'dan': 'Daniel', 'danny': 'Daniel',
-  'pat': 'Patrick',
-  'al': 'Albert', 'alex': 'Alexander', 'sandy': 'Alexander',
-  'abe': 'Abraham',
-  'gus': 'Augustus',
-  'matt': 'Matthew',
-  'nick': 'Nicholas',
-  'ted': 'Theodore', 'theo': 'Theodore',
-  'tim': 'Timothy',
-  'tony': 'Anthony',
-  'chris': 'Christopher',
-  'hal': 'Henry', 'hank': 'Henry',
-  'ike': 'Dwight',
-  // Feminine abbreviations and nicknames
-  'eliz': 'Elizabeth', 'lizzie': 'Elizabeth', 'betsy': 'Elizabeth',
-  'bess': 'Elizabeth', 'bessie': 'Elizabeth', 'betty': 'Elizabeth', 'beth': 'Elizabeth',
-  'maggie': 'Margaret', 'peggy': 'Margaret', 'meg': 'Margaret',
-  'polly': 'Mary', 'molly': 'Mary',
-  'nell': 'Eleanor', 'nelly': 'Eleanor',
-  'sally': 'Sarah', 'sadie': 'Sarah',
-  'hattie': 'Harriet',
-  'nan': 'Ann', 'nancy': 'Ann', 'annie': 'Ann',
-  'kate': 'Katherine', 'katy': 'Katherine', 'kitty': 'Katherine',
-  'dora': 'Dorothy', 'dot': 'Dorothy',
-  'sue': 'Susan', 'susie': 'Susan',
-  'fanny': 'Frances', 'fran': 'Frances',
-  'winnie': 'Winifred',
-  'tilly': 'Matilda', 'tillie': 'Matilda',
-};
+import { EXPAND } from './abbreviations';
 
 // Returns [original, expandedVariant?] — if the first token of the name is a known
 // abbreviation or nickname, the second element replaces it with the formal form.
@@ -252,6 +203,5 @@ export async function searchForPerson(graveData, location) {
     } catch (e) { console.warn('Tavily query failed:', query, e?.message); }
   }
 
-  console.warn('TAVILY results:', results.length, results.map(r => r.title).join(' | '));
   return results;
 }

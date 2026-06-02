@@ -1,42 +1,10 @@
 import { PROXY_BASE } from './config';
+import { EXPAND as _EXPAND } from './abbreviations';
 
-// Shared abbreviation/nickname table (subset needed for WikiTree first-name matching).
-const EXPAND = {
-  'wm': 'william', 'geo': 'george', 'thos': 'thomas', 'jno': 'john',
-  'chas': 'charles', 'jas': 'james', 'robt': 'robert', 'benj': 'benjamin',
-  'edw': 'edward', 'sam': 'samuel', 'nathl': 'nathaniel', 'bart': 'bartholomew',
-  'richd': 'richard', 'nichs': 'nicholas', 'danl': 'daniel',
-  'bill': 'william', 'billy': 'william', 'will': 'william',
-  'bob': 'robert', 'rob': 'robert',
-  'tom': 'thomas', 'tommy': 'thomas',
-  'jim': 'james', 'jimmy': 'james',
-  'dick': 'richard', 'rich': 'richard',
-  'charlie': 'charles', 'chuck': 'charles',
-  'ed': 'edward', 'eddie': 'edward', 'ned': 'edward',
-  'jack': 'john', 'johnny': 'john',
-  'fred': 'frederick', 'freddy': 'frederick',
-  'ben': 'benjamin',
-  'dan': 'daniel', 'danny': 'daniel',
-  'al': 'albert', 'alex': 'alexander',
-  'abe': 'abraham',
-  'gus': 'augustus',
-  'matt': 'matthew',
-  'nick': 'nicholas',
-  'ted': 'theodore', 'theo': 'theodore',
-  'tim': 'timothy',
-  'tony': 'anthony',
-  'hal': 'henry', 'hank': 'henry',
-  'eliz': 'elizabeth', 'lizzie': 'elizabeth', 'betsy': 'elizabeth',
-  'bess': 'elizabeth', 'bessie': 'elizabeth', 'betty': 'elizabeth', 'beth': 'elizabeth',
-  'maggie': 'margaret', 'peggy': 'margaret', 'meg': 'margaret',
-  'polly': 'mary', 'molly': 'mary',
-  'nell': 'eleanor', 'nelly': 'eleanor',
-  'sally': 'sarah', 'sadie': 'sarah',
-  'hattie': 'harriet',
-  'nan': 'ann', 'nancy': 'ann', 'annie': 'ann',
-  'kate': 'katherine', 'katy': 'katherine', 'kitty': 'katherine',
-  'sue': 'susan', 'susie': 'susan',
-};
+// WikiTree matching needs lowercase — derive from the shared title-case table.
+const EXPAND = Object.fromEntries(
+  Object.entries(_EXPAND).map(([k, v]) => [k, v.toLowerCase()])
+);
 
 // Return the canonical (lowercase) formal name for a given first name, or the
 // original lowercased name if no expansion is found.
@@ -218,7 +186,6 @@ export async function searchWikiTree(graveData, location = null) {
       if (bestYear && Math.abs(bestYear - parseInt(birthYear, 10)) > 10) return null;
     }
 
-    console.warn('WIKITREE match:', best.Name, best.BirthDate, best.DeathDate);
     return {
       name: `${best.FirstName || ''} ${best.LastNameAtBirth || best.LastNameCurrent || ''}`.trim(),
       birth: best.BirthDate || null,
@@ -229,7 +196,7 @@ export async function searchWikiTree(graveData, location = null) {
       bioSnippet: best.Bio ? best.Bio.slice(0, 1500) : null,
     };
   } catch (e) {
-    console.log('WikiTree fetch failed:', e.message);
+    console.warn('WikiTree fetch failed:', e.message);
     return null;
   }
 }

@@ -1,16 +1,40 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, StatusBar, Alert, RefreshControl,
+  StyleSheet, StatusBar, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudDeleteStory } from '../lib/sync';
+import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
 import { Headstone } from '../components/Icons';
+
+const StoryCard = memo(function StoryCard({ story, i, onPress, onDelete }) {
+  return (
+    <View key={story.timestamp ?? i} style={styles.savedCard}>
+      <View style={styles.savedAvatar}>
+        <Headstone size={17} color={colors.ash} />
+      </View>
+      <TouchableOpacity style={styles.savedCardMain} onPress={onPress}>
+        <Text style={styles.savedName}>{story.name || 'Unknown'}</Text>
+        <Text style={styles.savedDates}>{story.dates || ''}</Text>
+      </TouchableOpacity>
+      {story.is_public && <Text style={styles.publicBadge}>public</Text>}
+      <Text style={styles.savedArrow}>›</Text>
+      <TouchableOpacity
+        style={styles.deleteBtn}
+        onPress={onDelete}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Text style={styles.deleteBtnText}>✕</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
 
 const SORT_MODES = [
   { key: 'recent',   label: 'Recent' },
@@ -28,7 +52,6 @@ export default function RememberedStoriesScreen({ navigation }) {
   const [loaded, setLoaded] = useState(false);
   const [sortBy, setSortBy] = useState('recent');
   const [expandedCemeteries, setExpandedCemeteries] = useState(new Set());
-  const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -70,14 +93,12 @@ export default function RememberedStoriesScreen({ navigation }) {
       }));
   }, [stories, sortBy]);
 
-  async function onRefresh() {
-    setRefreshing(true);
+  const { refreshControl } = useRefresh(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     const uid = session?.user?.id ?? null;
     const local = await loadStories(uid);
     setStories(local);
-    setRefreshing(false);
-  }
+  });
 
   function toggleCemetery(name) {
     setExpandedCemeteries(prev => {
@@ -91,7 +112,7 @@ export default function RememberedStoriesScreen({ navigation }) {
     return count <= 5 || expandedCemeteries.has(name);
   }
 
-  function confirmDelete(story) {
+  const confirmDelete = useCallback((story) => {
     Alert.alert(
       'Delete story?',
       `Remove "${story.name || 'this story'}" permanently?`,
@@ -109,33 +130,7 @@ export default function RememberedStoriesScreen({ navigation }) {
         },
       ]
     );
-  }
-
-  function StoryCard({ story, i }) {
-    return (
-      <View key={story.timestamp ?? i} style={styles.savedCard}>
-        <View style={styles.savedAvatar}>
-          <Headstone size={17} color={colors.ash} />
-        </View>
-        <TouchableOpacity
-          style={styles.savedCardMain}
-          onPress={() => navigation.navigate('Result', { story })}
-        >
-          <Text style={styles.savedName}>{story.name || 'Unknown'}</Text>
-          <Text style={styles.savedDates}>{story.dates || ''}</Text>
-        </TouchableOpacity>
-        {story.is_public && <Text style={styles.publicBadge}>public</Text>}
-        <Text style={styles.savedArrow}>›</Text>
-        <TouchableOpacity
-          style={styles.deleteBtn}
-          onPress={() => confirmDelete(story)}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Text style={styles.deleteBtnText}>✕</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  }, [stories]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -169,7 +164,7 @@ export default function RememberedStoriesScreen({ navigation }) {
 
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+        refreshControl={refreshControl}
       >
         {loaded && stories.length === 0 ? (
           <View style={styles.emptyState}>
@@ -202,7 +197,11 @@ export default function RememberedStoriesScreen({ navigation }) {
                   )}
                 </TouchableOpacity>
                 {expanded && group.stories.map((story, i) => (
-                  <StoryCard key={story.timestamp ?? i} story={story} i={i} />
+                  <StoryCard
+                    key={story.timestamp ?? i} story={story} i={i}
+                    onPress={() => navigation.navigate('Result', { story })}
+                    onDelete={() => confirmDelete(story)}
+                  />
                 ))}
               </View>
             );
@@ -210,7 +209,11 @@ export default function RememberedStoriesScreen({ navigation }) {
 
         ) : (
           sortedStories.map((story, i) => (
-            <StoryCard key={story.timestamp ?? i} story={story} i={i} />
+            <StoryCard
+              key={story.timestamp ?? i} story={story} i={i}
+              onPress={() => navigation.navigate('Result', { story })}
+              onDelete={() => confirmDelete(story)}
+            />
           ))
         )}
       </ScrollView>

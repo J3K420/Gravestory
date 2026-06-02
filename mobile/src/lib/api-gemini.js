@@ -28,7 +28,7 @@ async function geminiCallWithFallback(payload) {
     const data = await res.json().catch(() => ({ error: { message: 'Invalid JSON' } }));
     if (!shouldFallback(res, data)) return { data, model: PRIMARY };
   } catch (err) {
-    console.log(`Primary fetch failed (${err.message}) — falling back`);
+    console.warn(`Primary fetch failed (${err.message}) — falling back`);
   }
 
   const res2 = await fetch(`${PROXY_BASE}/gemini/${FALLBACK}`, init);
@@ -78,7 +78,6 @@ Return only JSON.`;
 
   const text = data.candidates[0].content.parts[0].text;
   const parsed = safeParseJSON(text, { is_gravestone: true, confidence: 'low', reason: '' });
-  console.warn('VERIFY:', JSON.stringify(parsed));
 
   if (parsed.is_gravestone === false) {
     const err = new Error('Image does not appear to contain a gravestone');
@@ -140,7 +139,6 @@ If multiple deceased people share the stone, use the names array and pick the mo
   if (data.error) throw new Error(data.error.message);
 
   const text = data.candidates[0].content.parts[0].text;
-  console.warn('GRAVESTONE RAW:', text.slice(0, 300));
   return safeParseJSON(text, {
     names: [], primary_name: 'Unknown', birth_date: '', death_date: '',
     inscription: '', symbols: [], family_name: '', notes: '',

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, RefreshControl,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet,
   ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory } from '../lib/sync';
 import { supabase } from '../lib/supabase';
 import { forwardGeocode } from '../lib/api-nominatim';
+import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 
 const GOLD      = colors.flame;
@@ -111,17 +112,11 @@ export default function CemeteryMapScreen({ navigation, route }) {
   const [geocoding, setGeocoding] = useState(true);
   const [selectedStory, setSelectedStory] = useState(null);
   const [bioExpanded, setBioExpanded] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const { refreshControl } = useRefresh(resolveStories);
 
   useEffect(() => {
     resolveStories();
   }, []);
-
-  async function onRefresh() {
-    setRefreshing(true);
-    await resolveStories();
-    setRefreshing(false);
-  }
 
   async function resolveStories() {
     setGeocoding(true);
@@ -329,7 +324,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
         <ScrollView
           style={styles.graveList}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+          refreshControl={refreshControl}
         >
           {mappedStories.length === 0 && !geocoding ? (
             <Text style={styles.emptyText}>

@@ -640,7 +640,7 @@ async function forwardGeocode(locationStr, personName, dates) {
           rejectedByGeo ? '— some matched type but failed geographic check' : '— no type match');
         continue;
       }
-      cemeteryCoords = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
+      cemeteryCoords = { lat: parseFloat(result.lat), lng: parseFloat(result.lon), bbox: result.boundingbox };
 
       // Low-confidence flag: if the query mentioned a US state and the result's
       // address.state is a different US state, surface a "?" badge on the map pin.
@@ -674,72 +674,101 @@ async function forwardGeocode(locationStr, personName, dates) {
   }
 
   // Step 2 — if we have a person's name, search Overpass for a named grave/memorial
-  // node within 500m of the cemetery center that matches the name
+  // node near the cemetery center that matches the name.
+  // Two passes:
+  //   Pass 1 — tagged nodes/ways (grave, tomb, memorial, attraction) within 1000m.
+  //            Accepts ≥75% of name tokens matched (min 2).
+  //   Pass 2 — any named node within the Nominatim bounding box (no tag filter).
+  //            Requires 100% of name tokens to reduce false positives on untagged nodes.
   if (personName) {
-    // Extract all meaningful name tokens (ignore short words)
     const nameTokens = personName.toLowerCase()
       .split(/[\s,().]+/)
       .filter(t => t.length > 2 && !['and','the','née','nee','von','van','de'].includes(t));
 
+    let bestMatch = null;
+    let bestScore = 0;
+    let bestFromTagged = false;
+
+    // Pass 1 — tagged grave/memorial/tomb/attraction nodes within 1000m.
+    // Covers historic=memorial|tomb|grave|monument|mausoleum, tourism=attraction,
+    // cemetery=grave, memorial=*, building=tomb|mausoleum.
+    // Famous graves (e.g. Houdini) are often tagged tourism=attraction rather than
+    // historic=grave, so the wider tag set is necessary.
     try {
-      // Restricted query — only nodes/ways tagged as graves, tombs, or memorials.
-      // Avoids false positives like roads/parks named after people
-      // (e.g. "George Washington Memorial Parkway" matching George Washington's tomb).
+      const r = 1000;
+      const lat1 = cemeteryCoords.lat, lng1 = cemeteryCoords.lng;
       const overpassQuery = `
-        [out:json][timeout:15];
+        [out:json][timeout:20];
         (
-          node[name][historic~"^(memorial|tomb|grave|monument)$"](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
-          way[name][historic~"^(memorial|tomb|grave|monument)$"](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
-          node[name][cemetery=grave](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
-          way[name][cemetery=grave](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
-          node[name][building~"^(tomb|mausoleum)$"](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
-          way[name][building~"^(tomb|mausoleum)$"](around:600,${cemeteryCoords.lat},${cemeteryCoords.lng});
+          node[name][historic~"^(memorial|tomb|grave|monument|mausoleum)$"](around:${r},${lat1},${lng1});
+          way[name][historic~"^(memorial|tomb|grave|monument|mausoleum)$"](around:${r},${lat1},${lng1});
+          node[name][tourism=attraction](around:${r},${lat1},${lng1});
+          way[name][tourism=attraction](around:${r},${lat1},${lng1});
+          node[name][cemetery=grave](around:${r},${lat1},${lng1});
+          way[name][cemetery=grave](around:${r},${lat1},${lng1});
+          node[name][memorial](around:${r},${lat1},${lng1});
+          way[name][memorial](around:${r},${lat1},${lng1});
+          node[name][building~"^(tomb|mausoleum|chapel)$"](around:${r},${lat1},${lng1});
+          way[name][building~"^(tomb|mausoleum|chapel)$"](around:${r},${lat1},${lng1});
         );
         out center;
       `;
-      const res = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: 'data=' + encodeURIComponent(overpassQuery)
+      const res1 = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST', body: 'data=' + encodeURIComponent(overpassQuery)
       });
-      if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
-      const data = await res.json();
-      if (data.elements && data.elements.length > 0) {
-        // Score each element by how many name tokens it contains
-        let bestMatch = null;
-        let bestScore = 0;
-        for (const el of data.elements) {
-          if (!el.tags || !el.tags.name) continue;
-          const elName = el.tags.name.toLowerCase();
-          const score = nameTokens.filter(t => elName.includes(t)).length;
-          if (score > bestScore) {
-            bestScore = score;
-            bestMatch = el;
-          }
-        }
-        // Confidence gate for accepting AND caching:
-        //   - need at least 2 matched tokens (or all tokens if name has only 1),
-        //   - and at least 75% of available tokens matched.
-        // This rejects single-token coincidences like "Lee" matching unrelated people,
-        // while accepting strong matches like "Bruce Lee" → "Bruce and Brandon Lee Graves".
-        const minRequired = Math.max(
-          nameTokens.length === 1 ? 1 : 2,
-          Math.ceil(nameTokens.length * 0.75)
-        );
-        if (bestMatch && bestScore >= minRequired) {
-          const lat = bestMatch.lat || bestMatch.center?.lat;
-          const lng = bestMatch.lon || bestMatch.center?.lon;
-          if (lat && lng) {
-            console.log('📍 Found named grave in OSM:', bestMatch.tags.name, 'score:', bestScore, '/', nameTokens.length, lat, lng);
-            const coords = { lat, lng };
-            if (cacheKey) writeGraveCache(cacheKey, coords, bestMatch.tags.name, bestScore);
-            return { ...coords, isCemetery: true, lowConfidence };
-          }
-        } else if (bestMatch) {
-          console.log('📍 Best OSM match', bestMatch.tags.name, 'rejected — score', bestScore, '<', minRequired, 'required');
+      if (res1.ok) {
+        const d1 = await res1.json();
+        for (const el of (d1.elements || [])) {
+          if (!el.tags?.name) continue;
+          const score = nameTokens.filter(t => el.tags.name.toLowerCase().includes(t)).length;
+          if (score > bestScore) { bestScore = score; bestMatch = el; bestFromTagged = true; }
         }
       }
-    } catch(e) {
-      console.log('Overpass named grave search failed:', e);
+    } catch(e) { console.log('Overpass grave search pass 1 failed:', e); }
+
+    const minTagged = Math.max(nameTokens.length === 1 ? 1 : 2, Math.ceil(nameTokens.length * 0.75));
+
+    // Pass 2 — any named node within the Nominatim bounding box (no tag restriction).
+    // Only runs if pass 1 found nothing above threshold.
+    if (bestScore < minTagged && cemeteryCoords.bbox) {
+      try {
+        const [s, n, w, e] = cemeteryCoords.bbox.map(Number);
+        const bboxQuery = `
+          [out:json][timeout:15];
+          (
+            node[name](${s},${w},${n},${e});
+            way[name](${s},${w},${n},${e});
+          );
+          out center;
+        `;
+        const res2 = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST', body: 'data=' + encodeURIComponent(bboxQuery)
+        });
+        if (res2.ok) {
+          const d2 = await res2.json();
+          for (const el of (d2.elements || [])) {
+            if (!el.tags?.name) continue;
+            const score = nameTokens.filter(t => el.tags.name.toLowerCase().includes(t)).length;
+            if (score > bestScore) { bestScore = score; bestMatch = el; bestFromTagged = false; }
+          }
+        }
+      } catch(e) { console.log('Overpass grave search pass 2 failed:', e); }
+    }
+
+    // Accept: tagged nodes use ≥75%/min-2 threshold; untagged nodes require 100% match.
+    const threshold = bestFromTagged ? minTagged : nameTokens.length;
+    if (bestMatch && bestScore >= threshold) {
+      const lat = bestMatch.lat || bestMatch.center?.lat;
+      const lng = bestMatch.lon || bestMatch.center?.lon;
+      if (lat && lng) {
+        const pass = bestFromTagged ? 'pass 1 (tagged)' : 'pass 2 (untagged)';
+        console.log('📍 Found named grave in OSM', `[${pass}]:`, bestMatch.tags.name, 'score:', bestScore, '/', nameTokens.length, lat, lng);
+        const coords = { lat, lng };
+        if (cacheKey) writeGraveCache(cacheKey, coords, bestMatch.tags.name, bestScore);
+        return { ...coords, isCemetery: true, lowConfidence };
+      }
+    } else if (bestMatch) {
+      console.log('📍 Best OSM match', bestMatch.tags.name, 'rejected — score', bestScore, '< threshold', threshold);
     }
   }
 

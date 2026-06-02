@@ -133,7 +133,9 @@ export default function CemeteryMapScreen({ navigation, route }) {
   async function resolveStories() {
     setGeocoding(true);
 
-    let stories = await loadStories();
+    const { data: { session } } = await supabase.auth.getSession();
+    const uid = session?.user?.id ?? null;
+    let stories = await loadStories(uid);
 
     // When opened from a story result, narrow to the same cemetery
     if (focusStory?.location) {
@@ -227,13 +229,14 @@ export default function CemeteryMapScreen({ navigation, route }) {
             setMappedStories(prev =>
               prev.map(s => s.timestamp === story.timestamp ? updated : s)
             );
-            const allStories = await loadStories();
+            const { data: { session } } = await supabase.auth.getSession();
+            const uid = session?.user?.id ?? null;
+            const allStories = await loadStories(uid);
             const idx = allStories.findIndex(s => s.timestamp === story.timestamp);
             if (idx >= 0) {
               allStories[idx] = { ...allStories[idx], gps: newGps, userCorrected: true };
-              await saveStories(allStories);
+              await saveStories(allStories, uid);
             }
-            const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
               await cloudUpdateStory(updated, session.user);
             }

@@ -162,6 +162,14 @@ Built for one-handed use in a cemetery. Service worker caches the app shell (`gr
 
 - **Grave-node cache** — `grave-cache.js` caches successful Overpass name-match results so the same person's grave isn't re-queried on subsequent map opens.
 
+- **Grave-node search uses primary_name** — `forwardGeocode` is called with `story.graveData?.primary_name || story.name`. The biography `name` field is a combined string (e.g. "Harry Houdini and Bess Houdini") that inflates the token count and threshold; `graveData.primary_name` is the single OCR-extracted name and produces a reliable match threshold.
+
+- **Two-pass Overpass grave-node search** — Pass 1 searches tagged nodes (historic=memorial/tomb/grave/monument/mausoleum, tourism=attraction, cemetery=grave, memorial=*, building=tomb/mausoleum) within 1000m. Pass 2, if pass 1 misses, searches any named node within the Nominatim bounding box (requires 100% token match to control false positives on untagged nodes). Famous graves often use `tourism=attraction`, not `historic=grave`.
+
+- **Cemetery boundary polygon** — `fetchOSMCemeteryBoundary` in `map-cemetery.js` queries Overpass for ways and relations within 1000m. Relations need `stitchOuterRing()` to order member ways correctly (raw concatenation produces crossed lines). Scoring: name-match first (prevents dense complexes like Cypress Hills, Queens from overriding the specific cemetery), then relation over way, then smallest area. Relations stitching to >2000 points are skipped (district-level, not cemetery-level). The `cemeteryName` (first comma-segment of location string) is threaded from `initCemeteryMap` → `renderLeafletMap` → `loadAndDrawBoundary` → `fetchOSMCemeteryBoundary`. Clear `gs_grave_cache` from localStorage to force a fresh Overpass lookup.
+
+- **Nearby cemeteries** — `fetchNearbyCemeteries` uses a 5km radius and only `landuse=cemetery` / `amenity=grave_yard` on ways and relations. Unnamed elements (no `name` tag) are filtered out — they clutter the map with useless "Unnamed Cemetery" entries.
+
 - **Soft-delete sync** — deletes propagate to other devices via `deleted_at` in the delta sync, not through missing rows.
 
 - **Tavily inscription-phrase disambiguation** — when the OCR returns a bare surname with no dates (e.g. "TOMB OF WASHINGTON"), `searchForPerson` prepends two high-priority queries that search the inscription text verbatim before falling back to name-only queries. Prevents generic surname searches returning cemetery-name results instead of the actual person. Applies to both `js/api-tavily.js` and `mobile/src/lib/api-tavily.js`.
@@ -211,12 +219,12 @@ mobile/
       map-utils.js              — getDistanceMeters, groupGravesByCemetery (ES module)
       sync.js                   — storyToRow/rowToStory, cloudSaveStory/Update/Delete, syncDelta, syncOnSignIn, pushLocalOnly
     screens/
-      HomeScreen.js             — Home: logo, scan button, map buttons, saved list; delta sync on focus; long-press delete
+      HomeScreen.js             — Home: logo, scan button, map buttons, saved list; delta sync on focus; visible ✕ delete button + long-press delete on each story card
       AuthScreen.js             — Email/password + Google OAuth (expo-web-browser)
-      CameraScreen.js           — Photo picker → GPS capture → full pipeline → R2 upload → cloud save → Result
+      CameraScreen.js           — Photo picker → GPS capture → full pipeline → R2 upload → cloud save → Result. Camera screen shows a flickering gravestone SVG tap zone (matching web); tapping opens a styled bottom sheet (Modal slide-up, not Alert) to choose camera vs library. Loading state shows 🕯️ candle flicker instead of ActivityIndicator.
       ResultScreen.js           — Biography, gravestone photo, portraits, inscription, sources, share, map, public toggle, delete
       SettingsScreen.js         — Display name, default visibility toggle, account info, sign out
-      CemeteryMapScreen.js      — react-native-maps: grave markers, callouts, draggable pin correction, bottom list
+      CemeteryMapScreen.js      — react-native-maps: grave markers, callouts, draggable pin correction, bottom list, OSM boundary polygon (Polygon component; stitchOuterRing + fetchOSMCemeteryBoundary at full parity with web including name-match scoring)
       GlobalMapScreen.js        — Community map: public stories from Supabase RPC, silver markers, guest banner
     components/
       GravestoneLogo.js         — Animated SVG gravestone logo (flicker effect); accepts animate={false} for static rendering
@@ -262,7 +270,8 @@ mobile/
 - **Phase 5** ✅ — R2 image upload, story deletion (HomeScreen long-press), Settings screen (display name, visibility toggle, account info)
 - **Phase 6** ✅ — Gravestone photo in ResultScreen, delete from ResultScreen, draggable pin correction in CemeteryMapScreen, app icon + splash screen
 - **Phase 7** ✅ — Polish pass + tester APK: rejection bypass, pipeline error screen, first-run empty state, loading step labels, EAS preview build config
-- **Phase 8** 🔲 — Bug fixes from real-device testing, Play Store submission prep, OTA updates (EAS Update), payments (RevenueCat + Google Play Billing)
+- **Phase 7b** ✅ — UI/UX polish: gravestone SVG camera screen (flicker animation, "Tap" text, bottom-sheet picker), candle loading animation, story card delete button, OSM boundary polygon on cemetery map
+- **Phase 8** 🔲 — Visual design overhaul (APK), Play Store submission prep, OTA updates (EAS Update), payments (RevenueCat + Google Play Billing)
 
 ---
 

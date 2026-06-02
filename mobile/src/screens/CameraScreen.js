@@ -35,7 +35,8 @@ export default function CameraScreen({ navigation }) {
     setRejected(null);
     setPipelineError(null);
 
-    const opts = { mediaTypes: ['images'], quality: 0.85, base64: false };
+    // exif: true so we can read GPS coords before compression strips them
+    const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true };
 
     let result;
     if (fromCamera) {
@@ -48,27 +49,24 @@ export default function CameraScreen({ navigation }) {
 
     if (result.canceled) return;
 
-    // Compress image and request device GPS in parallel (GPS non-blocking — fails silently)
-    const [manipResult, gps] = await Promise.all([
+    const asset = result.assets[0];
+
+    // Pull GPS from the photo's own EXIF before ImageManipulator strips it.
+    // Only fall back to device GPS for camera shots — for library photos the device
+    // is not physically at the grave, so device location would be wrong.
+    let gps = extractExifGps(asset.exif);
+    const needsDeviceGps = !gps && fromCamera;
+
+    const [manipResult, deviceGps] = await Promise.all([
       ImageManipulator.manipulateAsync(
-        result.assets[0].uri,
+        asset.uri,
         [{ resize: { width: 1024 } }],
         { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       ),
-      (async () => {
-        try {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status !== 'granted') return null;
-          const loc = await Promise.race([
-            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000)),
-          ]);
-          return { lat: loc.coords.latitude, lng: loc.coords.longitude };
-        } catch {
-          return null;
-        }
-      })(),
+      needsDeviceGps ? getDeviceGps() : Promise.resolve(null),
     ]);
+
+    if (!gps) gps = deviceGps;
 
     await runPipeline(manipResult.base64, false, gps);
   }
@@ -222,6 +220,27 @@ export default function CameraScreen({ navigation }) {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function extractExifGps(exif) {
+  if (!exif?.GPSLatitude || !exif?.GPSLongitude) return null;
+  const lat = exif.GPSLatitudeRef === 'S' ? -Math.abs(exif.GPSLatitude) : Math.abs(exif.GPSLatitude);
+  const lng = exif.GPSLongitudeRef === 'W' ? -Math.abs(exif.GPSLongitude) : Math.abs(exif.GPSLongitude);
+  return { lat, lng };
+}
+
+async function getDeviceGps() {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return null;
+    const loc = await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000)),
+    ]);
+    return { lat: loc.coords.latitude, lng: loc.coords.longitude };
+  } catch {
+    return null;
+  }
 }
 
 const GOLD     = '#c9a84c';

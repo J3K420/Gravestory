@@ -411,8 +411,8 @@ const styles = StyleSheet.create({
   },
   stoneText: {
     color: colors.ash, fontFamily: fonts.bodyItalic,
-    fontSize: 16, textAlign: 'center',
-    marginTop: 10, opacity: 0.9, letterSpacing: 1,
+    fontSize: 32, textAlign: 'center',
+    marginTop: 100, opacity: 0.9, letterSpacing: 2,
   },
 
   sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },

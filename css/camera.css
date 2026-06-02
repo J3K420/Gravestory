@@ -130,7 +130,8 @@
 
   .upload-text {
     font-family: 'Playfair Display', serif;
-    font-size: 0.92rem;
+    font-size: 1.4rem;
+    letter-spacing: 0.08em;
     color: var(--aged);
     line-height: 1.3;
     opacity: 0.9;

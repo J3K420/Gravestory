@@ -232,10 +232,10 @@
       <path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="url(#uploadStoneGrad)" fill="none"/>
       <!-- Inner inscription border -->
       <path d="M36 80 L36 38 Q36 24 50 24 Q64 24 64 38 L64 80" stroke="url(#uploadStoneGrad)" stroke-opacity="0.4" fill="none"/>
-      <!-- Inscription lines (where book pages sit on the home logo) -->
-      <line x1="40" y1="58" x2="60" y2="58" stroke="url(#uploadStoneGrad)" stroke-opacity="0.45" stroke-width="0.7"/>
-      <line x1="42" y1="64" x2="58" y2="64" stroke="url(#uploadStoneGrad)" stroke-opacity="0.4" stroke-width="0.7"/>
-      <line x1="44" y1="70" x2="56" y2="70" stroke="url(#uploadStoneGrad)" stroke-opacity="0.35" stroke-width="0.7"/>
+      <!-- Inscription lines: solid color avoids the zero-height bounding-box gradient bug -->
+      <line x1="40" y1="58" x2="60" y2="58" stroke="#c9a84c" stroke-opacity="0.45" stroke-width="0.7"/>
+      <line x1="42" y1="64" x2="58" y2="64" stroke="#c9a84c" stroke-opacity="0.4"  stroke-width="0.7"/>
+      <line x1="44" y1="70" x2="56" y2="70" stroke="#c9a84c" stroke-opacity="0.35" stroke-width="0.7"/>
       <!-- Ground line -->
       <line x1="18" y1="92" x2="82" y2="92" stroke="url(#uploadStoneGrad)" stroke-opacity="0.5"/>
     </svg>

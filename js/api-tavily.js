@@ -6,6 +6,124 @@
 // runs the top 6, dedupes by URL, and tags each result with a source_type.
 // Depends on: PROXY_BASE (from js/config.js).
 
+// Period engravings used heavy abbreviation; common nicknames also differ from
+// formal names. Each entry maps the short/informal form (lowercase) to the full
+// formal name so we can generate additional query variants.
+const _EXPAND = {
+  // Masculine abbreviations (period engraving conventions)
+  'wm': 'William', 'geo': 'George', 'thos': 'Thomas', 'jno': 'John',
+  'chas': 'Charles', 'jas': 'James', 'robt': 'Robert', 'benj': 'Benjamin',
+  'edw': 'Edward', 'sam': 'Samuel', 'nathl': 'Nathaniel', 'bart': 'Bartholomew',
+  'richd': 'Richard', 'nichs': 'Nicholas', 'danl': 'Daniel', 'josph': 'Joseph',
+  // Masculine nicknames
+  'bill': 'William', 'billy': 'William', 'will': 'William',
+  'bob': 'Robert', 'rob': 'Robert',
+  'tom': 'Thomas', 'tommy': 'Thomas',
+  'jim': 'James', 'jimmy': 'James',
+  'dick': 'Richard', 'rich': 'Richard',
+  'charlie': 'Charles', 'chuck': 'Charles',
+  'ed': 'Edward', 'eddie': 'Edward', 'ned': 'Edward',
+  'jack': 'John', 'johnny': 'John',
+  'fred': 'Frederick', 'freddy': 'Frederick',
+  'ben': 'Benjamin',
+  'dan': 'Daniel', 'danny': 'Daniel',
+  'pat': 'Patrick',
+  'al': 'Albert', 'alex': 'Alexander', 'sandy': 'Alexander',
+  'abe': 'Abraham',
+  'gus': 'Augustus',
+  'matt': 'Matthew',
+  'nick': 'Nicholas',
+  'ted': 'Theodore', 'theo': 'Theodore',
+  'tim': 'Timothy',
+  'tony': 'Anthony',
+  'chris': 'Christopher',
+  'hal': 'Henry', 'hank': 'Henry',
+  'ike': 'Dwight',
+  // Feminine abbreviations and nicknames
+  'eliz': 'Elizabeth', 'lizzie': 'Elizabeth', 'betsy': 'Elizabeth',
+  'bess': 'Elizabeth', 'bessie': 'Elizabeth', 'betty': 'Elizabeth', 'beth': 'Elizabeth',
+  'maggie': 'Margaret', 'peggy': 'Margaret', 'meg': 'Margaret',
+  'polly': 'Mary', 'molly': 'Mary',
+  'nell': 'Eleanor', 'nelly': 'Eleanor',
+  'sally': 'Sarah', 'sadie': 'Sarah',
+  'hattie': 'Harriet',
+  'nan': 'Ann', 'nancy': 'Ann', 'annie': 'Ann',
+  'kate': 'Katherine', 'katy': 'Katherine', 'kitty': 'Katherine',
+  'dora': 'Dorothy', 'dot': 'Dorothy',
+  'sue': 'Susan', 'susie': 'Susan',
+  'fanny': 'Frances', 'fran': 'Frances',
+  'winnie': 'Winifred',
+  'tilly': 'Matilda', 'tillie': 'Matilda',
+};
+
+// Returns [original, expandedVariant?] — if the first token of the name is a known
+// abbreviation or nickname, the second element replaces it with the formal form.
+function _expandName(name) {
+  const parts = name.trim().split(/\s+/);
+  const key = parts[0].replace(/\.$/, '').toLowerCase();
+  const formal = _EXPAND[key];
+  if (formal && formal.toLowerCase() !== key) {
+    return [name, [formal, ...parts.slice(1)].join(' ')];
+  }
+  return [name];
+}
+
+// Parse "aged 72 yrs", "aet. 45", "in the 45th year of his age" from the inscription
+// and derive the missing birth or death year when only one end-date is present.
+function _parseAgeAtDeath(graveData) {
+  const inscr = graveData.inscription || '';
+  if (!inscr) return null;
+  const patterns = [
+    /aged?\s+(\d+)\s*y(?:ea)?r/i,
+    /aet\.?\s*(\d+)/i,
+    /in\s+(?:the\s+)?(\d+)(?:st|nd|rd|th)\s+year\s+of/i,
+    /died\s+in\s+(?:his|her|their)\s+(\d+)(?:st|nd|rd|th)?\s+year/i,
+  ];
+  const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0];
+  const deathYear = graveData.death_date?.match(/\d{4}/)?.[0];
+  for (const pat of patterns) {
+    const m = inscr.match(pat);
+    if (!m) continue;
+    const age = parseInt(m[1], 10);
+    if (age < 1 || age > 120) continue;
+    if (deathYear && !birthYear) return { birth_year: String(parseInt(deathYear, 10) - age), is_approx: true };
+    if (birthYear && !deathYear) return { death_year: String(parseInt(birthYear, 10) + age), is_approx: true };
+  }
+  return null;
+}
+
+// Maps symbol keywords (lowercased) to extra Tavily query suffixes.
+const _SYMBOL_QUERIES = {
+  'gar':                  ['"Grand Army Republic" veteran obituary'],
+  'grand army':           ['"Grand Army Republic" veteran obituary'],
+  'civil war':            ['Civil War veteran soldier obituary'],
+  'masonic':              ['Freemason Mason lodge member'],
+  'freemason':            ['Freemason Mason lodge member'],
+  'square and compass':   ['Freemason Mason lodge member'],
+  'odd fellows':          ['"Odd Fellows" IOOF member'],
+  'ioof':                 ['"Odd Fellows" IOOF member'],
+  'rebekah':              ['"Daughters of Rebekah" IOOF'],
+  'elks':                 ['"Order of Elks" BPOE member'],
+  'bpoe':                 ['"Order of Elks" BPOE member'],
+  'knights of columbus':  ['"Knights of Columbus" Catholic'],
+  'eastern star':         ['"Order of the Eastern Star" OES'],
+  'oes':                  ['"Order of the Eastern Star" OES'],
+  'vfw':                  ['"Veterans of Foreign Wars" veteran'],
+  'american legion':      ['"American Legion" veteran'],
+  'spanish american':     ['"Spanish-American War" veteran'],
+  'world war i':          ['World War I veteran obituary'],
+  'world war 1':          ['World War I veteran obituary'],
+  'wwi':                  ['World War I veteran obituary'],
+  'world war ii':         ['World War II veteran obituary'],
+  'world war 2':          ['World War II veteran obituary'],
+  'wwii':                 ['World War II veteran obituary'],
+  'navy':                 ['United States Navy veteran sailor'],
+  'marine':               ['United States Marine Corps veteran'],
+  'air force':            ['United States Air Force veteran'],
+  'infantry':             ['infantry soldier veteran obituary'],
+  'cavalry':              ['cavalry soldier veteran obituary'],
+};
+
 // ── TAVILY: WEB SEARCH ───────────────────────────────────────────
 async function searchForPerson(graveData, location) {
   // Collect ALL names from the stone
@@ -18,14 +136,10 @@ async function searchForPerson(graveData, location) {
   if (allNames.length === 0 && graveData.family_name) allNames.push(graveData.family_name);
   if (allNames.length === 0) return [];
 
-  // Strip parenthetical role tags the OCR prompt may attach for disambiguation,
-  // e.g. "George (deceased)" → "George", "Lizzie Knuver (wife)" → "Lizzie Knuver".
-  // Without this, the literal "(deceased)" text leaks into every Tavily query
-  // and poisons the result set. Also collapse any whitespace that leaves behind.
+  // Strip parenthetical role tags (e.g. "George (deceased)" → "George")
   for (let i = 0; i < allNames.length; i++) {
     allNames[i] = allNames[i].replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
   }
-  // De-dupe in case stripping made two entries identical (e.g. two "George"s with different tags)
   const _seenNames = new Set();
   const _cleanNames = [];
   for (const n of allNames) { if (n && !_seenNames.has(n)) { _seenNames.add(n); _cleanNames.push(n); } }
@@ -33,38 +147,51 @@ async function searchForPerson(graveData, location) {
   allNames.push(..._cleanNames);
   if (allNames.length === 0) return [];
 
+  // Expand abbreviations/nicknames → additional query variants
+  const allVariants = [];
+  const variantSeen = new Set();
+  allNames.slice(0, 3).forEach(name => {
+    _expandName(name).forEach(v => {
+      if (!variantSeen.has(v)) { variantSeen.add(v); allVariants.push(v); }
+    });
+  });
+
+  // Include OCR alternate readings when name confidence is not high
+  if (graveData.name_confidence !== 'high' && graveData.alternate_names?.length > 0) {
+    graveData.alternate_names.slice(0, 2).forEach(alt => {
+      const clean = (alt || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+      if (clean && !variantSeen.has(clean)) { variantSeen.add(clean); allVariants.push(clean); }
+    });
+  }
+
   const deathYear = graveData.death_date?.match(/\d{4}/)?.[0] || '';
   const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0] || '';
+
+  // Derive missing year from age-at-death inscription if both explicit dates are absent
+  const ageInfo = _parseAgeAtDeath(graveData);
+  const effectiveBirth = birthYear || ageInfo?.birth_year || '';
+  const effectiveDeath = deathYear || ageInfo?.death_year || '';
+
   const loc = location ? location.split(',').slice(0,2).map(s=>s.trim()).join(' ') : '';
   const inscr = (graveData.inscription || '').trim();
 
-  // Build targeted queries for each person + targeted site searches
+  // Build targeted queries
   const queries = [];
-  // BURIAL-FIRST: explicit burial queries run first so they survive the slice(0,4) cap.
-  // Without this, generic obituary queries dominate and the model conflates death-place with burial-place.
-  allNames.slice(0, 3).forEach(name => {
+  allVariants.forEach(name => {
     queries.push(`"${name}" buried cemetery grave location`.trim());
     queries.push(`site:findagrave.com "${name}" buried`.trim());
-    // BillionGraves: GPS-verified, volunteer-transcribed headstones — closest
-    // thing to a citable primary source.
     queries.push(`site:billiongraves.com "${name}"`.trim());
-    // Chronicling America (Library of Congress): public-domain newspaper
-    // archive, mostly pre-1929 US obituaries — free, fully licensed for embed.
-    if (deathYear) {
-      queries.push(`site:chroniclingamerica.loc.gov "${name}" ${deathYear} obituary`.trim());
-    }
+    if (effectiveDeath) queries.push(`site:chroniclingamerica.loc.gov "${name}" ${effectiveDeath} obituary`.trim());
   });
-  allNames.slice(0, 3).forEach(name => {
-    const yr = deathYear || birthYear;
+  allVariants.forEach(name => {
+    const yr = effectiveDeath || effectiveBirth;
     queries.push(`site:findagrave.com "${name}" ${yr}`.trim());
     queries.push(`site:legacy.com "${name}" obituary ${loc}`.trim());
     queries.push(`"${name}" obituary ${yr} ${loc}`.trim());
   });
-  // Add family history search
   if (graveData.family_name) {
-    queries.push(`site:newspapers.com "${graveData.family_name}" ${loc} ${deathYear}`.trim());
+    queries.push(`site:newspapers.com "${graveData.family_name}" ${loc} ${effectiveDeath}`.trim());
   }
-  // Add Atlas Obscura search for cemetery/location historical context
   if (loc) {
     queries.push(`site:atlasobscura.com ${loc} cemetery history`.trim());
     queries.push(`historic cemetery ${loc} history abandoned`.trim());
@@ -78,17 +205,28 @@ async function searchForPerson(graveData, location) {
     const ctx = inscr.slice(0, 55).replace(/"/g, '').trim();
     queries.unshift(`"${primaryName}" ${ctx}`);
   }
-  if (!deathYear && !birthYear && inscr.length > 30) {
+  if (!effectiveDeath && !effectiveBirth && inscr.length > 30) {
     const phrase = inscr.slice(0, 55).replace(/"/g, '').trim();
     queries.unshift(`"${phrase}"`);
+  }
+
+  // Symbol-guided queries: each recognised emblem/affiliation generates one
+  // targeted query that routes the search toward the right record repositories.
+  if (graveData.symbols?.length > 0) {
+    const symbolStr = graveData.symbols.join(' ').toLowerCase();
+    const primaryVar = allVariants[0] || '';
+    for (const [key, suffixes] of Object.entries(_SYMBOL_QUERIES)) {
+      if (symbolStr.includes(key)) {
+        suffixes.forEach(suffix => {
+          if (primaryVar) queries.push(`"${primaryVar}" ${suffix}`);
+        });
+      }
+    }
   }
 
   const results = [];
   const seen = new Set();
 
-  // Cap raised 4 → 6: the burial-first block now also emits BillionGraves and
-  // Chronicling America queries; at 4 the new sources would never run for
-  // multi-name stones. Marginal Tavily cost at basic tier is ~$0.003/query.
   console.log('🔎 TAVILY queries planned:', queries.slice(0, 6));
 
   for (const query of queries.slice(0, 6)) {
@@ -115,8 +253,8 @@ async function searchForPerson(graveData, location) {
               url: r.url,
               content: r.content?.slice(0, 1000),
               source_type:
-                u.includes('billiongraves.com')        ? 'verified_transcription' :
-                u.includes('findagrave.com')           ? 'memorial' :
+                u.includes('billiongraves.com')          ? 'verified_transcription' :
+                u.includes('findagrave.com')             ? 'memorial' :
                 u.includes('chroniclingamerica.loc.gov') ? 'public_domain' :
                 u.includes('legacy.com') || u.includes('newspapers.com') ? 'obituary' :
                 'web'

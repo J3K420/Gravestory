@@ -1,14 +1,93 @@
 // js/api-wikitree.js
 // WikiTree genealogy search.
-// POSTs to ${PROXY_BASE}/wikitree via the Cloudflare proxy. Two-pass strategy:
-//   1. With year filter for precision.
-//   2. Wider net without years if pass 1 returns nothing, then score locally.
-// Hard credibility floor: requires last-name match + (birth OR death year aligned)
-// before returning a record. Rejects "WikiTree-found-something" zero-evidence hits.
+// POSTs to ${PROXY_BASE}/wikitree via the Cloudflare proxy. Three-pass strategy:
+//   1. With year filter for precision (original name).
+//   2. Wider net without years if pass 1 returns nothing (original name).
+//   3. If first name is an abbreviation/nickname, retry with the formal form.
+// Scoring: name alignment (nickname-aware) + date alignment + geographic alignment.
+// Hard credibility floor: requires last-name match + (birth OR death year aligned).
 // Depends on: PROXY_BASE (from js/config.js).
 
+// Abbreviation/nickname table (lowercase canonical forms for first-name matching).
+const _WT_EXPAND = {
+  'wm': 'william', 'geo': 'george', 'thos': 'thomas', 'jno': 'john',
+  'chas': 'charles', 'jas': 'james', 'robt': 'robert', 'benj': 'benjamin',
+  'edw': 'edward', 'sam': 'samuel', 'nathl': 'nathaniel', 'bart': 'bartholomew',
+  'richd': 'richard', 'nichs': 'nicholas', 'danl': 'daniel',
+  'bill': 'william', 'billy': 'william', 'will': 'william',
+  'bob': 'robert', 'rob': 'robert',
+  'tom': 'thomas', 'tommy': 'thomas',
+  'jim': 'james', 'jimmy': 'james',
+  'dick': 'richard', 'rich': 'richard',
+  'charlie': 'charles', 'chuck': 'charles',
+  'ed': 'edward', 'eddie': 'edward', 'ned': 'edward',
+  'jack': 'john', 'johnny': 'john',
+  'fred': 'frederick', 'freddy': 'frederick',
+  'ben': 'benjamin',
+  'dan': 'daniel', 'danny': 'daniel',
+  'al': 'albert', 'alex': 'alexander',
+  'abe': 'abraham',
+  'gus': 'augustus',
+  'matt': 'matthew',
+  'nick': 'nicholas',
+  'ted': 'theodore', 'theo': 'theodore',
+  'tim': 'timothy',
+  'tony': 'anthony',
+  'hal': 'henry', 'hank': 'henry',
+  'eliz': 'elizabeth', 'lizzie': 'elizabeth', 'betsy': 'elizabeth',
+  'bess': 'elizabeth', 'bessie': 'elizabeth', 'betty': 'elizabeth', 'beth': 'elizabeth',
+  'maggie': 'margaret', 'peggy': 'margaret', 'meg': 'margaret',
+  'polly': 'mary', 'molly': 'mary',
+  'nell': 'eleanor', 'nelly': 'eleanor',
+  'sally': 'sarah', 'sadie': 'sarah',
+  'hattie': 'harriet',
+  'nan': 'ann', 'nancy': 'ann', 'annie': 'ann',
+  'kate': 'katherine', 'katy': 'katherine', 'kitty': 'katherine',
+  'sue': 'susan', 'susie': 'susan',
+};
+
+function _wtFormalFirst(name) {
+  const key = name.replace(/\.$/, '').toLowerCase();
+  return _WT_EXPAND[key] || key;
+}
+
+// Check whether two first names are equivalent, accounting for abbreviations,
+// nicknames, and prefix overlap.
+function _wtFirstNamesMatch(queried, candidate) {
+  const q = _wtFormalFirst(queried);
+  const c = _wtFormalFirst(candidate);
+  if (q === c) return true;
+  if (q.startsWith(c) || c.startsWith(q)) return true;
+  return false;
+}
+
+const _WT_STATE_ABBREVS = {
+  AL:'alabama', AK:'alaska', AZ:'arizona', AR:'arkansas', CA:'california',
+  CO:'colorado', CT:'connecticut', DE:'delaware', FL:'florida', GA:'georgia',
+  HI:'hawaii', ID:'idaho', IL:'illinois', IN:'indiana', IA:'iowa',
+  KS:'kansas', KY:'kentucky', LA:'louisiana', ME:'maine', MD:'maryland',
+  MA:'massachusetts', MI:'michigan', MN:'minnesota', MS:'mississippi',
+  MO:'missouri', MT:'montana', NE:'nebraska', NV:'nevada', NH:'new hampshire',
+  NJ:'new jersey', NM:'new mexico', NY:'new york', NC:'north carolina',
+  ND:'north dakota', OH:'ohio', OK:'oklahoma', OR:'oregon', PA:'pennsylvania',
+  RI:'rhode island', SC:'south carolina', SD:'south dakota', TN:'tennessee',
+  TX:'texas', UT:'utah', VT:'vermont', VA:'virginia', WA:'washington',
+  WV:'west virginia', WI:'wisconsin', WY:'wyoming', DC:'district of columbia',
+};
+
+function _wtExtractUSState(str) {
+  if (!str) return null;
+  const abbrevMatch = str.match(/\b([A-Z]{2})\b/);
+  if (abbrevMatch && _WT_STATE_ABBREVS[abbrevMatch[1]]) return _WT_STATE_ABBREVS[abbrevMatch[1]];
+  const lower = str.toLowerCase();
+  for (const fullName of Object.values(_WT_STATE_ABBREVS)) {
+    if (lower.includes(fullName)) return fullName;
+  }
+  return null;
+}
+
 // ── WIKITREE: GENEALOGY SEARCH ───────────────────────────────────
-async function searchWikiTree(graveData) {
+async function searchWikiTree(graveData, location) {
   const name = graveData.primary_name || graveData.names?.[0];
   if (!name) return null;
 
@@ -19,7 +98,12 @@ async function searchWikiTree(graveData) {
   const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0] || '';
   const deathYear = graveData.death_date?.match(/\d{4}/)?.[0] || '';
 
-  // Inner helper: do a single search call
+  // Build expanded first name for pass 3 (if abbreviated/informal)
+  const formalFirstLower = _wtFormalFirst(firstName);
+  const expandedFirstName = formalFirstLower !== firstName.toLowerCase()
+    ? formalFirstLower.charAt(0).toUpperCase() + formalFirstLower.slice(1)
+    : null;
+
   async function wikiSearch(body) {
     const res = await fetch(`${PROXY_BASE}/wikitree`, {
       method: 'POST',
@@ -42,11 +126,14 @@ async function searchWikiTree(graveData) {
     fields: 'Name,FirstName,LastNameAtBirth,LastNameCurrent,BirthDate,DeathDate,BirthLocation,DeathLocation,Father,Mother,Gender,Bio'
   };
 
+  const expandedQuery = expandedFirstName ? { ...baseQuery, FirstName: expandedFirstName } : null;
+
   console.log('🌳 WIKITREE searching:', firstName, lastName, birthYear || '(no year)');
 
   try {
-    // Attempt 1: with year filter (if we have one)
     let matches = [];
+
+    // Pass 1: date-filtered with original name
     if (birthYear) {
       matches = await wikiSearch({ ...baseQuery, BirthDate: birthYear, DeathDate: deathYear || undefined });
       if (matches.length > 0) {
@@ -56,10 +143,21 @@ async function searchWikiTree(graveData) {
       }
     }
 
-    // Attempt 2: no year filter — wider net, then score locally
+    // Pass 2: unfiltered with original name
     if (matches.length === 0) {
       matches = await wikiSearch(baseQuery);
       console.log('🌳 WIKITREE pass 2: found', matches.length, 'without year filter');
+    }
+
+    // Pass 3: if first name was an abbreviation/nickname, retry with formal form
+    if (matches.length === 0 && expandedQuery) {
+      if (birthYear) {
+        matches = await wikiSearch({ ...expandedQuery, BirthDate: birthYear, DeathDate: deathYear || undefined });
+      }
+      if (matches.length === 0) {
+        matches = await wikiSearch(expandedQuery);
+      }
+      console.log('🌳 WIKITREE pass 3 (expanded name):', matches.length, 'matches');
     }
 
     if (matches.length === 0) {
@@ -67,25 +165,24 @@ async function searchWikiTree(graveData) {
       return null;
     }
 
-    // Score each match against the queried person.
-    // A match needs name alignment AND at least one date alignment to count.
-    // Records with no BirthDate AND no DeathDate cannot clear the floor
-    // even if WikiTree's own filter surfaced them — they're zero-evidence hits.
     const queriedFirst = firstName.toLowerCase();
     const queriedLast  = lastName.toLowerCase();
     const birthYearNum = birthYear ? parseInt(birthYear, 10) : null;
     const deathYearNum = deathYear ? parseInt(deathYear, 10) : null;
+
+    // Geographic context: if we know the burial state, use it to boost/penalise
+    const queryState = _wtExtractUSState(location);
 
     let best = null;
     let bestScore = -Infinity;
     for (const m of matches) {
       let score = 0;
 
-      // — Name alignment (required component) —
+      // — Name alignment (nickname/abbreviation-aware) —
       const mFirst = (m.FirstName || '').toLowerCase();
       const mLast  = (m.LastNameAtBirth || m.LastNameCurrent || '').toLowerCase();
-      const firstMatch = mFirst && (mFirst === queriedFirst || mFirst.startsWith(queriedFirst) || queriedFirst.startsWith(mFirst));
-      const lastMatch  = mLast  && (mLast  === queriedLast);
+      const firstMatch = mFirst && _wtFirstNamesMatch(queriedFirst, mFirst);
+      const lastMatch  = mLast  && (mLast === queriedLast);
       if (firstMatch) score += 20;
       if (lastMatch)  score += 20;
 
@@ -111,10 +208,20 @@ async function searchWikiTree(graveData) {
         else                 { score -= diff; }
       }
 
-      // Slight bonus for records that have an actual birth location filled in
-      if (m.BirthLocation) score += 1;
+      // — Geographic alignment —
+      // Boost if burial state matches WikiTree birth/death location;
+      // penalise if the state is known for this record but contradicts it.
+      if (queryState) {
+        const mBirthState = _wtExtractUSState(m.BirthLocation || '');
+        const mDeathState = _wtExtractUSState(m.DeathLocation || '');
+        if (mBirthState === queryState || mDeathState === queryState) {
+          score += 30;
+        } else if (mBirthState || mDeathState) {
+          score -= 20;
+        }
+      }
 
-      // Stash the alignment flags so the floor check below can read them
+      if (m.BirthLocation) score += 1;
       m._nameAligned = firstMatch && lastMatch;
       m._dateAligned = birthAligned || deathAligned;
 
@@ -122,10 +229,6 @@ async function searchWikiTree(graveData) {
     }
 
     // — Credibility floor —
-    // Require: last-name match + (birth-year OR death-year alignment).
-    // Without these, the record is "WikiTree returned something for the name filter
-    // but no real biographical fields aligned" — same bug class as the Wikipedia
-    // hits[0] / Linda Lee Cadwell case that surfaced in Session 5.
     if (!best || !best._nameAligned || !best._dateAligned) {
       console.log(
         '🌳 WIKITREE best match below credibility floor — rejecting.',
@@ -137,9 +240,6 @@ async function searchWikiTree(graveData) {
       return null;
     }
 
-    // Secondary sanity check: if both sides have a birth year and they're >10 years apart, reject.
-    // (Belt-and-suspenders — the floor above already requires date alignment, but keep this
-    //  in case future scoring changes loosen the alignment thresholds.)
     if (birthYear) {
       const bestYear = parseInt((best.BirthDate || '').slice(0, 4), 10);
       if (bestYear && Math.abs(bestYear - parseInt(birthYear, 10)) > 10) {

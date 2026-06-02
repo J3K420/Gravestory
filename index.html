@@ -904,7 +904,7 @@ async function startAnalysis() {
 
     // 4. Search WikiTree
     setStep(4);
-    const wikiData = await searchWikiTree(graveData);
+    const wikiData = await searchWikiTree(graveData, locationStr);
 
     // 5. Generate full biography with Gemini
     setStep(5);

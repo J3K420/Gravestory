@@ -236,57 +236,45 @@ export async function syncDelta(user) {
   return stories;
 }
 
-// Called on sign-in: full pull on first sign-in, delta on returning devices.
+// Called on sign-in: always does a full pull so cloud is authoritative.
+// Only preserves local stories that have never been pushed (no id).
 // Returns updated stories array.
 export async function syncOnSignIn(user) {
   if (!user) return null;
-  const since = await getLastSync(user.id);
   let stories = await loadStories(user.id);
 
-  if (!since || stories.length === 0) {
-    // First sign-in on this device — pull everything
-    try {
-      const { data, error } = await supabase
-        .from('stories')
-        .select('*')
-        .eq('user_id', user.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+  try {
+    const { data, error } = await supabase
+      .from('stories')
+      .select('*')
+      .eq('user_id', user.id)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
 
-      const cloudStories = data.map(rowToStory);
-      const cloudTimestamps = new Set(cloudStories.map(s => s.timestamp).filter(Boolean));
+    const cloudStories = data.map(rowToStory);
+    const cloudTimestamps = new Set(cloudStories.map(s => s.timestamp).filter(Boolean));
 
-      // Merge: cloud first, then re-attach local-only stories not yet in cloud
-      const merged = [...cloudStories];
-      for (const ls of stories) {
-        if (
-          ls.timestamp &&
-          !cloudTimestamps.has(ls.timestamp) &&
-          !merged.some(s => s.timestamp === ls.timestamp)
-        ) {
-          merged.unshift(ls);
-        }
-      }
-      await saveStories(merged, user.id);
-      stories = merged;
-      stories = await pushLocalOnly(user, stories);
+    // Cloud is authoritative. Only keep local stories that have never been
+    // pushed to the cloud (no id) — drops any contaminated stories from
+    // other accounts that don't belong here.
+    const localOnly = stories.filter(
+      s => !s.id && s.timestamp && !cloudTimestamps.has(s.timestamp)
+    );
+    const merged = [...cloudStories, ...localOnly];
 
-      // Only advance high-water mark once all locals are synced
-      const stillPending = stories.some(s => (!s.id || s._needsCloudSync) && s.timestamp);
-      if (!stillPending) {
-        const newest = stories.reduce(
-          (max, s) => (!max || (s._updatedAt && s._updatedAt > max) ? s._updatedAt : max),
-          null
-        );
-        await setLastSync(user.id, newest || new Date().toISOString());
-      }
-      return stories;
-    } catch (e) {
-      console.warn('syncOnSignIn full pull failed, staying on local cache:', e.message);
-      return stories;
-    }
-  } else {
-    return await syncDelta(user);
+    await saveStories(merged, user.id);
+    stories = merged;
+    stories = await pushLocalOnly(user, stories);
+
+    const newest = stories.reduce(
+      (max, s) => (!max || (s._updatedAt && s._updatedAt > max) ? s._updatedAt : max),
+      null
+    );
+    await setLastSync(user.id, newest || new Date().toISOString());
+    return stories;
+  } catch (e) {
+    console.warn('syncOnSignIn full pull failed, staying on local cache:', e.message);
+    return stories;
   }
 }

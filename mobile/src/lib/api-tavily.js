@@ -1,5 +1,94 @@
 import { PROXY_BASE } from './config';
 
+// Period engravings used heavy abbreviation; common nicknames also differ from
+// formal names. Each entry maps the short/informal form (lowercase) to the full
+// formal name so we can generate additional query variants.
+const EXPAND = {
+  // Masculine abbreviations (period engraving conventions)
+  'wm': 'William', 'geo': 'George', 'thos': 'Thomas', 'jno': 'John',
+  'chas': 'Charles', 'jas': 'James', 'robt': 'Robert', 'benj': 'Benjamin',
+  'edw': 'Edward', 'sam': 'Samuel', 'nathl': 'Nathaniel', 'bart': 'Bartholomew',
+  'richd': 'Richard', 'nichs': 'Nicholas', 'danl': 'Daniel', 'josph': 'Joseph',
+  // Masculine nicknames
+  'bill': 'William', 'billy': 'William', 'will': 'William',
+  'bob': 'Robert', 'rob': 'Robert',
+  'tom': 'Thomas', 'tommy': 'Thomas',
+  'jim': 'James', 'jimmy': 'James',
+  'dick': 'Richard', 'rich': 'Richard',
+  'charlie': 'Charles', 'chuck': 'Charles',
+  'ed': 'Edward', 'eddie': 'Edward', 'ned': 'Edward',
+  'jack': 'John', 'johnny': 'John',
+  'fred': 'Frederick', 'freddy': 'Frederick',
+  'ben': 'Benjamin',
+  'dan': 'Daniel', 'danny': 'Daniel',
+  'pat': 'Patrick',
+  'al': 'Albert', 'alex': 'Alexander', 'sandy': 'Alexander',
+  'abe': 'Abraham',
+  'gus': 'Augustus',
+  'matt': 'Matthew',
+  'nick': 'Nicholas',
+  'ted': 'Theodore', 'theo': 'Theodore',
+  'tim': 'Timothy',
+  'tony': 'Anthony',
+  'chris': 'Christopher',
+  'hal': 'Henry', 'hank': 'Henry',
+  'ike': 'Dwight',
+  // Feminine abbreviations and nicknames
+  'eliz': 'Elizabeth', 'lizzie': 'Elizabeth', 'betsy': 'Elizabeth',
+  'bess': 'Elizabeth', 'bessie': 'Elizabeth', 'betty': 'Elizabeth', 'beth': 'Elizabeth',
+  'maggie': 'Margaret', 'peggy': 'Margaret', 'meg': 'Margaret',
+  'polly': 'Mary', 'molly': 'Mary',
+  'nell': 'Eleanor', 'nelly': 'Eleanor',
+  'sally': 'Sarah', 'sadie': 'Sarah',
+  'hattie': 'Harriet',
+  'nan': 'Ann', 'nancy': 'Ann', 'annie': 'Ann',
+  'kate': 'Katherine', 'katy': 'Katherine', 'kitty': 'Katherine',
+  'dora': 'Dorothy', 'dot': 'Dorothy',
+  'sue': 'Susan', 'susie': 'Susan',
+  'fanny': 'Frances', 'fran': 'Frances',
+  'winnie': 'Winifred',
+  'tilly': 'Matilda', 'tillie': 'Matilda',
+};
+
+// Returns [original, expandedVariant?] — if the first token of the name is a known
+// abbreviation or nickname, the second element replaces it with the formal form.
+function expandName(name) {
+  const parts = name.trim().split(/\s+/);
+  const key = parts[0].replace(/\.$/, '').toLowerCase();
+  const formal = EXPAND[key];
+  if (formal && formal.toLowerCase() !== key) {
+    return [name, [formal, ...parts.slice(1)].join(' ')];
+  }
+  return [name];
+}
+
+// Parse "aged 72 yrs", "aet. 45", "in the 45th year of his age" from the inscription
+// and derive the missing birth or death year when only one end-date is present.
+function parseAgeAtDeath(graveData) {
+  const inscr = graveData.inscription || '';
+  if (!inscr) return null;
+
+  const patterns = [
+    /aged?\s+(\d+)\s*y(?:ea)?r/i,
+    /aet\.?\s*(\d+)/i,
+    /in\s+(?:the\s+)?(\d+)(?:st|nd|rd|th)\s+year\s+of/i,
+    /died\s+in\s+(?:his|her|their)\s+(\d+)(?:st|nd|rd|th)?\s+year/i,
+  ];
+
+  const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0];
+  const deathYear = graveData.death_date?.match(/\d{4}/)?.[0];
+
+  for (const pat of patterns) {
+    const m = inscr.match(pat);
+    if (!m) continue;
+    const age = parseInt(m[1], 10);
+    if (age < 1 || age > 120) continue;
+    if (deathYear && !birthYear) return { birth_year: String(parseInt(deathYear, 10) - age), is_approx: true };
+    if (birthYear && !deathYear) return { death_year: String(parseInt(birthYear, 10) + age), is_approx: true };
+  }
+  return null;
+}
+
 export async function searchForPerson(graveData, location) {
   const allNames = [];
   if (graveData.names?.length > 0) {
@@ -19,26 +108,41 @@ export async function searchForPerson(graveData, location) {
   for (const n of allNames) { if (n && !seen.has(n)) { seen.add(n); cleanNames.push(n); } }
   if (cleanNames.length === 0) return [];
 
+  // Expand abbreviations/nicknames → additional query variants
+  const allVariants = [];
+  const variantSeen = new Set();
+  cleanNames.slice(0, 3).forEach(name => {
+    expandName(name).forEach(v => {
+      if (!variantSeen.has(v)) { variantSeen.add(v); allVariants.push(v); }
+    });
+  });
+
   const deathYear = graveData.death_date?.match(/\d{4}/)?.[0] || '';
   const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0] || '';
+
+  // Derive missing year from age-at-death inscription if both explicit dates are absent
+  const ageInfo = parseAgeAtDeath(graveData);
+  const effectiveBirth = birthYear || ageInfo?.birth_year || '';
+  const effectiveDeath = deathYear || ageInfo?.death_year || '';
+
   const loc = location ? location.split(',').slice(0, 2).map(s => s.trim()).join(' ') : '';
   const inscr = (graveData.inscription || '').trim();
 
   const queries = [];
-  cleanNames.slice(0, 3).forEach(name => {
+  allVariants.forEach(name => {
     queries.push(`"${name}" buried cemetery grave location`.trim());
     queries.push(`site:findagrave.com "${name}" buried`.trim());
     queries.push(`site:billiongraves.com "${name}"`.trim());
-    if (deathYear) queries.push(`site:chroniclingamerica.loc.gov "${name}" ${deathYear} obituary`.trim());
+    if (effectiveDeath) queries.push(`site:chroniclingamerica.loc.gov "${name}" ${effectiveDeath} obituary`.trim());
   });
-  cleanNames.slice(0, 3).forEach(name => {
-    const yr = deathYear || birthYear;
+  allVariants.forEach(name => {
+    const yr = effectiveDeath || effectiveBirth;
     queries.push(`site:findagrave.com "${name}" ${yr}`.trim());
     queries.push(`site:legacy.com "${name}" obituary ${loc}`.trim());
     queries.push(`"${name}" obituary ${yr} ${loc}`.trim());
   });
   if (graveData.family_name) {
-    queries.push(`site:newspapers.com "${graveData.family_name}" ${loc} ${deathYear}`.trim());
+    queries.push(`site:newspapers.com "${graveData.family_name}" ${loc} ${effectiveDeath}`.trim());
   }
   if (loc) {
     queries.push(`site:atlasobscura.com ${loc} cemetery history`.trim());
@@ -54,7 +158,7 @@ export async function searchForPerson(graveData, location) {
     const ctx = inscr.slice(0, 55).replace(/"/g, '').trim();
     queries.unshift(`"${primaryName}" ${ctx}`);
   }
-  if (!deathYear && !birthYear && inscr.length > 30) {
+  if (!effectiveDeath && !effectiveBirth && inscr.length > 30) {
     const phrase = inscr.slice(0, 55).replace(/"/g, '').trim();
     queries.unshift(`"${phrase}"`);
   }

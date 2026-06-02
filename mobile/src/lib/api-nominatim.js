@@ -224,3 +224,22 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
   // ── Step 3: fall back to cemetery center ─────────────────────────
   return { lat: cemeteryCoords.lat, lng: cemeteryCoords.lng, isCemetery: true, lowConfidence };
 }
+
+// Reverse-geocode a GPS coordinate to a human-readable "City, State" string.
+// Used to enrich search context before Tavily/WikiTree queries fire.
+export async function reverseGeocode(lat, lng) {
+  try {
+    const url = `${NOMINATIM}/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`;
+    const res = await fetch(url, { headers: HEADERS });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const addr = data.address || {};
+    const city  = addr.city || addr.town || addr.village || addr.hamlet || addr.suburb || '';
+    const state = addr.state || '';
+    const country = (addr.country_code || '').toLowerCase() !== 'us' ? (addr.country || '') : '';
+    return [city, state || country].filter(Boolean).join(', ') || null;
+  } catch (e) {
+    console.warn('reverseGeocode failed:', e?.message);
+    return null;
+  }
+}

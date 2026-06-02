@@ -18,7 +18,7 @@ import { generateBiography } from '../lib/biography';
 import { saveStories, loadStories } from '../lib/storage';
 import { cloudSaveStory, cloudUpdateStory } from '../lib/sync';
 import { uploadGravestoneImage } from '../lib/api-r2';
-import { forwardGeocode } from '../lib/api-nominatim';
+import { forwardGeocode, reverseGeocode } from '../lib/api-nominatim';
 
 const STEPS = [
   'Verifying gravestone…',
@@ -102,6 +102,10 @@ export default function CameraScreen({ navigation }) {
     setStepIndex(0);
 
     try {
+      // Fire reverseGeocode in parallel with verify so we have a location hint
+      // ready before OCR and search queries execute.
+      const reverseGeoPromise = gps ? reverseGeocode(gps.lat, gps.lng) : Promise.resolve(null);
+
       if (!skipVerify) {
         setStepIndex(0);
         try {
@@ -116,13 +120,15 @@ export default function CameraScreen({ navigation }) {
         }
       }
 
+      const locationHint = await reverseGeoPromise;
+
       setStepIndex(1);
-      const graveData = await readGravestone(base64, null);
+      const graveData = await readGravestone(base64, locationHint);
 
       setStepIndex(2);
       const [searchResults, wikiData, portraits] = await Promise.all([
-        searchForPerson(graveData, null),
-        searchWikiTree(graveData),
+        searchForPerson(graveData, locationHint),
+        searchWikiTree(graveData, locationHint),
         fetchWikipediaPortraits(
           graveData.primary_name || graveData.names?.[0] || '',
           [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ')
@@ -130,7 +136,7 @@ export default function CameraScreen({ navigation }) {
       ]);
 
       setStepIndex(3);
-      const bioResult = await generateBiography(graveData, searchResults, wikiData, null);
+      const bioResult = await generateBiography(graveData, searchResults, wikiData, locationHint);
 
       // Portrait fallback: if the stone showed only a surname (e.g. "HOUDINI"),
       // the single-token guard skipped the initial Wikipedia fetch. Now that the

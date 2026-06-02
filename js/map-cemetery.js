@@ -665,9 +665,7 @@ async function fetchNearbyCemeteries(lat, lng) {
   if (loadingDiv) loadingDiv.style.display = 'block';
 
   try {
-    // Overpass API query — find all cemeteries within 10km
-    // Includes active, historic, and abandoned cemeteries
-    const radius = 10000; // 10km
+    const radius = 5000; // 5km — wide enough to be useful, tight enough to avoid whole-city noise
     const query = `
       [out:json][timeout:15];
       (
@@ -741,7 +739,11 @@ async function fetchNearbyCemeteries(lat, lng) {
       const elLng = el.lon || el.center?.lon;
       if (!elLat || !elLng) return;
 
-      const name = el.tags?.name || 'Unnamed Cemetery';
+      // Skip unnamed cemeteries — "Unnamed Cemetery" entries clutter the map
+      // and give the user nothing actionable to tap on.
+      const name = el.tags?.name;
+      if (!name) return;
+
       const isHistoric = el.tags?.historic || el.tags?.['abandoned:landuse'];
       const religion = el.tags?.religion || '';
       const denomination = el.tags?.denomination || '';
@@ -767,11 +769,12 @@ async function fetchNearbyCemeteries(lat, lng) {
       nearbyCemeteryMarkers.push(marker);
     });
 
-    // Update count in footer
+    // Update count in footer — count only named ones (same filter as markers)
+    const namedCount = data.elements.filter(el => el.tags?.name).length;
     const countEl = document.getElementById('map-grave-count');
-    if (countEl) {
+    if (countEl && namedCount > 0) {
       const existing = countEl.textContent;
-      countEl.textContent = existing + ' · ' + data.elements.length + ' cemeteries found nearby';
+      countEl.textContent = existing + ' · ' + namedCount + ' cemeteries found nearby';
     }
 
     // Update nearby section
@@ -789,9 +792,9 @@ function renderNearbyCemeteryList(elements, userLat, userLng) {
   if (!list) return;
 
   const sorted = elements
-    .filter(el => el.lat || el.center?.lat)
+    .filter(el => el.tags?.name && (el.lat || el.center?.lat))
     .map(el => ({
-      name: el.tags?.name || 'Unnamed Cemetery',
+      name: el.tags.name,
       lat: el.lat || el.center?.lat,
       lng: el.lon || el.center?.lon,
       historic: el.tags?.historic || el.tags?.['abandoned:landuse'],

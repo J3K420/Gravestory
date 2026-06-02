@@ -142,40 +142,77 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
     if (cached) return { ...cached, isCemetery: true, lowConfidence };
   }
 
-  // ── Nominatim name search within cemetery bbox ───────────────────
-  // Overpass is blocked on mobile (all mirrors return 403/406 to Cloudflare
-  // Worker IPs and to React Native's HTTP stack). Use Nominatim /search with
-  // viewbox+bounded=1 instead — finds OSM-tagged grave/memorial nodes by name.
+  // ── Grave name search within cemetery area ───────────────────────
+  // Two-pass approach — Overpass is fully blocked on mobile (all mirrors return
+  // 403/406 to Cloudflare Worker IPs and to React Native's HTTP stack directly).
+  //
+  // Pass 1: Nominatim with viewbox bias but WITHOUT bounded=1.  bounded=1 applies
+  // Nominatim's importance-score threshold which silently drops low-importance
+  // nodes like individual graves.  Using viewbox as a preference and then
+  // filtering by the cemetery bounding box ourselves catches more results.
+  //
+  // Pass 2: Photon (photon.komoot.io) — Elasticsearch-backed OSM geocoder that
+  // indexes low-importance named nodes (graves, memorials) more reliably than
+  // Nominatim's search index.  Uses the same bbox to restrict results.
   if (personName && cemeteryCoords.bbox) {
     const nameTokens = personName.toLowerCase()
       .split(/[\s,().]+/)
       .filter(t => t.length > 2 && !['and', 'the', 'née', 'nee', 'von', 'van', 'de'].includes(t));
 
     if (nameTokens.length > 0) {
+      const [s, n, w, e] = cemeteryCoords.bbox.map(Number);
+      const pad = 0.002;
+      const { lat: cLat, lng: cLng } = cemeteryCoords;
+      const threshold = Math.max(nameTokens.length === 1 ? 1 : 2, Math.ceil(nameTokens.length * 0.75));
+
+      const inBox = (lat, lon) =>
+        lat >= s - pad && lat <= n + pad && lon >= w - pad && lon <= e + pad;
+
+      // Pass 1 — Nominatim viewbox bias, proximity-filtered
       try {
-        // Expand bbox by ~100m so graves near the edge aren't clipped.
-        const [s, n, w, e] = cemeteryCoords.bbox.map(Number);
-        const pad = 0.001;
         const viewbox = `${w - pad},${s - pad},${e + pad},${n + pad}`;
-        const url = `${NOMINATIM}/search?q=${encodeURIComponent(personName)}&format=json&viewbox=${viewbox}&bounded=1&limit=10`;
+        const url = `${NOMINATIM}/search?q=${encodeURIComponent(personName)}&format=json&viewbox=${viewbox}&limit=10`;
         const res = await fetch(url, { headers: HEADERS });
         if (res.ok) {
           const data = await res.json();
-          let bestMatch = null;
-          let bestScore = 0;
+          let bestMatch = null, bestScore = 0;
           for (const r of (data || [])) {
+            const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+            if (!inBox(lat, lon)) continue;
             const dn = (r.display_name || '').toLowerCase();
             const score = nameTokens.filter(t => dn.includes(t)).length;
-            if (score > bestScore) { bestScore = score; bestMatch = r; }
+            if (score > bestScore) { bestScore = score; bestMatch = { lat, lng: lon, name: r.display_name }; }
           }
-          const threshold = Math.max(nameTokens.length === 1 ? 1 : 2, Math.ceil(nameTokens.length * 0.75));
           if (bestMatch && bestScore >= threshold) {
-            const coords = { lat: parseFloat(bestMatch.lat), lng: parseFloat(bestMatch.lon) };
-            if (cacheKey) await writeGraveCache(cacheKey, coords, bestMatch.display_name, bestScore);
+            const coords = { lat: bestMatch.lat, lng: bestMatch.lng };
+            if (cacheKey) await writeGraveCache(cacheKey, coords, bestMatch.name, bestScore);
             return { ...coords, isCemetery: true, lowConfidence };
           }
         }
       } catch (e) { console.warn('Nominatim name search failed:', e.message); }
+
+      // Pass 2 — Photon (Elasticsearch-backed, surfaces low-importance grave nodes)
+      try {
+        const bbox = `${w - pad},${s - pad},${e + pad},${n + pad}`;
+        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(personName)}&lat=${cLat}&lon=${cLng}&limit=10&bbox=${bbox}`;
+        const res = await fetch(url, { headers: HEADERS });
+        if (res.ok) {
+          const data = await res.json();
+          let bestMatch = null, bestScore = 0;
+          for (const feat of (data?.features || [])) {
+            const [lon, lat] = feat.geometry?.coordinates || [];
+            if (!lat || !lon || !inBox(lat, lon)) continue;
+            const name = (feat.properties?.name || '').toLowerCase();
+            const score = nameTokens.filter(t => name.includes(t)).length;
+            if (score > bestScore) { bestScore = score; bestMatch = { lat, lng: lon, name: feat.properties?.name }; }
+          }
+          if (bestMatch && bestScore >= threshold) {
+            const coords = { lat: bestMatch.lat, lng: bestMatch.lng };
+            if (cacheKey) await writeGraveCache(cacheKey, coords, bestMatch.name, bestScore);
+            return { ...coords, isCemetery: true, lowConfidence };
+          }
+        }
+      } catch (e) { console.warn('Photon name search failed:', e.message); }
     }
   }
 

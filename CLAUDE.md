@@ -172,6 +172,10 @@ Built for one-handed use in a cemetery. Service worker caches the app shell (`gr
 
 - **Soft-delete sync** — deletes propagate to other devices via `deleted_at` in the delta sync, not through missing rows.
 
+- **Mobile per-user storage isolation** — `loadStories(userId)` / `saveStories(stories, userId)` in `mobile/src/lib/storage.js` use key `gs_stories_${userId}` for signed-in users and `gs_stories_guest` for guests. Every call site (HomeScreen, CameraScreen, CemeteryMapScreen, ResultScreen, sync.js) must pass the userId from `supabase.auth.getSession()`. Never call these functions without a userId argument — that silently reads the guest bucket.
+
+- **Mobile syncOnSignIn always does a full pull** — `syncOnSignIn` in `mobile/src/lib/sync.js` always pulls all cloud stories (not just delta) on sign-in. Cloud is authoritative; local stories are only kept if they have no `id` field (never been pushed). This prevents contaminated/stale local data from persisting across account switches. `syncDelta` (called on every HomeScreen focus) handles incremental updates after sign-in.
+
 - **Tavily inscription-phrase disambiguation** — when the OCR returns a bare surname with no dates (e.g. "TOMB OF WASHINGTON"), `searchForPerson` prepends two high-priority queries that search the inscription text verbatim before falling back to name-only queries. Prevents generic surname searches returning cemetery-name results instead of the actual person. Applies to both `js/api-tavily.js` and `mobile/src/lib/api-tavily.js`.
 
 - **Historical figures biography exception** — `generateBiography` explicitly instructs Gemini that the anti-fabrication rule applies to private individuals only. For clearly identified major historical figures (presidents, monarchs, generals, etc.) the model MUST write a full biography drawing on well-established historical record, cited as `[Historical record]`. A two-paragraph biography for George Washington is considered a failure. Applies to both `js/biography.js` and `mobile/src/lib/biography.js`.
@@ -189,45 +193,79 @@ Parallel codebase in `mobile/`. Do not touch web files when working on mobile an
 | Framework | Expo SDK 54 (managed workflow) |
 | Navigation | React Navigation v7 native stack |
 | Auth | Supabase (same project as web) + AsyncStorage session |
-| Storage | AsyncStorage (local) + Supabase delta sync |
+| Storage | AsyncStorage (local, user-scoped keys) + Supabase delta sync |
 | Camera/picker | expo-image-picker + expo-image-manipulator |
 | SVG | react-native-svg |
 | Maps | react-native-maps (Apple Maps on iOS, Google Maps on Android) |
 | Location | expo-location (foreground GPS on scan) |
+| Fonts | Fraunces (300/400/400-italic/500/700) + Hanken Grotesk (400/500/600) via @expo-google-fonts |
+
+### Mobile design system
+
+All screens import from `src/lib/theme.js`. Do not hardcode colors or font names in screen files.
+
+**Color tokens:**
+- `colors.ink` `#14100b` — background
+- `colors.stone` `#1f1812` — panel/header backgrounds
+- `colors.stone2` `#2a2017` — card/input backgrounds
+- `colors.line` `#3a2e22` — borders and dividers
+- `colors.flame` `#f2b65c` — gold accent, primary CTAs
+- `colors.ember` `#cf7a3a` — warm orange, secondary accent
+- `colors.parchment` `#efe4d2` — primary text
+- `colors.ash` `#b7a892` — secondary/muted text
+- `colors.ashDim` `#8a7d6c` — labels, placeholders
+- `colors.silver` `#aabedc` — community/global map accents
+- `colors.moss` `#7c8a68` — success states
+- `colors.onFlame` `#2a1808` — text on flame-colored buttons
+
+**Font tokens:**
+- `fonts.title` `Fraunces_700Bold` — screen headings, "GraveStory" logo
+- `fonts.serif` `Fraunces_400Regular` — biography body text
+- `fonts.serifItalic` `Fraunces_400Regular_Italic` — inscriptions, italic body
+- `fonts.name` `Fraunces_500Medium` — story names in cards, sub-headings
+- `fonts.body` `HankenGrotesk_400Regular` — UI labels, descriptions
+- `fonts.bodyMedium` `HankenGrotesk_500Medium` — medium UI elements
+- `fonts.sansBold` `HankenGrotesk_600SemiBold` — button text
+- `fonts.bodyItalic` `Fraunces_400Regular_Italic` — alias used by older screens
+
+**Radius tokens:** `radius.sm=13`, `radius.md=15`, `radius.lg=18`
 
 ### Mobile file structure
 
 ```
 mobile/
-  App.js                        — NavigationContainer + SafeAreaProvider + cold-start deep link handler
+  App.js                        — NavigationContainer + SafeAreaProvider + font loading (useFonts) + cold-start deep link handler
   index.js                      — Entry point; imports polyfills.js first, then registerRootComponent
   polyfills.js                  — crypto.getRandomValues + crypto.subtle.digest polyfill (expo-crypto); MUST be first import in index.js
   app.config.js                 — Expo config: slug "mobile", owner "j3k420", scheme "gravestory" (replaces app.json)
   src/
     lib/
       config.js                 — PROXY_BASE (same Cloudflare Worker as web)
+      theme.js                  — Design tokens: colors, fonts, radius, space. Single source of truth for all screens.
       supabase.js               — Supabase client, AsyncStorage, flowType: 'pkce'
-      storage.js                — AsyncStorage: loadStories, saveStories, getLastSync
+      storage.js                — User-scoped AsyncStorage: loadStories(userId), saveStories(stories, userId). Keys: gs_stories_{userId} or gs_stories_guest. getLastSync/setLastSync per userId.
       util-json.js              — safeParseJSON (ES module port of web version)
       api-gemini.js             — verifyIsGravestone, readGravestone (ES module)
       api-tavily.js             — searchForPerson (ES module)
       api-wikitree.js           — searchWikiTree (ES module)
       api-wikipedia.js          — fetchWikipediaPortraits (ES module, adds User-Agent header)
       biography.js              — generateBiography (ES module)
-      api-nominatim.js          — forwardGeocode: text → { lat, lng } via Nominatim
+      api-nominatim.js          — forwardGeocode: full parity with web — multi-query fallback, geographic context filter, strict/fuzzy cemetery matching, US state low-confidence flag, two-pass Overpass grave-node search, AsyncStorage grave cache. Signature: forwardGeocode(locationStr, personName, dates)
+      grave-cache.js            — AsyncStorage-backed grave coordinate cache (30-day TTL). graveCacheKey, readGraveCache, writeGraveCache. Port of web grave-cache.js (localStorage → AsyncStorage).
       api-r2.js                 — uploadGravestoneImage(base64): POST to /upload-image with { data, contentType } body, returns URL or null
       map-utils.js              — getDistanceMeters, groupGravesByCemetery (ES module)
-      sync.js                   — storyToRow/rowToStory, cloudSaveStory/Update/Delete, syncDelta, syncOnSignIn, pushLocalOnly
+      sync.js                   — storyToRow/rowToStory, cloudSaveStory/Update/Delete, syncDelta, syncOnSignIn, pushLocalOnly. syncOnSignIn always does a full cloud pull (not delta) — cloud is authoritative, local stories only kept if no cloud id (unsynced).
     screens/
-      HomeScreen.js             — Home: logo, scan button, map buttons, saved list; delta sync on focus; visible ✕ delete button + long-press delete on each story card
-      AuthScreen.js             — Email/password + Google OAuth (expo-web-browser)
-      CameraScreen.js           — Photo picker → GPS capture → full pipeline → R2 upload → cloud save → Result. Camera screen shows a flickering gravestone SVG tap zone (matching web); tapping opens a styled bottom sheet (Modal slide-up, not Alert) to choose camera vs library. Loading state shows 🕯️ candle flicker instead of ActivityIndicator.
-      ResultScreen.js           — Biography, gravestone photo, portraits, inscription, sources, share, map, public toggle, delete
-      SettingsScreen.js         — Display name, default visibility toggle, account info, sign out
-      CemeteryMapScreen.js      — react-native-maps: grave markers, callouts, draggable pin correction, bottom list, OSM boundary polygon (Polygon component; stitchOuterRing + fetchOSMCemeteryBoundary at full parity with web including name-match scoring)
-      GlobalMapScreen.js        — Community map: public stories from Supabase RPC, silver markers, guest banner
+      HomeScreen.js             — Home: GravestoneLogo (size=240), scan button, map buttons with SVG icons, "Remembered Stories" scroll button, saved list with headstone avatar cards. Delta sync on focus. Auth state change listener clears list on SIGNED_OUT.
+      AuthScreen.js             — Email/password + Google OAuth (expo-web-browser). GravestoneLogo header, Fraunces title, HankenGrotesk inputs/buttons.
+      CameraScreen.js           — Photo picker → GPS capture → full pipeline → forwardGeocode refinement → R2 upload → cloud save → Result. Flickering gravestone SVG tap zone (375×410); tapping opens bottom-sheet picker. Candle flicker loading animation. forwardGeocode called after biography to refine GPS using graveData.primary_name.
+      ResultScreen.js           — Biography (Fraunces serif), gravestone photo, portraits, inscription, sources. Action chip row: Map / Share / Public toggle. Scan Again + Delete buttons.
+      SettingsScreen.js         — Display name, default visibility toggle, account info, sign out. Grouped sections, gradient save button.
+      CemeteryMapScreen.js      — react-native-maps: grave markers, callouts, draggable pin correction, bottom list, OSM boundary polygon. loadStories/saveStories always called with userId from session.
+      GlobalMapScreen.js        — Community map: public stories from Supabase RPC, silver markers, guest banner. Globe icon header.
     components/
       GravestoneLogo.js         — Animated SVG gravestone logo (flicker effect); accepts animate={false} for static rendering
+      Icons.js                  — SVG icon set: CandleMark, Headstone, MapStack, Globe, ShareIcon, Pin. All accept size + color props.
 ```
 
 ### Mobile conventions
@@ -246,9 +284,10 @@ mobile/
 4. `readGravestone(base64)` — Gemini OCR → structured JSON
 5. Parallel: `searchForPerson` + `searchWikiTree` + `fetchWikipediaPortraits`
 6. `generateBiography` — Gemini narrative or stone-only fallback
-7. Read `user.user_metadata.default_public` → set `story.is_public`
-8. Save to AsyncStorage → `cloudSaveStory` (if signed in) → `uploadGravestoneImage` → `cloudUpdateStory` with `image_url`
-9. Navigate to ResultScreen
+7. `forwardGeocode(bioResult.location, graveData.primary_name, bioResult.dates)` — refines GPS to cemetery center or precise grave node via Nominatim + Overpass. Falls back to EXIF/device GPS if null. Sets `_lowConfidence` on state mismatch.
+8. Read `user.user_metadata.default_public` → set `story.is_public`
+9. Save to user-scoped AsyncStorage key → `cloudSaveStory` (if signed in) → `uploadGravestoneImage` → `cloudUpdateStory` with `image_url`
+10. Navigate to ResultScreen
 
 ### Google OAuth (mobile)
 
@@ -271,7 +310,8 @@ mobile/
 - **Phase 6** ✅ — Gravestone photo in ResultScreen, delete from ResultScreen, draggable pin correction in CemeteryMapScreen, app icon + splash screen
 - **Phase 7** ✅ — Polish pass + tester APK: rejection bypass, pipeline error screen, first-run empty state, loading step labels, EAS preview build config
 - **Phase 7b** ✅ — UI/UX polish: gravestone SVG camera screen (flicker animation, "Tap" text, bottom-sheet picker), candle loading animation, story card delete button, OSM boundary polygon on cemetery map
-- **Phase 8** 🔲 — Visual design overhaul (APK), Play Store submission prep, OTA updates (EAS Update), payments (RevenueCat + Google Play Billing)
+- **Phase 8** ✅ — Full visual design overhaul: theme.js design system (Fraunces + Hanken Grotesk, new palette), Icons.js SVG set, all screens redesigned. Per-user storage isolation (user-scoped AsyncStorage keys). Full GPS precision parity with web (forwardGeocode multi-query, geographic context filter, two-pass Overpass, grave-cache.js). Bug fixes: CemeteryMapScreen userId, syncOnSignIn full-pull-on-empty.
+- **Phase 9** 🔲 — Play Store submission prep, OTA updates (EAS Update), payments (RevenueCat + Google Play Billing), iOS TestFlight build
 
 ---
 
@@ -285,7 +325,7 @@ mobile/
 - Production build (AAB for Play Store): `npx eas build --platform android --profile production`
 - Testers install via direct `.apk` link; subsequent updates install over the top automatically
 
-### Phase 8 — Planned scope
+### Phase 9 — Planned scope
 
 - Bug fixes from real-device tester feedback
 - Play Store submission: $25 Google Play Developer account, store listing, privacy policy URL, content rating, AAB production build

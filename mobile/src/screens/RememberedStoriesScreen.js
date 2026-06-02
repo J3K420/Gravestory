@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
   StyleSheet, StatusBar, Alert,
@@ -12,9 +12,21 @@ import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
 import { Headstone } from '../components/Icons';
 
+const SORT_MODES = [
+  { key: 'recent',   label: 'Recent' },
+  { key: 'name',     label: 'Name' },
+  { key: 'cemetery', label: 'Cemetery' },
+];
+
+function cemeteryName(story) {
+  if (!story.location) return '';
+  return story.location.split(',')[0].trim().toLowerCase();
+}
+
 export default function RememberedStoriesScreen({ navigation }) {
   const [stories, setStories] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [sortBy, setSortBy] = useState('recent');
 
   useFocusEffect(
     useCallback(() => {
@@ -29,6 +41,18 @@ export default function RememberedStoriesScreen({ navigation }) {
       return () => { active = false; };
     }, [])
   );
+
+  const sortedStories = useMemo(() => {
+    const copy = [...stories];
+    if (sortBy === 'name') {
+      copy.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    } else if (sortBy === 'cemetery') {
+      copy.sort((a, b) => cemeteryName(a).localeCompare(cemeteryName(b)));
+    } else {
+      copy.sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+    }
+    return copy;
+  }, [stories, sortBy]);
 
   function confirmDelete(story) {
     Alert.alert(
@@ -62,6 +86,24 @@ export default function RememberedStoriesScreen({ navigation }) {
         <View style={styles.headerSpacer} />
       </View>
 
+      {/* Sort bar */}
+      <View style={styles.sortBar}>
+        <Text style={styles.sortLabel}>Sort by</Text>
+        <View style={styles.sortPills}>
+          {SORT_MODES.map(mode => (
+            <TouchableOpacity
+              key={mode.key}
+              style={[styles.sortPill, sortBy === mode.key && styles.sortPillActive]}
+              onPress={() => setSortBy(mode.key)}
+            >
+              <Text style={[styles.sortPillText, sortBy === mode.key && styles.sortPillTextActive]}>
+                {mode.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
       <ScrollView contentContainerStyle={styles.scroll}>
         {loaded && stories.length === 0 ? (
           <View style={styles.emptyState}>
@@ -72,7 +114,7 @@ export default function RememberedStoriesScreen({ navigation }) {
             </Text>
           </View>
         ) : (
-          stories.map((story, i) => (
+          sortedStories.map((story, i) => (
             <View key={story.timestamp ?? i} style={styles.savedCard}>
               <View style={styles.savedAvatar}>
                 <Headstone size={17} color={colors.ash} />
@@ -82,7 +124,11 @@ export default function RememberedStoriesScreen({ navigation }) {
                 onPress={() => navigation.navigate('Result', { story })}
               >
                 <Text style={styles.savedName}>{story.name || 'Unknown'}</Text>
-                <Text style={styles.savedDates}>{story.dates || ''}</Text>
+                {sortBy === 'cemetery' && story.location ? (
+                  <Text style={styles.savedDates}>{story.location.split(',')[0].trim()}</Text>
+                ) : (
+                  <Text style={styles.savedDates}>{story.dates || ''}</Text>
+                )}
               </TouchableOpacity>
               {story.is_public && <Text style={styles.publicBadge}>public</Text>}
               <Text style={styles.savedArrow}>›</Text>
@@ -117,6 +163,29 @@ const styles = StyleSheet.create({
     fontFamily: fonts.title, letterSpacing: 1,
   },
   headerSpacer: { width: 52 },
+
+  sortBar: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: colors.line,
+    gap: 12,
+  },
+  sortLabel: {
+    color: colors.ashDim, fontSize: 11, fontFamily: fonts.body,
+    textTransform: 'uppercase', letterSpacing: 1,
+  },
+  sortPills: { flexDirection: 'row', gap: 6 },
+  sortPill: {
+    paddingHorizontal: 12, paddingVertical: 5,
+    borderRadius: 20, borderWidth: 1, borderColor: colors.line,
+    backgroundColor: colors.stone2,
+  },
+  sortPillActive: {
+    borderColor: colors.flame,
+    backgroundColor: 'rgba(242,182,92,0.12)',
+  },
+  sortPillText: { color: colors.ash, fontSize: 12, fontFamily: fonts.body },
+  sortPillTextActive: { color: colors.flame, fontFamily: fonts.bodyMedium },
 
   scroll: { padding: 16, paddingBottom: 48 },
 

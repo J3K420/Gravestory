@@ -18,6 +18,7 @@ import { generateBiography } from '../lib/biography';
 import { saveStories, loadStories } from '../lib/storage';
 import { cloudSaveStory, cloudUpdateStory } from '../lib/sync';
 import { uploadGravestoneImage } from '../lib/api-r2';
+import { forwardGeocode } from '../lib/api-nominatim';
 
 const STEPS = [
   'Verifying gravestone…',
@@ -133,6 +134,16 @@ export default function CameraScreen({ navigation }) {
 
       setStepIndex(4);
 
+      // Refine GPS via Nominatim + Overpass grave-node search, same as web pipeline.
+      // Uses primary_name (single OCR name) for a reliable token-match threshold.
+      // Falls back to EXIF/device GPS if geocoding returns nothing.
+      const primaryName = graveData.primary_name || graveData.names?.[0] || '';
+      const geoResult = await forwardGeocode(bioResult.location, primaryName, bioResult.dates);
+      const refinedGps = geoResult
+        ? { lat: geoResult.lat, lng: geoResult.lng }
+        : gps;
+      const lowConfidence = geoResult?.lowConfidence || undefined;
+
       // Read default visibility from user metadata
       const { data: { session } } = await supabase.auth.getSession();
       const defaultPublic = session?.user?.user_metadata?.default_public ?? false;
@@ -141,7 +152,8 @@ export default function CameraScreen({ navigation }) {
         ...bioResult,
         graveData,
         portraits,
-        gps,
+        gps: refinedGps,
+        _lowConfidence: lowConfidence,
         timestamp: Date.now(),
         is_public: defaultPublic,
       };

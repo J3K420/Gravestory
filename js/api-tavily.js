@@ -36,6 +36,7 @@ async function searchForPerson(graveData, location) {
   const deathYear = graveData.death_date?.match(/\d{4}/)?.[0] || '';
   const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0] || '';
   const loc = location ? location.split(',').slice(0,2).map(s=>s.trim()).join(' ') : '';
+  const inscr = (graveData.inscription || '').trim();
 
   // Build targeted queries for each person + targeted site searches
   const queries = [];
@@ -67,6 +68,19 @@ async function searchForPerson(graveData, location) {
   if (loc) {
     queries.push(`site:atlasobscura.com ${loc} cemetery history`.trim());
     queries.push(`historic cemetery ${loc} history abandoned`.trim());
+  }
+
+  // High-priority disambiguation: when name is a bare surname with no dates (e.g. historical
+  // monuments where the stone reads "TOMB OF WASHINGTON"), use the inscription text itself as
+  // the search query — far more specific than the name alone.
+  const primaryName = allNames[0] || '';
+  if (primaryName && !primaryName.includes(' ') && inscr.length > 15) {
+    const ctx = inscr.slice(0, 55).replace(/"/g, '').trim();
+    queries.unshift(`"${primaryName}" ${ctx}`);
+  }
+  if (!deathYear && !birthYear && inscr.length > 30) {
+    const phrase = inscr.slice(0, 55).replace(/"/g, '').trim();
+    queries.unshift(`"${phrase}"`);
   }
 
   const results = [];

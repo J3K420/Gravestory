@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform,
+  StyleSheet, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../lib/supabase';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function AuthScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -18,6 +23,34 @@ export default function AuthScreen({ navigation }) {
     setLoading(false);
     if (error) { setStatus('❌ ' + error.message); }
     else { navigation.goBack(); }
+  }
+
+  async function signInWithGoogle() {
+    setLoading(true);
+    setStatus('');
+    try {
+      const redirectTo = Linking.createURL('login-callback');
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo, skipBrowserRedirect: true },
+      });
+      if (error) throw error;
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type === 'success') {
+        const params = new URLSearchParams(result.url.split('?')[1] ?? '');
+        const code = params.get('code');
+        if (!code) throw new Error('No code in callback URL');
+        const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+        if (sessionError) throw sessionError;
+        navigation.goBack();
+      } else {
+        setStatus('❌ Login cancelled (' + result.type + ')');
+      }
+    } catch (err) {
+      setStatus('❌ ' + err.message);
+    }
+    setLoading(false);
   }
 
   async function signUp() {
@@ -40,6 +73,16 @@ export default function AuthScreen({ navigation }) {
 
         <Text style={styles.title}>Sign in to GraveStory</Text>
         <Text style={styles.subtitle}>Save your stories across devices</Text>
+
+        <TouchableOpacity style={styles.googleBtn} onPress={signInWithGoogle} disabled={loading}>
+          <Text style={styles.googleBtnText}>G  Continue with Google</Text>
+        </TouchableOpacity>
+
+        <View style={styles.orRow}>
+          <View style={styles.orLine} />
+          <Text style={styles.orText}>or</Text>
+          <View style={styles.orLine} />
+        </View>
 
         <TextInput
           style={styles.input}
@@ -103,4 +146,12 @@ const styles = StyleSheet.create({
   },
   btnSecondaryText: { color: 'rgba(201,168,76,0.8)', fontSize: 15 },
   statusText: { color: 'rgba(201,168,76,0.7)', textAlign: 'center', marginTop: 16, fontSize: 14 },
+  googleBtn: {
+    backgroundColor: '#fff', paddingVertical: 14, borderRadius: 4,
+    alignItems: 'center', marginBottom: 16,
+  },
+  googleBtnText: { color: '#3c3c3c', fontSize: 15, fontWeight: '600', letterSpacing: 0.5 },
+  orRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  orLine: { flex: 1, height: 1, backgroundColor: 'rgba(201,168,76,0.2)' },
+  orText: { color: 'rgba(201,168,76,0.5)', marginHorizontal: 12, fontSize: 13 },
 });

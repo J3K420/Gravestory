@@ -163,3 +163,118 @@ Built for one-handed use in a cemetery. Service worker caches the app shell (`gr
 - **Grave-node cache** — `grave-cache.js` caches successful Overpass name-match results so the same person's grave isn't re-queried on subsequent map opens.
 
 - **Soft-delete sync** — deletes propagate to other devices via `deleted_at` in the delta sync, not through missing rows.
+
+---
+
+## React Native mobile app (Expo)
+
+Parallel codebase in `mobile/`. Do not touch web files when working on mobile and vice versa.
+
+### Mobile stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Expo SDK 54 (managed workflow) |
+| Navigation | React Navigation v7 native stack |
+| Auth | Supabase (same project as web) + AsyncStorage session |
+| Storage | AsyncStorage (local) + Supabase delta sync |
+| Camera/picker | expo-image-picker + expo-image-manipulator |
+| SVG | react-native-svg |
+| Maps | react-native-maps (Apple Maps on iOS, Google Maps on Android) |
+| Location | expo-location (foreground GPS on scan) |
+
+### Mobile file structure
+
+```
+mobile/
+  App.js                        — NavigationContainer + SafeAreaProvider + cold-start deep link handler
+  index.js                      — Entry point; imports polyfills.js first, then registerRootComponent
+  polyfills.js                  — crypto.getRandomValues + crypto.subtle.digest polyfill (expo-crypto); MUST be first import in index.js
+  app.json                      — scheme: "gravestory" (required for OAuth deep links)
+  src/
+    lib/
+      config.js                 — PROXY_BASE (same Cloudflare Worker as web)
+      supabase.js               — Supabase client, AsyncStorage, flowType: 'pkce'
+      storage.js                — AsyncStorage: loadStories, saveStories, getLastSync
+      util-json.js              — safeParseJSON (ES module port of web version)
+      api-gemini.js             — verifyIsGravestone, readGravestone (ES module)
+      api-tavily.js             — searchForPerson (ES module)
+      api-wikitree.js           — searchWikiTree (ES module)
+      api-wikipedia.js          — fetchWikipediaPortraits (ES module, adds User-Agent header)
+      biography.js              — generateBiography (ES module)
+      api-nominatim.js          — forwardGeocode: text → { lat, lng } via Nominatim
+      api-r2.js                 — uploadGravestoneImage(base64): POST to /upload-image, returns URL or null
+      map-utils.js              — getDistanceMeters, groupGravesByCemetery (ES module)
+      sync.js                   — storyToRow/rowToStory, cloudSaveStory/Update/Delete, syncDelta, syncOnSignIn, pushLocalOnly
+    screens/
+      HomeScreen.js             — Home: logo, scan button, map buttons, saved list; delta sync on focus; long-press delete
+      AuthScreen.js             — Email/password + Google OAuth (expo-web-browser)
+      CameraScreen.js           — Photo picker → GPS capture → full pipeline → R2 upload → cloud save → Result
+      ResultScreen.js           — Biography, gravestone photo, portraits, inscription, sources, share, map, public toggle, delete
+      SettingsScreen.js         — Display name, default visibility toggle, account info, sign out
+      CemeteryMapScreen.js      — react-native-maps: grave markers, callouts, draggable pin correction, bottom list
+      GlobalMapScreen.js        — Community map: public stories from Supabase RPC, silver markers, guest banner
+    components/
+      GravestoneLogo.js         — Animated SVG gravestone logo (flicker effect); accepts animate={false} for static rendering
+```
+
+### Mobile conventions
+
+- ES modules (`import`/`export`) — opposite of web's classic scripts
+- `SafeAreaView` from `react-native-safe-area-context`, NOT from `react-native`
+- `SafeAreaProvider` wraps the entire app in `App.js`
+- All API calls use same `PROXY_BASE` as web — same Cloudflare Worker handles both
+- `console.warn` (not `console.log`) for pipeline debug output — New Architecture (bridgeless) only forwards warns to DevTools
+
+### Mobile pipeline (CameraScreen.js)
+
+1. expo-image-picker → compress to 1024px JPEG → base64 via expo-image-manipulator
+2. `verifyIsGravestone(base64)` — throws `{ __verificationRejection: true }` → rejection UI
+3. `readGravestone(base64)` — Gemini OCR → structured JSON
+4. Parallel: `searchForPerson` + `searchWikiTree` + `fetchWikipediaPortraits`
+5. `generateBiography` — Gemini narrative or stone-only fallback
+6. Read `user.user_metadata.default_public` → set `story.is_public`
+7. Save to AsyncStorage → `cloudSaveStory` (if signed in) → `uploadGravestoneImage` → `cloudUpdateStory` with `image_url`
+8. Navigate to ResultScreen
+
+### Google OAuth (mobile)
+
+- Uses `expo-web-browser` + `expo-linking` + Supabase PKCE flow
+- Redirect URI: `gravestory://login-callback` — must be added to Supabase Dashboard → Auth → URL Configuration → Redirect URLs
+- **Does not work in Expo Go** — requires a real build (`npx eas build --profile development`)
+- Cold-start deep link handler in `App.js` calls `supabase.auth.exchangeCodeForSession(code)` — passes only the extracted code UUID, NOT the full URL
+- `AuthScreen.js` handles the normal in-app OAuth flow via `WebBrowser.openAuthSessionAsync`; extracts `code` from `result.url` with `URLSearchParams` before calling `exchangeCodeForSession`
+- **Do NOT pass the full callback URL to `exchangeCodeForSession`** — it expects just the UUID code string; passing the full URL causes "invalid flow state" server error
+- **Crypto polyfill is required** — Hermes on Android has no `crypto.getRandomValues` or `crypto.subtle`; without `polyfills.js`, Supabase PKCE can't generate the code verifier or challenge, and OAuth silently fails with "invalid flow state"
+- `polyfills.js` must be the first import in `index.js` — it runs before any Supabase code and patches `globalThis.crypto` using `expo-crypto`
+
+### Phase completion status
+
+- **Phase 1** ✅ — Scaffold, navigation, HomeScreen, AuthScreen (email/password), GravestoneLogo, AsyncStorage
+- **Phase 2** ✅ — Full camera pipeline, all API modules ported, ResultScreen, SettingsScreen, Google OAuth wired
+- **Phase 3** ✅ — Maps: react-native-maps, per-cemetery map, GPS capture via expo-location
+- **Phase 4** ✅ — Global community map (public stories from Supabase, port of web map-global.js), Supabase sync wired to mobile
+- **Phase 5** ✅ — R2 image upload, story deletion (HomeScreen long-press), Settings screen (display name, visibility toggle, account info)
+- **Phase 6** ✅ — Gravestone photo in ResultScreen, delete from ResultScreen, draggable pin correction in CemeteryMapScreen, app icon + splash screen
+- **Phase 7** ✅ — Polish pass + tester APK: rejection bypass, pipeline error screen, first-run empty state, loading step labels, EAS preview build config
+- **Phase 8** 🔲 — Bug fixes from real-device testing, Play Store submission prep, OTA updates (EAS Update), payments (RevenueCat + Google Play Billing)
+
+---
+
+### EAS build config
+
+- `app.config.js` slug: `"mobile"` (matches the EAS project registration — do not change back to "gravestory")
+- `app.config.js` owner: `"j3k420"`
+- `scheme: "gravestory"` controls deep links — independent of slug
+- Google Maps Android API key stored as an EAS Secret (already created, scope: project, all environments)
+- Preview build (installable APK for testers): `npx eas build --platform android --profile preview`
+- Production build (AAB for Play Store): `npx eas build --platform android --profile production`
+- Testers install via direct `.apk` link; subsequent updates install over the top automatically
+
+### Phase 8 — Planned scope
+
+- Bug fixes from real-device tester feedback
+- Play Store submission: $25 Google Play Developer account, store listing, privacy policy URL, content rating, AAB production build
+- EAS Update (OTA): add `expo-updates` so JS-only fixes ship in seconds without a full rebuild
+- Payments: RevenueCat + Google Play Billing for subscriptions / consumable credit packs (mandatory for Play Store; 15–30% Google cut)
+- iOS TestFlight build (requires $99/yr Apple Developer account)

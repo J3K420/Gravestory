@@ -2,10 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
 import Svg, { Defs, LinearGradient, Stop, Rect, Path, Line } from 'react-native-svg';
 
-export default function GravestoneLogo({ size = 200 }) {
+export default function GravestoneLogo({ size = 200, animate = true }) {
   const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    if (!animate) return;
     const flicker = Animated.loop(
       Animated.sequence([
         Animated.delay(200),
@@ -28,7 +29,7 @@ export default function GravestoneLogo({ size = 200 }) {
     );
     flicker.start();
     return () => flicker.stop();
-  }, []);
+  }, [animate]);
 
   const h = size * 1.12;
 

@@ -9,7 +9,7 @@
 
 const VALID_SCREENS = [
   'home', 'auth', 'settings', 'camera', 'result',
-  'cemetery-map-screen', 'global-map-screen'
+  'cemetery-map-screen', 'global-map-screen', 'remembered-stories'
   // NOTE: 'loading' deliberately excluded — reload mid-research should
   // fall back to home, not get stuck on a spinner with no in-flight work.
 ];
@@ -25,6 +25,9 @@ function showScreen(id) {
   if (id === 'home') {
     renderSavedList();
     updateHomeMapButton();
+  }
+  if (id === 'remembered-stories') {
+    renderSavedList();
   }
 
   if (!_navigatingViaHistory) {

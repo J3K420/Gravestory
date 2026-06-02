@@ -115,12 +115,9 @@
     To install: tap the Share button in Safari, then "Add to Home Screen"
   </p>
 
-  <div class="saved-section">
-    <p class="saved-label">✦ Remembered Stories</p>
-    <div class="saved-list" id="saved-list">
-      <p class="empty-saved">Your saved stories will appear here</p>
-    </div>
-  </div>
+  <button class="home-map-btn" onclick="showScreen('remembered-stories')" style="margin-top:1.5rem;">
+    📜 Remembered Stories
+  </button>
 
   <!-- User menu (top-right of home screen) -->
   <div id="user-menu" style="position:absolute;top:1rem;right:1rem;z-index:10;font-family:'Crimson Pro',serif;">
@@ -131,6 +128,20 @@
       <div id="user-menu-email" style="padding:0.5rem 0.7rem;font-size:0.75rem;color:rgba(201,168,76,0.6);border-bottom:1px solid rgba(201,168,76,0.15);margin-bottom:0.3rem;"></div>
       <button onclick="openSettings()" style="display:block;width:100%;background:none;border:none;color:#c9a84c;text-align:left;padding:0.5rem 0.7rem;cursor:pointer;font-family:inherit;font-size:0.85rem;border-radius:3px;">⚙️ Settings</button>
       <button onclick="signOut()" style="display:block;width:100%;background:none;border:none;color:#c9a84c;text-align:left;padding:0.5rem 0.7rem;cursor:pointer;font-family:inherit;font-size:0.85rem;border-radius:3px;">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ REMEMBERED STORIES SCREEN ═══ -->
+<div id="remembered-stories" class="screen">
+  <div class="home-bg"></div>
+  <div class="home-border"></div>
+  <div class="remembered-inner">
+    <button onclick="showScreen('home')" class="remembered-back">← Back</button>
+    <h2 class="remembered-title">✦ Remembered Stories</h2>
+    <p class="remembered-subtitle">every life deserves to be remembered</p>
+    <div class="saved-list" id="saved-list">
+      <p class="empty-saved">Your saved stories will appear here</p>
     </div>
   </div>
 </div>

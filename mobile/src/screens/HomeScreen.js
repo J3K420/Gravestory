@@ -1,23 +1,18 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, StatusBar, Alert,
+  StyleSheet, StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
-import { loadStories, saveStories } from '../lib/storage';
-import { syncOnSignIn, syncDelta, cloudDeleteStory } from '../lib/sync';
+import { syncOnSignIn, syncDelta } from '../lib/sync';
 import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
-import { Headstone, MapStack, Globe } from '../components/Icons';
+import { MapStack, Globe } from '../components/Icons';
 
 export default function HomeScreen({ navigation }) {
   const [user, setUser] = useState(null);
-  const [stories, setStories] = useState([]);
-  const [storiesLoaded, setStoriesLoaded] = useState(false);
-  const scrollRef = useRef(null);
-  const [savedSectionY, setSavedSectionY] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -27,12 +22,7 @@ export default function HomeScreen({ navigation }) {
       const newUser = session?.user ?? null;
       setUser(newUser);
       if (event === 'SIGNED_IN' && newUser) {
-        syncOnSignIn(newUser).then(updated => {
-          if (updated) setStories(updated);
-        });
-      }
-      if (event === 'SIGNED_OUT') {
-        loadStories(null).then(guestStories => setStories(guestStories));
+        syncOnSignIn(newUser);
       }
     });
     return () => listener.subscription.unsubscribe();
@@ -43,13 +33,7 @@ export default function HomeScreen({ navigation }) {
       let active = true;
       async function refresh() {
         const { data: { session } } = await supabase.auth.getSession();
-        const uid = session?.user?.id ?? null;
-        const local = await loadStories(uid);
-        if (active) { setStories(local); setStoriesLoaded(true); }
-        if (session?.user && active) {
-          const synced = await syncDelta(session.user);
-          if (synced && active) setStories(synced);
-        }
+        if (session?.user && active) syncDelta(session.user);
       }
       refresh();
       return () => { active = false; };
@@ -59,26 +43,6 @@ export default function HomeScreen({ navigation }) {
   const displayName = user?.user_metadata?.full_name
     || user?.email?.split('@')[0]
     || null;
-
-  function confirmDelete(story) {
-    Alert.alert(
-      'Delete story?',
-      `Remove "${story.name || 'this story'}" permanently?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive',
-          onPress: async () => {
-            const updated = stories.filter(s => s.timestamp !== story.timestamp);
-            setStories(updated);
-            const { data: { session } } = await supabase.auth.getSession();
-            await saveStories(updated, session?.user?.id ?? null);
-            if (session?.user) await cloudDeleteStory(story, session.user);
-          },
-        },
-      ]
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -91,7 +55,7 @@ export default function HomeScreen({ navigation }) {
         <Text style={styles.userBtnText}>{displayName ?? 'Sign in'}</Text>
       </TouchableOpacity>
 
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll}>
 
         {/* Logo */}
         <View style={styles.logoArea}>
@@ -123,50 +87,13 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Saved stories scroll button */}
+        {/* Remembered stories nav button */}
         <TouchableOpacity
           style={styles.savedBtn}
-          onPress={() => scrollRef.current?.scrollTo({ y: savedSectionY, animated: true })}
+          onPress={() => navigation.navigate('RememberedStories')}
         >
           <Text style={styles.savedBtnText}>✦ Remembered Stories</Text>
         </TouchableOpacity>
-
-        {/* Saved stories section */}
-        <View style={styles.savedSection} onLayout={e => setSavedSectionY(e.nativeEvent.layout.y)}>
-          <Text style={styles.savedLabel}>Remembered Stories</Text>
-
-          {storiesLoaded && stories.length === 0 ? (
-            <View style={styles.emptyState}>
-              <GravestoneLogo size={80} animate={false} />
-              <Text style={styles.emptyTitle}>No stories yet</Text>
-              <Text style={styles.emptySaved}>Tap Scan above to photograph your first gravestone</Text>
-            </View>
-          ) : (
-            stories.map((story, i) => (
-              <View key={story.timestamp ?? i} style={styles.savedCard}>
-                <View style={styles.savedAvatar}>
-                  <Headstone size={17} color={colors.ash} />
-                </View>
-                <TouchableOpacity
-                  style={styles.savedCardMain}
-                  onPress={() => navigation.navigate('Result', { story })}
-                >
-                  <Text style={styles.savedName}>{story.name || 'Unknown'}</Text>
-                  <Text style={styles.savedDates}>{story.dates || ''}</Text>
-                </TouchableOpacity>
-                {story.is_public && <Text style={styles.publicBadge}>public</Text>}
-                <Text style={styles.savedArrow}>›</Text>
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => confirmDelete(story)}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                >
-                  <Text style={styles.deleteBtnText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -226,35 +153,4 @@ const styles = StyleSheet.create({
   },
   savedBtnText: { color: colors.flame, fontSize: 13, letterSpacing: 2, textAlign: 'center', fontFamily: fonts.body },
 
-  savedSection: { marginTop: 40, width: '100%' },
-  savedLabel: {
-    color: colors.ashDim, fontSize: 10, letterSpacing: 3, fontFamily: fonts.body,
-    textTransform: 'uppercase', marginBottom: 12, textAlign: 'center',
-  },
-
-  emptyState: { alignItems: 'center', paddingVertical: 32 },
-  emptyTitle: { color: colors.parchment, fontSize: 18, marginTop: 16, marginBottom: 8, fontFamily: fonts.title },
-  emptySaved: { color: colors.ash, fontFamily: fonts.bodyItalic, textAlign: 'center', opacity: 0.6, maxWidth: 260 },
-
-  savedCard: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: colors.line,
-    padding: 11, marginBottom: 10, borderRadius: radius.sm,
-    backgroundColor: colors.stone2, gap: 11,
-  },
-  savedAvatar: {
-    width: 34, height: 34, borderRadius: 9,
-    backgroundColor: colors.stone,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  savedCardMain: { flex: 1, paddingVertical: 2 },
-  savedName: { color: colors.parchment, fontSize: 15, marginBottom: 2, fontFamily: fonts.name },
-  savedDates: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.bodyItalic },
-  publicBadge: {
-    color: colors.silver, fontSize: 10, letterSpacing: 1, fontFamily: fonts.body,
-    textTransform: 'uppercase', marginRight: 4,
-  },
-  savedArrow: { color: colors.flame, fontSize: 20 },
-  deleteBtn: { paddingLeft: 12 },
-  deleteBtnText: { color: colors.dangerDim, fontSize: 15, fontFamily: fonts.body },
 });

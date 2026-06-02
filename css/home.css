@@ -177,3 +177,54 @@
     color: rgba(138,126,110,0.5);
     font-size: 0.9rem;
   }
+
+  /* ── REMEMBERED STORIES SCREEN ── */
+  #remembered-stories {
+    align-items: center;
+    justify-content: flex-start;
+    padding: 2rem;
+    position: relative;
+    overflow-y: auto;
+  }
+
+  .remembered-inner {
+    width: 100%;
+    max-width: 500px;
+    position: relative;
+    z-index: 2;
+    padding-top: 1rem;
+  }
+
+  .remembered-back {
+    background: none;
+    border: none;
+    color: rgba(201,168,76,0.6);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.9rem;
+    cursor: pointer;
+    margin-bottom: 2rem;
+    display: block;
+    padding: 0;
+  }
+
+  .remembered-back:hover { color: var(--gold); }
+
+  .remembered-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem;
+    color: var(--gold);
+    text-align: center;
+    margin-bottom: 0.5rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+  }
+
+  .remembered-subtitle {
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-size: 0.9rem;
+    color: var(--stone);
+    text-align: center;
+    margin-bottom: 2rem;
+    letter-spacing: 0.1em;
+  }

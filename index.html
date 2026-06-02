@@ -898,17 +898,27 @@ async function startAnalysis() {
     setStep(2);
     const graveData = await readGravestone(currentImageBase64, locationStr);
 
-    // 3. Search web for more info
-    setStep(3);
-    const searchResults = await searchForPerson(graveData, locationStr);
+    // Inform the user if multiple distinct gravestones are in frame — the bio
+    // focuses on the primary inscription; best results come from one stone per scan.
+    if (graveData.multiple_subjects === true) {
+      const el = document.getElementById('loading-step');
+      if (el) el.textContent = 'Multiple gravestones detected — focusing on primary inscription…';
+      console.log('⚠️ Multiple gravestones detected in frame');
+    }
 
-    // 4. Search WikiTree
-    setStep(4);
-    const wikiData = await searchWikiTree(graveData, locationStr);
+    // 3. Search web + WikiTree + Wikipedia article in parallel
+    setStep(3);
+    const primaryOcrName = graveData.primary_name || graveData.names?.[0] || '';
+    const datesStr = [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ');
+    const [searchResults, wikiData, wikipediaSummary] = await Promise.all([
+      searchForPerson(graveData, locationStr),
+      searchWikiTree(graveData, locationStr),
+      fetchWikipediaArticleSummary(primaryOcrName, datesStr),
+    ]);
 
     // 5. Generate full biography with Gemini
     setStep(5);
-    const story = await generateBiography(graveData, searchResults, wikiData, locationStr);
+    const story = await generateBiography(graveData, searchResults, wikiData, locationStr, wikipediaSummary);
 
     // 5.5 — Fetch Wikipedia portraits (best-effort, doesn't block on failure)
     const portraits = await fetchWikipediaPortraits(story.name, story.dates);

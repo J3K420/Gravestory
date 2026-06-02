@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, StatusBar,
+  StyleSheet, StatusBar, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -13,6 +13,7 @@ import { MapStack, Globe } from '../components/Icons';
 
 export default function HomeScreen({ navigation }) {
   const [user, setUser] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -40,6 +41,13 @@ export default function HomeScreen({ navigation }) {
     }, [])
   );
 
+  async function onRefresh() {
+    setRefreshing(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) await syncDelta(session.user);
+    setRefreshing(false);
+  }
+
   const displayName = user?.user_metadata?.full_name
     || user?.email?.split('@')[0]
     || null;
@@ -55,7 +63,10 @@ export default function HomeScreen({ navigation }) {
         <Text style={styles.userBtnText}>{displayName ?? 'Sign in'}</Text>
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+      >
 
         {/* Logo */}
         <View style={styles.logoArea}>

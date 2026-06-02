@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, StatusBar, Alert,
+  StyleSheet, StatusBar, Alert, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -28,6 +28,7 @@ export default function RememberedStoriesScreen({ navigation }) {
   const [loaded, setLoaded] = useState(false);
   const [sortBy, setSortBy] = useState('recent');
   const [expandedCemeteries, setExpandedCemeteries] = useState(new Set());
+  const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -68,6 +69,15 @@ export default function RememberedStoriesScreen({ navigation }) {
         stories: [...list].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0)),
       }));
   }, [stories, sortBy]);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const uid = session?.user?.id ?? null;
+    const local = await loadStories(uid);
+    setStories(local);
+    setRefreshing(false);
+  }
 
   function toggleCemetery(name) {
     setExpandedCemeteries(prev => {
@@ -157,7 +167,10 @@ export default function RememberedStoriesScreen({ navigation }) {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+      >
         {loaded && stories.length === 0 ? (
           <View style={styles.emptyState}>
             <GravestoneLogo size={80} animate={false} />

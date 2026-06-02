@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Switch,
-  StyleSheet, Alert, ScrollView, ActivityIndicator,
+  StyleSheet, Alert, ScrollView, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
@@ -12,6 +12,7 @@ export default function SettingsScreen({ navigation }) {
   const [displayName, setDisplayName]   = useState('');
   const [defaultPublic, setDefaultPublic] = useState(false);
   const [saving, setSaving]             = useState(false);
+  const [refreshing, setRefreshing]     = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -21,6 +22,17 @@ export default function SettingsScreen({ navigation }) {
       setDefaultPublic(session.user.user_metadata?.default_public ?? false);
     });
   }, []);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      setUser(session.user);
+      setDisplayName(session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '');
+      setDefaultPublic(session.user.user_metadata?.default_public ?? false);
+    }
+    setRefreshing(false);
+  }
 
   async function saveProfile() {
     setSaving(true);
@@ -55,7 +67,10 @@ export default function SettingsScreen({ navigation }) {
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+      >
         <Text style={styles.title}>Account</Text>
 
         {user ? (

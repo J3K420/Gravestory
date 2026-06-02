@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, Polygon } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import Svg, { Rect, Path, Line } from 'react-native-svg';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory } from '../lib/sync';
@@ -16,71 +16,6 @@ const GOLD      = colors.flame;
 const INK       = colors.ink;
 const PARCHMENT = colors.parchment;
 const STONE     = colors.ash;
-
-// ── BOUNDARY HELPERS ─────────────────────────────────────────────
-// Uses Nominatim polygon_geojson=1 instead of Overpass — public Overpass
-// mirrors block Cloudflare Worker IPs with 403. Nominatim already works
-// in this app for geocoding and allows reasonable mobile use.
-
-async function fetchOSMCemeteryBoundary(lat, lng, cemeteryName = null) {
-  console.warn('🗺️ boundary: fetching for', lat, lng, '| cemetery:', cemeteryName);
-  try {
-    const searchTerm = cemeteryName || 'cemetery';
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchTerm)}&format=json&polygon_geojson=1&limit=10&addressdetails=1`;
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'GraveStory/1.0 (mobile)' },
-    });
-    console.warn('🗺️ boundary: HTTP', res.status);
-    if (!res.ok) return null;
-
-    const results = await res.json();
-
-    // Keep only results with polygon geometry near the grave coords
-    const EPS = 0.15; // ~15km in degrees
-    const nearby = results.filter(r => {
-      if (!r.geojson || r.geojson.type === 'Point') return false;
-      return Math.abs(parseFloat(r.lat) - lat) < EPS &&
-             Math.abs(parseFloat(r.lon) - lng) < EPS;
-    });
-
-    console.warn('🗺️ boundary: nearby with polygon', nearby.length);
-    if (nearby.length === 0) return null;
-
-    // Prefer cemetery landuse/amenity, then closest to grave
-    nearby.sort((a, b) => {
-      const ac = (a.class === 'landuse' || a.class === 'amenity') &&
-                 (a.type === 'cemetery' || a.type === 'grave_yard');
-      const bc = (b.class === 'landuse' || b.class === 'amenity') &&
-                 (b.type === 'cemetery' || b.type === 'grave_yard');
-      if (ac !== bc) return ac ? -1 : 1;
-      const ad = Math.abs(parseFloat(a.lat) - lat) + Math.abs(parseFloat(a.lon) - lng);
-      const bd = Math.abs(parseFloat(b.lat) - lat) + Math.abs(parseFloat(b.lon) - lng);
-      return ad - bd;
-    });
-
-    const best = nearby[0];
-    console.warn('🗺️ boundary: best', best.display_name, '|', best.geojson.type);
-
-    const coords = geojsonToCoords(best.geojson);
-    console.warn('🗺️ boundary: returning', coords?.length ?? 0, 'coords');
-    return coords;
-  } catch (e) {
-    console.warn('🗺️ boundary: caught error', e);
-    return null;
-  }
-}
-
-function geojsonToCoords(geojson) {
-  if (geojson.type === 'Polygon') {
-    return geojson.coordinates[0].map(([longitude, latitude]) => ({ latitude, longitude }));
-  }
-  if (geojson.type === 'MultiPolygon') {
-    const rings = geojson.coordinates.map(p => p[0]);
-    rings.sort((a, b) => b.length - a.length);
-    return rings[0].map(([longitude, latitude]) => ({ latitude, longitude }));
-  }
-  return null;
-}
 
 // Wrapper that owns tracksViewChanges: starts true so the SVG is captured,
 // flips to false after the first layout so map updates don't re-snapshot.
@@ -174,7 +109,6 @@ export default function CemeteryMapScreen({ navigation, route }) {
   const mapRef = useRef(null);
   const [mappedStories, setMappedStories] = useState([]);
   const [geocoding, setGeocoding] = useState(true);
-  const [boundaryCoords, setBoundaryCoords] = useState([]);
   const [selectedStory, setSelectedStory] = useState(null);
   const [bioExpanded, setBioExpanded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -223,20 +157,6 @@ export default function CemeteryMapScreen({ navigation, route }) {
     setGeocoding(false);
 
     if (resolved.length === 0) return;
-
-    // Fetch the cemetery boundary polygon from OSM
-    const primaryStory = focusStory
-      ? resolved.find(s => s.timestamp === focusStory.timestamp) || resolved[0]
-      : resolved[0];
-    if (primaryStory?.gps) {
-      const cemeteryName = (primaryStory.location || '').split(',')[0].trim();
-      fetchOSMCemeteryBoundary(primaryStory.gps.lat, primaryStory.gps.lng, cemeteryName)
-        .then(coords => {
-          console.warn('🗺️ boundary: setState with', coords ? coords.length + ' pts' : 'null');
-          if (coords) setBoundaryCoords(coords);
-        })
-        .catch(e => console.warn('🗺️ boundary: call site error', e));
-    }
 
     // Animate map to the appropriate position after geocoding
     setTimeout(() => {
@@ -333,16 +253,6 @@ export default function CemeteryMapScreen({ navigation, route }) {
           initialRegion={DEFAULT_REGION}
           onPress={() => { setSelectedStory(null); setBioExpanded(false); }}
         >
-          {boundaryCoords.length > 0 && (
-            <Polygon
-              coordinates={boundaryCoords}
-              strokeColor="rgba(201,168,76,0.85)"
-              fillColor="rgba(160,120,48,0.14)"
-              strokeWidth={2}
-              zIndex={1}
-            />
-          )}
-
           {mappedStories.map((story, i) => (
             <GraveMarker
               key={story.timestamp ?? i}

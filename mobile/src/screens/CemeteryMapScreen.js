@@ -126,6 +126,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
   const [geocoding, setGeocoding] = useState(true);
   const [boundaryCoords, setBoundaryCoords] = useState([]);
   const [selectedStory, setSelectedStory] = useState(null);
+  const [bioExpanded, setBioExpanded] = useState(false);
 
   useEffect(() => {
     resolveStories();
@@ -270,7 +271,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
           ref={mapRef}
           style={styles.map}
           initialRegion={DEFAULT_REGION}
-          onPress={() => setSelectedStory(null)}
+          onPress={() => { setSelectedStory(null); setBioExpanded(false); }}
         >
           {boundaryCoords.length > 0 && (
             <Polygon
@@ -287,7 +288,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
               coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}
               draggable
               onDragEnd={e => handleDragEnd(story, e.nativeEvent.coordinate)}
-              onPress={() => setSelectedStory(story)}
+              onPress={() => { setSelectedStory(story); setBioExpanded(false); }}
             >
               <View style={styles.markerOuter}>
                 <View style={[styles.markerInner, story._lowConfidence && styles.markerLowConf]}>
@@ -308,9 +309,13 @@ export default function CemeteryMapScreen({ navigation, route }) {
         {/* Floating callout — replaces <Callout> which is unreliable on Android */}
         {selectedStory && (
           <View style={styles.floatingCallout}>
-            <TouchableOpacity style={styles.calloutDismiss} onPress={() => setSelectedStory(null)}>
+            <TouchableOpacity
+              style={styles.calloutDismiss}
+              onPress={() => { setSelectedStory(null); setBioExpanded(false); }}
+            >
               <Text style={styles.calloutDismissText}>✕</Text>
             </TouchableOpacity>
+
             <Text style={styles.calloutName}>{selectedStory.name || 'Unknown'}</Text>
             {!!selectedStory.dates && (
               <Text style={styles.calloutDates}>{selectedStory.dates}</Text>
@@ -321,10 +326,30 @@ export default function CemeteryMapScreen({ navigation, route }) {
             {selectedStory._lowConfidence && (
               <Text style={styles.calloutWarn}>⚠ approximate location</Text>
             )}
+
+            {/* Inline bio preview — first two paragraphs */}
+            {bioExpanded && !!selectedStory.biography && (
+              <ScrollView style={styles.calloutBioScroll} showsVerticalScrollIndicator={false}>
+                <Text style={styles.calloutBioText}>
+                  {selectedStory.biography.split('\n\n').filter(p => p.trim()).slice(0, 2).join('\n\n')}
+                </Text>
+              </ScrollView>
+            )}
+
             <View style={styles.calloutButtons}>
+              {!!selectedStory.biography && (
+                <TouchableOpacity
+                  style={styles.calloutBtn}
+                  onPress={() => setBioExpanded(e => !e)}
+                >
+                  <Text style={styles.calloutBtnText}>
+                    {bioExpanded ? '▲ Hide bio' : '▼ Read bio'}
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                style={styles.calloutBtn}
-                onPress={() => { setSelectedStory(null); navigation.navigate('Result', { story: selectedStory }); }}
+                style={[styles.calloutBtn, styles.calloutBtnPrimary]}
+                onPress={() => { setSelectedStory(null); setBioExpanded(false); navigation.navigate('Result', { story: selectedStory }); }}
               >
                 <Text style={styles.calloutBtnText}>→ Go to bio</Text>
               </TouchableOpacity>
@@ -421,11 +446,16 @@ const styles = StyleSheet.create({
   calloutDates: { color: colors.ash, fontSize: 13, fontFamily: fonts.serifItalic, marginBottom: 2 },
   calloutLocation: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, marginBottom: 6 },
   calloutWarn: { color: colors.ember, fontSize: 11, fontFamily: fonts.body, marginBottom: 6 },
+  calloutBioScroll: { maxHeight: 140, marginBottom: 8 },
+  calloutBioText: {
+    color: colors.ash, fontSize: 13, fontFamily: fonts.serif, lineHeight: 20,
+  },
   calloutButtons: { flexDirection: 'row', gap: 8, marginTop: 4 },
   calloutBtn: {
     borderWidth: 1, borderColor: GOLD,
     paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.sm,
   },
+  calloutBtnPrimary: { backgroundColor: 'rgba(242,182,92,0.1)' },
   calloutBtnText: { color: GOLD, fontSize: 13, fontFamily: fonts.sansBold },
 
   panel: {

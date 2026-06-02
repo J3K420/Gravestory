@@ -142,20 +142,24 @@ export default function HomeScreen({ navigation }) {
             </View>
           ) : (
             stories.map((story, i) => (
-              <TouchableOpacity
-                key={story.timestamp ?? i}
-                style={styles.savedCard}
-                onPress={() => navigation.navigate('Result', { story })}
-                onLongPress={() => confirmDelete(story)}
-                delayLongPress={500}
-              >
-                <View style={styles.savedCardMain}>
+              <View key={story.timestamp ?? i} style={styles.savedCard}>
+                <TouchableOpacity
+                  style={styles.savedCardMain}
+                  onPress={() => navigation.navigate('Result', { story })}
+                >
                   <Text style={styles.savedName}>{story.name || 'Unknown'}</Text>
                   <Text style={styles.savedDates}>{story.dates || ''}</Text>
-                </View>
+                </TouchableOpacity>
                 {story.is_public && <Text style={styles.publicBadge}>public</Text>}
                 <Text style={styles.savedArrow}>›</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => confirmDelete(story)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Text style={styles.deleteBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
             ))
           )}
         </View>
@@ -224,7 +228,7 @@ const styles = StyleSheet.create({
     padding: 14, marginBottom: 8,
     backgroundColor: 'rgba(245,240,232,0.04)',
   },
-  savedCardMain: { flex: 1 },
+  savedCardMain: { flex: 1, paddingVertical: 2 },
   savedName: { color: PARCHMENT, fontSize: 15, marginBottom: 2 },
   savedDates: { color: STONE, fontSize: 13, fontStyle: 'italic' },
   publicBadge: {
@@ -232,4 +236,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase', marginRight: 8,
   },
   savedArrow: { color: GOLD, fontSize: 22 },
+  deleteBtn: { paddingLeft: 14 },
+  deleteBtnText: { color: 'rgba(200,80,60,0.55)', fontSize: 16, fontWeight: '600' },
 });

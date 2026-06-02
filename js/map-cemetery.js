@@ -399,23 +399,40 @@ async function fetchOSMCemeteryBoundary(lat, lng, skipEstateFallback = false) {
     });
     if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
     const data = await res.json();
-    const candidates = (data.elements || []).filter(el => el.geometry && el.geometry.length > 2);
+
+    // Build candidates from both ways (el.geometry) and relations (el.members[].geometry).
+    // Overpass `out geom` puts geometry on the element for ways but inside members for
+    // relations — large cemeteries like Inglewood Park Cemetery are mapped as relations,
+    // so skipping them caused a tiny sub-way to be drawn as the boundary instead.
+    const candidates = [];
+    for (const el of (data.elements || [])) {
+      if (el.geometry && el.geometry.length > 2) {
+        candidates.push({ pts: el.geometry.map(pt => [pt.lat, pt.lon]), isRelation: false });
+      } else if (el.type === 'relation' && el.members) {
+        const outerPts = el.members
+          .filter(m => m.role === 'outer' && m.geometry?.length)
+          .flatMap(m => m.geometry.map(pt => [pt.lat, pt.lon]));
+        if (outerPts.length > 2) candidates.push({ pts: outerPts, isRelation: true });
+      }
+    }
+
     if (candidates.length > 0) {
-      // Prefer the smallest polygon that actually contains the grave point.
-      // Avoids grabbing a big multi-cemetery district polygon when the specific cemetery
-      // is a smaller way inside it.
-      const scored = candidates.map(el => {
-        const pts = el.geometry.map(pt => [pt.lat, pt.lon]);
+      const scored = candidates.map(({ pts, isRelation }) => {
         const lats = pts.map(p => p[0]);
         const lngs = pts.map(p => p[1]);
         const area = (Math.max(...lats) - Math.min(...lats)) * (Math.max(...lngs) - Math.min(...lngs));
         const containsGrave = lat >= Math.min(...lats) && lat <= Math.max(...lats) &&
                               lng >= Math.min(...lngs) && lng <= Math.max(...lngs);
-        return { pts, area, containsGrave };
+        return { pts, area, containsGrave, isRelation };
       });
       const containing = scored.filter(s => s.containsGrave);
       const pool = containing.length > 0 ? containing : scored;
-      pool.sort((a, b) => a.area - b.area);
+      // Relations are the full cemetery outline; prefer them over tiny sub-ways,
+      // then pick smallest within each type to avoid huge district polygons.
+      pool.sort((a, b) => {
+        if (a.isRelation !== b.isRelation) return a.isRelation ? -1 : 1;
+        return a.area - b.area;
+      });
       return pool[0].pts;
     }
   } catch(e) {
@@ -658,8 +675,8 @@ async function fetchNearbyCemeteries(lat, lng) {
         way[amenity=grave_yard](around:${radius},${lat},${lng});
         node[historic=cemetery](around:${radius},${lat},${lng});
         way[landuse=cemetery][historic](around:${radius},${lat},${lng});
-        node[abandoned:landuse=cemetery](around:${radius},${lat},${lng});
-        way[abandoned:landuse=cemetery](around:${radius},${lat},${lng});
+        node["abandoned:landuse"=cemetery](around:${radius},${lat},${lng});
+        way["abandoned:landuse"=cemetery](around:${radius},${lat},${lng});
       );
       out center tags;
     `;
@@ -668,6 +685,7 @@ async function fetchNearbyCemeteries(lat, lng) {
       method: 'POST',
       body: 'data=' + encodeURIComponent(query)
     });
+    if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
 
     const data = await res.json();
     if (!data.elements || data.elements.length === 0) {

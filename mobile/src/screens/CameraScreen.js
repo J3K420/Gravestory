@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, ScrollView,
+  Animated, ScrollView, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Stop, Rect, Path, Line, Circle } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
@@ -148,7 +149,8 @@ export default function CameraScreen({ navigation }) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color={GOLD} style={{ marginBottom: 24 }} />
+          <CandleFlicker />
+          <Text style={styles.loadingTitle}>Researching this life…</Text>
           <Text style={styles.loadingStep}>{STEPS[stepIndex]}</Text>
           <View style={styles.dotsRow}>
             {STEPS.map((_, i) => (
@@ -197,6 +199,18 @@ export default function CameraScreen({ navigation }) {
     );
   }
 
+  function showSourcePicker() {
+    Alert.alert(
+      'Choose Photo Source',
+      null,
+      [
+        { text: 'Take Photo', onPress: () => pickAndAnalyze(true) },
+        { text: 'Choose from Library', onPress: () => pickAndAnalyze(false) },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
@@ -204,21 +218,85 @@ export default function CameraScreen({ navigation }) {
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Scan a Gravestone</Text>
-        <Text style={styles.subtitle}>
-          Take a photo or choose one from your library.{'\n'}
-          Make sure the stone is clearly visible.
-        </Text>
+        <Text style={styles.title}>Photograph the Stone</Text>
+        <Text style={styles.subtitle}>Frame the gravestone clearly for best results</Text>
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => pickAndAnalyze(true)}>
-          <Text style={styles.primaryBtnText}>✦ Open Camera</Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.stoneZone} onPress={showSourcePicker} activeOpacity={0.8}>
+          <Svg width={220} height={240} viewBox="0 0 100 100" fill="none" strokeWidth={1.5}>
+            <Defs>
+              <LinearGradient id="camStoneGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <Stop offset="0%" stopColor="#e8d4a0" />
+                <Stop offset="100%" stopColor="#8a6f3a" />
+              </LinearGradient>
+            </Defs>
+            <Rect x="22" y="84" width="56" height="6" stroke="url(#camStoneGrad)" fill="none" />
+            <Path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="url(#camStoneGrad)" fill="none" />
+            <Path d="M36 80 L36 38 Q36 24 50 24 Q64 24 64 38 L64 80" stroke="url(#camStoneGrad)" strokeOpacity={0.4} fill="none" />
+            <Line x1="40" y1="58" x2="60" y2="58" stroke="url(#camStoneGrad)" strokeOpacity={0.45} strokeWidth={0.7} />
+            <Line x1="42" y1="64" x2="58" y2="64" stroke="url(#camStoneGrad)" strokeOpacity={0.4} strokeWidth={0.7} />
+            <Line x1="44" y1="70" x2="56" y2="70" stroke="url(#camStoneGrad)" strokeOpacity={0.35} strokeWidth={0.7} />
+            <Line x1="18" y1="92" x2="82" y2="92" stroke="url(#camStoneGrad)" strokeOpacity={0.5} />
+          </Svg>
 
-        <TouchableOpacity style={styles.secondaryBtn} onPress={() => pickAndAnalyze(false)}>
-          <Text style={styles.secondaryBtnText}>Choose from Library</Text>
+          <View style={styles.stoneInner}>
+            <Svg width={34} height={34} viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M3 7.5h3l1.5-2h9L18 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z" />
+              <Circle cx="12" cy="13" r="3.5" />
+            </Svg>
+            <Text style={styles.stoneText}>Tap to take or{'\n'}choose photo</Text>
+          </View>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function CandleFlicker() {
+  const opacity = useRef(new Animated.Value(1)).current;
+  const scale   = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.delay(200),
+        Animated.timing(opacity, { toValue: 0.15, duration: 40, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1,    duration: 40, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.4,  duration: 40, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1,    duration: 40, useNativeDriver: true }),
+        Animated.delay(500),
+        Animated.parallel([
+          Animated.timing(opacity, { toValue: 0.5, duration: 350, useNativeDriver: true }),
+          Animated.timing(scale,   { toValue: 1.05, duration: 350, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(opacity, { toValue: 1,  duration: 250, useNativeDriver: true }),
+          Animated.timing(scale,   { toValue: 1,  duration: 250, useNativeDriver: true }),
+        ]),
+        Animated.delay(400),
+        Animated.timing(opacity, { toValue: 0.1, duration: 30, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1,   duration: 30, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.05, duration: 30, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1,   duration: 30, useNativeDriver: true }),
+        Animated.delay(600),
+        Animated.parallel([
+          Animated.timing(opacity, { toValue: 0.45, duration: 400, useNativeDriver: true }),
+          Animated.timing(scale,   { toValue: 0.97, duration: 400, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(opacity, { toValue: 1,  duration: 300, useNativeDriver: true }),
+          Animated.timing(scale,   { toValue: 1,  duration: 300, useNativeDriver: true }),
+        ]),
+        Animated.delay(300),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  return (
+    <Animated.Text style={{ fontSize: 64, opacity, transform: [{ scale }] }}>
+      🕯️
+    </Animated.Text>
   );
 }
 
@@ -253,21 +331,36 @@ const styles = StyleSheet.create({
   back: { padding: 24, paddingBottom: 0 },
   backText: { color: 'rgba(201,168,76,0.6)', fontSize: 15 },
   scroll: { alignItems: 'center', padding: 24, paddingTop: 48 },
-  title: { color: PARCHMENT, fontSize: 28, fontWeight: '700', letterSpacing: 1, marginBottom: 12 },
-  subtitle: { color: STONE, fontStyle: 'italic', textAlign: 'center', lineHeight: 22, marginBottom: 48 },
-  primaryBtn: {
-    borderWidth: 1, borderColor: GOLD,
-    paddingHorizontal: 40, paddingVertical: 18, borderRadius: 2, marginBottom: 16, width: '100%',
+  title: {
+    color: PARCHMENT, fontSize: 26, fontWeight: '700',
+    letterSpacing: 1, marginBottom: 10, textAlign: 'center',
   },
-  primaryBtnText: { color: GOLD, fontSize: 16, letterSpacing: 2, textAlign: 'center' },
-  secondaryBtn: {
-    borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
-    paddingHorizontal: 40, paddingVertical: 16, borderRadius: 2, width: '100%',
+  subtitle: {
+    color: STONE, fontStyle: 'italic', textAlign: 'center',
+    lineHeight: 22, marginBottom: 8, fontSize: 14,
   },
-  secondaryBtnText: { color: STONE, fontSize: 15, letterSpacing: 1, textAlign: 'center' },
+  stoneZone: {
+    width: 220, height: 240,
+    alignSelf: 'center',
+    marginTop: 24,
+  },
+  stoneInner: {
+    position: 'absolute',
+    top: 72,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  stoneText: {
+    color: STONE, fontStyle: 'italic',
+    fontSize: 13, textAlign: 'center',
+    lineHeight: 20, marginTop: 8,
+    opacity: 0.9,
+  },
 
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  loadingStep: { color: PARCHMENT, fontSize: 16, letterSpacing: 1, marginBottom: 24, textAlign: 'center' },
+  loadingTitle: { color: PARCHMENT, fontSize: 22, fontWeight: '700', letterSpacing: 0.5, marginTop: 20, marginBottom: 6, textAlign: 'center' },
+  loadingStep: { color: STONE, fontStyle: 'italic', fontSize: 15, letterSpacing: 0.5, marginBottom: 28, textAlign: 'center' },
   dotsRow: { flexDirection: 'row', gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(201,168,76,0.2)' },
   dotActive: { backgroundColor: GOLD },

@@ -284,7 +284,7 @@ export default function CameraScreen({ navigation }) {
 
         <TouchableOpacity style={styles.stoneZone} onPress={() => setShowPicker(true)} activeOpacity={0.85}>
           <Animated.View style={{ opacity: stoneOpacity }}>
-            <Svg width={220} height={240} viewBox="0 0 100 100" fill="none" strokeWidth={1.5}>
+            <Svg width={440} height={480} viewBox="0 0 100 100" fill="none" strokeWidth={1.5}>
               <Defs>
                 <LinearGradient id="camStoneGrad" x1="0%" y1="0%" x2="0%" y2="100%">
                   <Stop offset="0%" stopColor="#e8d4a0" />
@@ -398,13 +398,13 @@ const styles = StyleSheet.create({
     lineHeight: 22, marginBottom: 8, fontSize: 14,
   },
   stoneZone: {
-    width: 220, height: 240,
+    width: 440, height: 480,
     alignSelf: 'center',
     marginTop: 24,
   },
   stoneInner: {
     position: 'absolute',
-    top: 72,
+    top: 144,
     left: 0,
     right: 0,
     alignItems: 'center',

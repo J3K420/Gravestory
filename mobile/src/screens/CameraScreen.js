@@ -132,6 +132,18 @@ export default function CameraScreen({ navigation }) {
       setStepIndex(3);
       const bioResult = await generateBiography(graveData, searchResults, wikiData, null);
 
+      // Portrait fallback: if the stone showed only a surname (e.g. "HOUDINI"),
+      // the single-token guard skipped the initial Wikipedia fetch. Now that the
+      // biography has resolved the full name (e.g. "Harry Houdini"), retry.
+      let resolvedPortraits = portraits;
+      if (resolvedPortraits.length === 0 && bioResult.name) {
+        const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
+        const bioTokens = bioResult.name.toLowerCase().replace(/[.,'"()]/g,'').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w));
+        if (bioTokens.length >= 2) {
+          resolvedPortraits = await fetchWikipediaPortraits(bioResult.name, bioResult.dates);
+        }
+      }
+
       setStepIndex(4);
 
       // Refine GPS via Nominatim + Overpass grave-node search, same as web pipeline.
@@ -151,7 +163,7 @@ export default function CameraScreen({ navigation }) {
       let story = {
         ...bioResult,
         graveData,
-        portraits,
+        portraits: resolvedPortraits,
         gps: refinedGps,
         _lowConfidence: lowConfidence,
         timestamp: Date.now(),

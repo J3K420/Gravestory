@@ -5,7 +5,16 @@ const storyKey = (userId) => userId ? `gs_stories_${userId}` : 'gs_stories_guest
 export async function loadStories(userId = null) {
   try {
     const raw = await AsyncStorage.getItem(storyKey(userId));
-    return raw ? JSON.parse(raw) : [];
+    if (raw !== null) return JSON.parse(raw);
+
+    // One-time migration from the old shared key
+    const legacy = await AsyncStorage.getItem('gravestories');
+    if (legacy) {
+      await AsyncStorage.setItem(storyKey(userId), legacy);
+      await AsyncStorage.removeItem('gravestories');
+      return JSON.parse(legacy);
+    }
+    return [];
   } catch {
     return [];
   }

@@ -178,7 +178,16 @@ Built for one-handed use in a cemetery. Service worker caches the app shell (`gr
 
 - **Tavily inscription-phrase disambiguation** — when the OCR returns a bare surname with no dates (e.g. "TOMB OF WASHINGTON"), `searchForPerson` prepends two high-priority queries that search the inscription text verbatim before falling back to name-only queries. Prevents generic surname searches returning cemetery-name results instead of the actual person. Applies to both `js/api-tavily.js` and `mobile/src/lib/api-tavily.js`.
 
-- **Historical figures biography exception** — `generateBiography` explicitly instructs Gemini that the anti-fabrication rule applies to private individuals only. For clearly identified major historical figures (presidents, monarchs, generals, etc.) the model MUST write a full biography drawing on well-established historical record, cited as `[Historical record]`. A two-paragraph biography for George Washington is considered a failure. Applies to both `js/biography.js` and `mobile/src/lib/biography.js`.
+- **Mobile search accuracy improvements (Session 9)** — several layered improvements to `mobile/src/lib/`:
+  - *GPS-derived location hint* — `reverseGeocode(lat, lng)` in `api-nominatim.js` fires in parallel with `verifyIsGravestone` so a "City, State" string is available before OCR and all search calls. The `locationHint` is threaded into `readGravestone`, `searchForPerson`, `searchWikiTree`, and `generateBiography` (all previously received `null`).
+  - *Nickname/abbreviation expansion* — `EXPAND` table in `api-tavily.js` and `api-wikitree.js` maps ~60 period abbreviations and informal names (Wm→William, Geo→George, Lizzie→Elizabeth, etc.) to formal forms. Tavily fires queries for both the raw name and the expanded form. WikiTree `firstNamesMatch()` is nickname-aware and adds a third search pass with the expanded first name when the abbreviated form returns nothing.
+  - *Age-at-death parsing* — `parseAgeAtDeath()` in `api-tavily.js` extracts approximate birth or death year from inscription phrases like "aged 72 yrs" or "aet. 45", unlocking date-filtered Tavily and WikiTree queries for stones with no explicit dates.
+  - *WikiTree geographic scoring* — `searchWikiTree` accepts a `location` param; `extractUSState()` parses a state from the GPS-derived location string and adds ±30/−20 score to candidates whose WikiTree birth/death location matches or contradicts the burial state.
+  - *Symbol-guided Tavily queries* — `SYMBOL_QUERIES` map in `api-tavily.js` (~30 entries) routes recognised emblems to targeted record repositories: GAR → Civil War veteran queries, Masonic/Odd Fellows/Elks/KofC/VFW/military branch symbols each fire their own precision query.
+  - *OCR alternate readings* — `readGravestone` now outputs `name_confidence` (high/medium/low) and `alternate_names` (1-2 plausible alternate spellings when the stone is weathered). When confidence is not high, alternate readings are folded into Tavily query variants. Symbols field prompt updated to request specifics (e.g. "GAR Grand Army of the Republic emblem").
+  - *Namesake collision guard* — the historical-figure biography exception in `biography.js` now requires graveData birth/death dates to be consistent (±5 years) with the famous figure's actual dates before invoking full-biography mode. Prevents "John Adams d.1931" inheriting the Founding Father's biography.
+
+- **Historical figures biography exception** — `generateBiography` explicitly instructs Gemini that the anti-fabrication rule applies to private individuals only. For clearly identified major historical figures (presidents, monarchs, generals, etc.) the model MUST write a full biography drawing on well-established historical record, cited as `[Historical record]`. A two-paragraph biography for George Washington is considered a failure. Applies to both `js/biography.js` and `mobile/src/lib/biography.js`. See also the Namesake collision guard bullet above.
 
 - **Mobile Wikipedia portraits return an array** — `fetchWikipediaPortraits` in `mobile/src/lib/api-wikipedia.js` returns `string[]` (up to 5 local file URIs), not the `{ left, right }` object used by the web version. Each URL is downloaded and resized to an 800px JPEG via `expo-image-manipulator` so React Native always gets a local `file://` URI it can decode. `ResultScreen` uses `normalizePortraits()` to handle both the old `{ left, right }` format (stored in older saved stories) and the new array format.
 
@@ -251,12 +260,12 @@ mobile/
       supabase.js               — Supabase client, AsyncStorage, flowType: 'pkce'
       storage.js                — User-scoped AsyncStorage: loadStories(userId), saveStories(stories, userId). Keys: gs_stories_{userId} or gs_stories_guest. getLastSync/setLastSync per userId.
       util-json.js              — safeParseJSON (ES module port of web version)
-      api-gemini.js             — verifyIsGravestone, readGravestone (ES module)
-      api-tavily.js             — searchForPerson (ES module)
-      api-wikitree.js           — searchWikiTree (ES module)
+      api-gemini.js             — verifyIsGravestone, readGravestone (ES module). readGravestone returns name_confidence (high/medium/low) and alternate_names (1-2 alternate spellings when stone is weathered/ambiguous) in addition to standard fields.
+      api-tavily.js             — searchForPerson (ES module). Contains: EXPAND nickname table (~60 entries), expandName(), parseAgeAtDeath() (derives missing year from "aged N yrs" inscription phrases), SYMBOL_QUERIES map (routes GAR/Masonic/Odd Fellows/military emblems to targeted record repositories). Uses graveData.alternate_names as extra query variants when name_confidence ≠ high.
+      api-wikitree.js           — searchWikiTree(graveData, location) (ES module). Signature accepts location string for geographic scoring. Contains: EXPAND table (subset), formalFirst(), firstNamesMatch() (nickname-aware), extractUSState(), STATE_ABBREVS. Three search passes: date-filtered → unfiltered → expanded-first-name fallback. Geographic alignment adds ±30/−20 to candidate scores.
       api-wikipedia.js          — fetchWikipediaPortraits (ES module, adds User-Agent header). Returns array of up to 5 local JPEG URIs (resized via expo-image-manipulator). imageFilenameMatchesPerson uses substring containment + strips Wikimedia "NNNpx-" thumbnail prefix so CamelCase and thumbnail filenames match correctly.
-      biography.js              — generateBiography (ES module)
-      api-nominatim.js          — forwardGeocode: full parity with web — multi-query fallback, geographic context filter, strict/fuzzy cemetery matching, US state low-confidence flag, two-pass Overpass grave-node search, AsyncStorage grave cache. Signature: forwardGeocode(locationStr, personName, dates)
+      biography.js              — generateBiography (ES module). Historical-figure exception includes namesake collision guard: requires graveData dates to align (±5 yrs) with famous figure's actual dates before invoking full-biography mode.
+      api-nominatim.js          — forwardGeocode + reverseGeocode (ES module). forwardGeocode: full parity with web — multi-query fallback, geographic context filter, strict/fuzzy cemetery matching, US state low-confidence flag, two-pass Overpass grave-node search, AsyncStorage grave cache. Signature: forwardGeocode(locationStr, personName, dates). reverseGeocode(lat, lng): converts GPS coords to "City, State" string via Nominatim /reverse; used by CameraScreen to build locationHint before search queries fire.
       grave-cache.js            — AsyncStorage-backed grave coordinate cache (30-day TTL). graveCacheKey, readGraveCache, writeGraveCache. Port of web grave-cache.js (localStorage → AsyncStorage).
       api-r2.js                 — uploadGravestoneImage(base64): POST to /upload-image with { data, contentType } body, returns URL or null
       map-utils.js              — getDistanceMeters, groupGravesByCemetery (ES module)
@@ -264,7 +273,7 @@ mobile/
     screens/
       HomeScreen.js             — Home: GravestoneLogo (size=240), scan button, map buttons with SVG icons, "Remembered Stories" scroll button, saved list with headstone avatar cards. Delta sync on focus. Auth state change listener clears list on SIGNED_OUT.
       AuthScreen.js             — Email/password + Google OAuth (expo-web-browser). GravestoneLogo header, Fraunces title, HankenGrotesk inputs/buttons.
-      CameraScreen.js           — Photo picker → GPS capture → full pipeline → forwardGeocode refinement → R2 upload → cloud save → Result. Flickering gravestone SVG tap zone (375×410); tapping opens bottom-sheet picker. Candle flicker loading animation. forwardGeocode called after biography to refine GPS using graveData.primary_name. Portrait retry: if fetchWikipediaPortraits returns empty (single-token OCR name), retries after bio resolves full name; splits bioResult.name on " and " and tries each person individually so combined names like "Harry Houdini and Bess Houdini" don't break the Wikipedia title-match guard.
+      CameraScreen.js           — Photo picker → GPS capture → full pipeline → forwardGeocode refinement → R2 upload → cloud save → Result. Flickering gravestone SVG tap zone (375×410); tapping opens bottom-sheet picker. Candle flicker loading animation. reverseGeocode fires in parallel with verifyIsGravestone to build locationHint from EXIF/device GPS; locationHint is threaded into readGravestone, searchForPerson, searchWikiTree, and generateBiography. forwardGeocode called after biography to refine GPS using graveData.primary_name. Portrait retry: if fetchWikipediaPortraits returns empty (single-token OCR name), retries after bio resolves full name; splits bioResult.name on " and " and tries each person individually so combined names like "Harry Houdini and Bess Houdini" don't break the Wikipedia title-match guard.
       ResultScreen.js           — Biography (Fraunces serif), full-width paging FlatList image carousel at top (gravestone photo first, then Wikipedia portraits), inscription, sources. normalizePortraits() handles both old { left, right } and new array portrait formats for backward compat. Action chip row: Map / Share / Public toggle. Scan Again + Delete buttons.
       SettingsScreen.js         — Display name, default visibility toggle, account info, sign out. Grouped sections, gradient save button.
       CemeteryMapScreen.js      — react-native-maps: grave markers, floating overlay callout (NOT <Callout> — Android unreliable), "Read bio" pull-down (first 2 bio paragraphs), draggable pin correction, bottom list, OSM boundary polygon. loadStories/saveStories always called with userId from session.
@@ -286,15 +295,16 @@ mobile/
 
 1. expo-image-picker (`exif: true`) → read EXIF GPS before compression strips it → compress to 1024px JPEG → base64 via expo-image-manipulator
 2. GPS source: EXIF coords from the photo if present; device GPS fallback only for **camera shots** (not library picks — device location would be wrong for historical photos)
-3. `verifyIsGravestone(base64)` — throws `{ __verificationRejection: true }` → rejection UI
-4. `readGravestone(base64)` — Gemini OCR → structured JSON
-5. Parallel: `searchForPerson` + `searchWikiTree` + `fetchWikipediaPortraits` (using `graveData.primary_name`; may return empty if stone shows only a surname)
-6. `generateBiography` — Gemini narrative or stone-only fallback
-7. **Portrait retry** — if step 5 returned no portraits, split `bioResult.name` on `" and "` and call `fetchWikipediaPortraits` for each part until one succeeds. This handles stones where the OCR returns only a surname (e.g. "HOUDINI") but the bio resolves "Harry Houdini".
-8. `forwardGeocode(bioResult.location, graveData.primary_name, bioResult.dates)` — refines GPS to cemetery center or precise grave node via Nominatim + Overpass. Falls back to EXIF/device GPS if null. Sets `_lowConfidence` on state mismatch.
-9. Read `user.user_metadata.default_public` → set `story.is_public`
-10. Save to user-scoped AsyncStorage key → `cloudSaveStory` (if signed in) → `uploadGravestoneImage` → `cloudUpdateStory` with `image_url`
-11. Navigate to ResultScreen
+3. `reverseGeocode(gps.lat, gps.lng)` fires **in parallel** with `verifyIsGravestone` — converts GPS coords to "City, State" string (`locationHint`) before any search queries execute. If no GPS, locationHint is null.
+4. `verifyIsGravestone(base64)` — throws `{ __verificationRejection: true }` → rejection UI
+5. `readGravestone(base64, locationHint)` — Gemini OCR → structured JSON including `name_confidence`, `alternate_names`, and specific symbol names
+6. Parallel: `searchForPerson(graveData, locationHint)` + `searchWikiTree(graveData, locationHint)` + `fetchWikipediaPortraits` (using `graveData.primary_name`; may return empty if stone shows only a surname). locationHint feeds nickname-expanded Tavily queries, symbol-guided queries, WikiTree geographic scoring, and alternate-reading variants.
+7. `generateBiography(graveData, searchResults, wikiData, locationHint)` — Gemini narrative or stone-only fallback
+8. **Portrait retry** — if step 6 returned no portraits, split `bioResult.name` on `" and "` and call `fetchWikipediaPortraits` for each part until one succeeds. This handles stones where the OCR returns only a surname (e.g. "HOUDINI") but the bio resolves "Harry Houdini".
+9. `forwardGeocode(bioResult.location, graveData.primary_name, bioResult.dates)` — refines GPS to cemetery center or precise grave node via Nominatim + Overpass. Falls back to EXIF/device GPS if null. Sets `_lowConfidence` on state mismatch.
+10. Read `user.user_metadata.default_public` → set `story.is_public`
+11. Save to user-scoped AsyncStorage key → `cloudSaveStory` (if signed in) → `uploadGravestoneImage` → `cloudUpdateStory` with `image_url`
+12. Navigate to ResultScreen
 
 ### Google OAuth (mobile)
 

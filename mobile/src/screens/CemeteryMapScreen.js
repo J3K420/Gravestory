@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polygon } from 'react-native-maps';
+import Svg, { Rect, Path, Line } from 'react-native-svg';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory } from '../lib/sync';
 import { supabase } from '../lib/supabase';
@@ -17,98 +18,147 @@ const PARCHMENT = colors.parchment;
 const STONE     = colors.ash;
 
 // ── BOUNDARY HELPERS ─────────────────────────────────────────────
-
-function stitchOuterRing(ways) {
-  if (ways.length === 0) return [];
-  if (ways.length === 1) return ways[0];
-  const EPS = 1e-6;
-  const close = (a, b) => Math.abs(a[0] - b[0]) < EPS && Math.abs(a[1] - b[1]) < EPS;
-  const remaining = ways.map(w => w.slice());
-  const ring = remaining.shift();
-  while (remaining.length > 0) {
-    const tail = ring[ring.length - 1];
-    let joined = false;
-    for (let i = 0; i < remaining.length; i++) {
-      const w = remaining[i];
-      if (close(w[0], tail)) {
-        ring.push(...w.slice(1)); remaining.splice(i, 1); joined = true; break;
-      }
-      if (close(w[w.length - 1], tail)) {
-        ring.push(...w.slice(0, -1).reverse()); remaining.splice(i, 1); joined = true; break;
-      }
-    }
-    if (!joined) { for (const w of remaining) ring.push(...w); break; }
-  }
-  return ring;
-}
+// Uses Nominatim polygon_geojson=1 instead of Overpass — public Overpass
+// mirrors block Cloudflare Worker IPs with 403. Nominatim already works
+// in this app for geocoding and allows reasonable mobile use.
 
 async function fetchOSMCemeteryBoundary(lat, lng, cemeteryName = null) {
-  const query = `
-    [out:json][timeout:15];
-    (
-      way[landuse=cemetery](around:1000,${lat},${lng});
-      way[amenity=grave_yard](around:1000,${lat},${lng});
-      relation[landuse=cemetery](around:1000,${lat},${lng});
-      relation[amenity=grave_yard](around:1000,${lat},${lng});
-    );
-    out geom;
-  `;
+  console.warn('🗺️ boundary: fetching for', lat, lng, '| cemetery:', cemeteryName);
   try {
-    const res = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      body: 'data=' + encodeURIComponent(query),
+    const searchTerm = cemeteryName || 'cemetery';
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchTerm)}&format=json&polygon_geojson=1&limit=10&addressdetails=1`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'GraveStory/1.0 (mobile)' },
     });
+    console.warn('🗺️ boundary: HTTP', res.status);
     if (!res.ok) return null;
-    const data = await res.json();
 
-    const nameKey = cemeteryName ? cemeteryName.toLowerCase() : null;
-    const candidates = [];
+    const results = await res.json();
 
-    for (const el of (data.elements || [])) {
-      const elName = (el.tags?.name || '').toLowerCase();
-      const nameMatch = nameKey ? elName.includes(nameKey) : false;
-      if (el.geometry && el.geometry.length > 2) {
-        candidates.push({ pts: el.geometry.map(pt => [pt.lat, pt.lon]), isRelation: false, nameMatch });
-      } else if (el.type === 'relation' && el.members) {
-        try {
-          const outerWays = el.members
-            .filter(m => m.role === 'outer' && m.geometry?.length > 1)
-            .map(m => m.geometry.map(pt => [pt.lat, pt.lon]));
-          if (outerWays.length > 0) {
-            const stitched = stitchOuterRing(outerWays);
-            if (stitched.length > 2 && stitched.length <= 2000) {
-              candidates.push({ pts: stitched, isRelation: true, nameMatch });
-            }
-          }
-        } catch { /* skip bad relation */ }
-      }
-    }
-
-    if (candidates.length === 0) return null;
-
-    const scored = candidates.map(({ pts, isRelation, nameMatch }) => {
-      const lats = pts.map(p => p[0]);
-      const lngs = pts.map(p => p[1]);
-      const area = (Math.max(...lats) - Math.min(...lats)) * (Math.max(...lngs) - Math.min(...lngs));
-      const containsGrave = lat >= Math.min(...lats) && lat <= Math.max(...lats) &&
-                            lng >= Math.min(...lngs) && lng <= Math.max(...lngs);
-      return { pts, area, containsGrave, isRelation, nameMatch };
+    // Keep only results with polygon geometry near the grave coords
+    const EPS = 0.15; // ~15km in degrees
+    const nearby = results.filter(r => {
+      if (!r.geojson || r.geojson.type === 'Point') return false;
+      return Math.abs(parseFloat(r.lat) - lat) < EPS &&
+             Math.abs(parseFloat(r.lon) - lng) < EPS;
     });
 
-    const containing = scored.filter(s => s.containsGrave);
-    const pool = containing.length > 0 ? containing : scored;
-    pool.sort((a, b) => {
-      if (a.nameMatch !== b.nameMatch) return a.nameMatch ? -1 : 1;
-      if (a.isRelation !== b.isRelation) return a.isRelation ? -1 : 1;
-      return a.area - b.area;
+    console.warn('🗺️ boundary: nearby with polygon', nearby.length);
+    if (nearby.length === 0) return null;
+
+    // Prefer cemetery landuse/amenity, then closest to grave
+    nearby.sort((a, b) => {
+      const ac = (a.class === 'landuse' || a.class === 'amenity') &&
+                 (a.type === 'cemetery' || a.type === 'grave_yard');
+      const bc = (b.class === 'landuse' || b.class === 'amenity') &&
+                 (b.type === 'cemetery' || b.type === 'grave_yard');
+      if (ac !== bc) return ac ? -1 : 1;
+      const ad = Math.abs(parseFloat(a.lat) - lat) + Math.abs(parseFloat(a.lon) - lng);
+      const bd = Math.abs(parseFloat(b.lat) - lat) + Math.abs(parseFloat(b.lon) - lng);
+      return ad - bd;
     });
 
-    // Convert [lat, lon] → react-native-maps {latitude, longitude}
-    return pool[0].pts.map(([latitude, longitude]) => ({ latitude, longitude }));
-  } catch {
+    const best = nearby[0];
+    console.warn('🗺️ boundary: best', best.display_name, '|', best.geojson.type);
+
+    const coords = geojsonToCoords(best.geojson);
+    console.warn('🗺️ boundary: returning', coords?.length ?? 0, 'coords');
+    return coords;
+  } catch (e) {
+    console.warn('🗺️ boundary: caught error', e);
     return null;
   }
 }
+
+function geojsonToCoords(geojson) {
+  if (geojson.type === 'Polygon') {
+    return geojson.coordinates[0].map(([longitude, latitude]) => ({ latitude, longitude }));
+  }
+  if (geojson.type === 'MultiPolygon') {
+    const rings = geojson.coordinates.map(p => p[0]);
+    rings.sort((a, b) => b.length - a.length);
+    return rings[0].map(([longitude, latitude]) => ({ latitude, longitude }));
+  }
+  return null;
+}
+
+// Wrapper that owns tracksViewChanges: starts true so the SVG is captured,
+// flips to false after the first layout so map updates don't re-snapshot.
+function GraveMarker({ story, onPress, onDragEnd }) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  return (
+    <Marker
+      coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}
+      draggable
+      tracksViewChanges={tracksViewChanges}
+      onDragEnd={onDragEnd}
+      onPress={onPress}
+    >
+      <View onLayout={() => setTracksViewChanges(false)}>
+        <GravestoneMarker lowConfidence={story._lowConfidence} />
+      </View>
+    </Marker>
+  );
+}
+
+// SVG gravestone marker — matches the web Leaflet divIcon design
+function GravestoneMarker({ lowConfidence }) {
+  return (
+    <View style={markerStyles.shadow}>
+      <Svg width={32} height={32} viewBox="0 0 100 100" fill="none">
+        {/* Base step */}
+        <Rect x="22" y="84" width="56" height="6" stroke="#c9a84c" strokeWidth="2" fill="rgba(20,15,8,0.85)" />
+        {/* Stone body with arched top */}
+        <Path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="#c9a84c" strokeWidth="2" fill="rgba(20,15,8,0.85)" />
+        {/* Open book — left page */}
+        <Path d="M38 40 L38 56 Q44 54 49 56 L49 42 Q44 40 38 40 Z" stroke="#e8d4a0" strokeWidth="2" fill="rgba(232,212,160,0.25)" />
+        {/* Open book — right page */}
+        <Path d="M51 42 Q56 40 62 40 L62 56 Q56 54 51 56 Z" stroke="#e8d4a0" strokeWidth="2" fill="rgba(232,212,160,0.25)" />
+        {/* Book spine */}
+        <Line x1="50" y1="41" x2="50" y2="56" stroke="#e8d4a0" strokeWidth="1.5" />
+        {/* Cross vertical */}
+        <Line x1="50" y1="63" x2="50" y2="76" stroke="#e8d4a0" strokeWidth="1.5" />
+        {/* Cross horizontal */}
+        <Line x1="44" y1="68" x2="56" y2="68" stroke="#e8d4a0" strokeWidth="1.5" />
+      </Svg>
+      {lowConfidence && (
+        <View style={markerStyles.badge}>
+          <Text style={markerStyles.badgeText}>?</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// Defined outside the component so it's stable across renders
+const markerStyles = StyleSheet.create({
+  shadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.6,
+    shadowRadius: 2,
+    elevation: 4,
+  },
+  badge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(60,40,20,0.95)',
+    borderWidth: 1,
+    borderColor: '#c9a84c',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: '#e8d4a0',
+    fontSize: 9,
+    fontWeight: 'bold',
+    lineHeight: 12,
+  },
+});
 
 // Geographic center of the contiguous US — used before any graves are located
 const DEFAULT_REGION = {
@@ -181,8 +231,11 @@ export default function CemeteryMapScreen({ navigation, route }) {
     if (primaryStory?.gps) {
       const cemeteryName = (primaryStory.location || '').split(',')[0].trim();
       fetchOSMCemeteryBoundary(primaryStory.gps.lat, primaryStory.gps.lng, cemeteryName)
-        .then(coords => { if (coords) setBoundaryCoords(coords); })
-        .catch(() => {});
+        .then(coords => {
+          console.warn('🗺️ boundary: setState with', coords ? coords.length + ' pts' : 'null');
+          if (coords) setBoundaryCoords(coords);
+        })
+        .catch(e => console.warn('🗺️ boundary: call site error', e));
     }
 
     // Animate map to the appropriate position after geocoding
@@ -283,26 +336,20 @@ export default function CemeteryMapScreen({ navigation, route }) {
           {boundaryCoords.length > 0 && (
             <Polygon
               coordinates={boundaryCoords}
-              strokeColor="rgba(160,120,48,0.8)"
-              fillColor="rgba(160,120,48,0.06)"
+              strokeColor="rgba(201,168,76,0.85)"
+              fillColor="rgba(160,120,48,0.14)"
               strokeWidth={2}
+              zIndex={1}
             />
           )}
 
           {mappedStories.map((story, i) => (
-            <Marker
+            <GraveMarker
               key={story.timestamp ?? i}
-              coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}
-              draggable
-              onDragEnd={e => handleDragEnd(story, e.nativeEvent.coordinate)}
+              story={story}
               onPress={() => { setSelectedStory(story); setBioExpanded(false); }}
-            >
-              <View style={styles.markerOuter}>
-                <View style={[styles.markerInner, story._lowConfidence && styles.markerLowConf]}>
-                  <Text style={styles.markerCross}>✝</Text>
-                </View>
-              </View>
-            </Marker>
+              onDragEnd={e => handleDragEnd(story, e.nativeEvent.coordinate)}
+            />
           ))}
         </MapView>
 
@@ -434,15 +481,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.sm,
   },
   geocodingText: { color: PARCHMENT, fontSize: 12, fontFamily: fonts.body, letterSpacing: 0.5 },
-
-  markerOuter: { alignItems: 'center' },
-  markerInner: {
-    backgroundColor: 'rgba(20,16,11,0.92)',
-    borderWidth: 1.5, borderColor: GOLD,
-    borderRadius: 4, paddingHorizontal: 7, paddingVertical: 4,
-  },
-  markerLowConf: { borderColor: colors.ember, opacity: 0.8 },
-  markerCross: { color: GOLD, fontSize: 15 },
 
   floatingCallout: {
     position: 'absolute', top: 12, left: 12, right: 12,

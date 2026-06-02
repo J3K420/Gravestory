@@ -1,7 +1,8 @@
 import { graveCacheKey, readGraveCache, writeGraveCache } from './grave-cache';
+import { PROXY_BASE } from './config';
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
-const OVERPASS  = 'https://overpass-api.de/api/interpreter';
+const OVERPASS  = `${PROXY_BASE}/overpass`;
 const HEADERS   = { 'User-Agent': 'GraveStory/1.0 (mobile)' };
 
 const US_STATE_LOOKUP = {
@@ -172,7 +173,7 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
         );
         out center;
       `;
-      const res1 = await fetch(OVERPASS, { method: 'POST', body: 'data=' + encodeURIComponent(overpassQuery) });
+      const res1 = await fetch(OVERPASS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: overpassQuery }) });
       if (res1.ok) {
         const d1 = await res1.json();
         for (const el of (d1.elements || [])) {
@@ -197,7 +198,7 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
           );
           out center;
         `;
-        const res2 = await fetch(OVERPASS, { method: 'POST', body: 'data=' + encodeURIComponent(bboxQuery) });
+        const res2 = await fetch(OVERPASS, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: bboxQuery }) });
         if (res2.ok) {
           const d2 = await res2.json();
           for (const el of (d2.elements || [])) {

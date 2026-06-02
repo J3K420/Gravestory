@@ -164,6 +164,10 @@ Built for one-handed use in a cemetery. Service worker caches the app shell (`gr
 
 - **Soft-delete sync** — deletes propagate to other devices via `deleted_at` in the delta sync, not through missing rows.
 
+- **Tavily inscription-phrase disambiguation** — when the OCR returns a bare surname with no dates (e.g. "TOMB OF WASHINGTON"), `searchForPerson` prepends two high-priority queries that search the inscription text verbatim before falling back to name-only queries. Prevents generic surname searches returning cemetery-name results instead of the actual person. Applies to both `js/api-tavily.js` and `mobile/src/lib/api-tavily.js`.
+
+- **Historical figures biography exception** — `generateBiography` explicitly instructs Gemini that the anti-fabrication rule applies to private individuals only. For clearly identified major historical figures (presidents, monarchs, generals, etc.) the model MUST write a full biography drawing on well-established historical record, cited as `[Historical record]`. A two-paragraph biography for George Washington is considered a failure. Applies to both `js/biography.js` and `mobile/src/lib/biography.js`.
+
 ---
 
 ## React Native mobile app (Expo)
@@ -190,7 +194,7 @@ mobile/
   App.js                        — NavigationContainer + SafeAreaProvider + cold-start deep link handler
   index.js                      — Entry point; imports polyfills.js first, then registerRootComponent
   polyfills.js                  — crypto.getRandomValues + crypto.subtle.digest polyfill (expo-crypto); MUST be first import in index.js
-  app.json                      — scheme: "gravestory" (required for OAuth deep links)
+  app.config.js                 — Expo config: slug "mobile", owner "j3k420", scheme "gravestory" (replaces app.json)
   src/
     lib/
       config.js                 — PROXY_BASE (same Cloudflare Worker as web)
@@ -203,7 +207,7 @@ mobile/
       api-wikipedia.js          — fetchWikipediaPortraits (ES module, adds User-Agent header)
       biography.js              — generateBiography (ES module)
       api-nominatim.js          — forwardGeocode: text → { lat, lng } via Nominatim
-      api-r2.js                 — uploadGravestoneImage(base64): POST to /upload-image, returns URL or null
+      api-r2.js                 — uploadGravestoneImage(base64): POST to /upload-image with { data, contentType } body, returns URL or null
       map-utils.js              — getDistanceMeters, groupGravesByCemetery (ES module)
       sync.js                   — storyToRow/rowToStory, cloudSaveStory/Update/Delete, syncDelta, syncOnSignIn, pushLocalOnly
     screens/
@@ -228,14 +232,15 @@ mobile/
 
 ### Mobile pipeline (CameraScreen.js)
 
-1. expo-image-picker → compress to 1024px JPEG → base64 via expo-image-manipulator
-2. `verifyIsGravestone(base64)` — throws `{ __verificationRejection: true }` → rejection UI
-3. `readGravestone(base64)` — Gemini OCR → structured JSON
-4. Parallel: `searchForPerson` + `searchWikiTree` + `fetchWikipediaPortraits`
-5. `generateBiography` — Gemini narrative or stone-only fallback
-6. Read `user.user_metadata.default_public` → set `story.is_public`
-7. Save to AsyncStorage → `cloudSaveStory` (if signed in) → `uploadGravestoneImage` → `cloudUpdateStory` with `image_url`
-8. Navigate to ResultScreen
+1. expo-image-picker (`exif: true`) → read EXIF GPS before compression strips it → compress to 1024px JPEG → base64 via expo-image-manipulator
+2. GPS source: EXIF coords from the photo if present; device GPS fallback only for **camera shots** (not library picks — device location would be wrong for historical photos)
+3. `verifyIsGravestone(base64)` — throws `{ __verificationRejection: true }` → rejection UI
+4. `readGravestone(base64)` — Gemini OCR → structured JSON
+5. Parallel: `searchForPerson` + `searchWikiTree` + `fetchWikipediaPortraits`
+6. `generateBiography` — Gemini narrative or stone-only fallback
+7. Read `user.user_metadata.default_public` → set `story.is_public`
+8. Save to AsyncStorage → `cloudSaveStory` (if signed in) → `uploadGravestoneImage` → `cloudUpdateStory` with `image_url`
+9. Navigate to ResultScreen
 
 ### Google OAuth (mobile)
 

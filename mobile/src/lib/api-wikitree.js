@@ -218,7 +218,6 @@ export async function searchWikiTree(graveData, location = null) {
       if (bestYear && Math.abs(bestYear - parseInt(birthYear, 10)) > 10) return null;
     }
 
-    console.warn('WIKITREE match:', best.Name, best.BirthDate, best.DeathDate);
     return {
       name: `${best.FirstName || ''} ${best.LastNameAtBirth || best.LastNameCurrent || ''}`.trim(),
       birth: best.BirthDate || null,
@@ -229,7 +228,7 @@ export async function searchWikiTree(graveData, location = null) {
       bioSnippet: best.Bio ? best.Bio.slice(0, 1500) : null,
     };
   } catch (e) {
-    console.log('WikiTree fetch failed:', e.message);
+    console.warn('WikiTree fetch failed:', e.message);
     return null;
   }
 }

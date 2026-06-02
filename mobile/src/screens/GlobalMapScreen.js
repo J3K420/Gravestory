@@ -95,6 +95,7 @@ export default function GlobalMapScreen({ navigation }) {
   }
 
   function flyTo(story) {
+    if (!story.gps) return;
     mapRef.current?.animateToRegion(
       { latitude: story.gps.lat, longitude: story.gps.lng, latitudeDelta: 0.0006, longitudeDelta: 0.0006 },
       700
@@ -133,7 +134,7 @@ export default function GlobalMapScreen({ navigation }) {
       {/* Map */}
       <View style={styles.mapContainer}>
         <MapView ref={mapRef} style={styles.map} initialRegion={DEFAULT_REGION}>
-          {stories.map((story, i) => (
+          {stories.filter(s => s.gps).map((story, i) => (
             <Marker key={story.id ?? i} coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}>
               <View style={styles.markerOuter}>
                 <View style={[styles.markerInner, story._lowConfidence && styles.markerLowConf]}>

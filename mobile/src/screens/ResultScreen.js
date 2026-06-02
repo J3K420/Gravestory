@@ -3,21 +3,15 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Linking, Share, Image, Alert, FlatList, Dimensions, RefreshControl,
 } from 'react-native';
-
-const SCREEN_W = Dimensions.get('window').width;
-
-// Handles both old saved stories ({ left, right }) and new array format
-function normalizePortraits(portraits) {
-  if (!portraits) return [];
-  if (Array.isArray(portraits)) return portraits.filter(Boolean);
-  return [portraits.left, portraits.right].filter(Boolean);
-}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory, cloudDeleteStory } from '../lib/sync';
+import { normalizePortraits } from '../lib/api-wikipedia';
 import { colors, fonts, radius } from '../lib/theme';
 import { MapStack, ShareIcon, Globe } from '../components/Icons';
+
+const SCREEN_W = Dimensions.get('window').width;
 
 export default function ResultScreen({ navigation, route }) {
   const [story, setStory]               = useState(route.params?.story);

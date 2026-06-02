@@ -109,8 +109,16 @@ export async function fetchWikipediaArticleSummary(name, dates) {
   }
 }
 
+// Normalizes portrait data from both old saved stories ({ left, right } object)
+// and the new array format so display code doesn't need to handle both shapes.
+export function normalizePortraits(portraits) {
+  if (!portraits) return [];
+  if (Array.isArray(portraits)) return portraits.filter(Boolean);
+  return [portraits.left, portraits.right].filter(Boolean);
+}
+
 // Returns an array of image URLs (up to 5). Old callers expecting { left, right }
-// should use normalizePortraits() in the display layer for backward compatibility.
+// should use normalizePortraits() for backward compatibility.
 export async function fetchWikipediaPortraits(name, dates) {
   if (!name || name.toLowerCase().includes('unknown')) return [];
 

@@ -207,7 +207,6 @@ CRITICAL: the "sources" and "source_urls" arrays MUST be index-aligned to the [N
   if (data.error) throw new Error(data.error.message);
 
   const text = data.candidates[0].content.parts[0].text;
-  console.warn('BIOGRAPHY length:', text.length, 'chars');
   const parsed = safeParseJSON(text, null);
   if (parsed?.biography) return validateCitations(parsed);
 

@@ -252,6 +252,5 @@ export async function searchForPerson(graveData, location) {
     } catch (e) { console.warn('Tavily query failed:', query, e?.message); }
   }
 
-  console.warn('TAVILY results:', results.length, results.map(r => r.title).join(' | '));
   return results;
 }

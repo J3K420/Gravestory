@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, Callout } from 'react-native-maps';
+import MapView, { Marker, Callout, Polygon } from 'react-native-maps';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory } from '../lib/sync';
 import { supabase } from '../lib/supabase';
@@ -14,6 +14,100 @@ const GOLD     = '#c9a84c';
 const INK      = '#0d0b08';
 const PARCHMENT = '#e8d4a0';
 const STONE    = 'rgba(138,126,110,0.7)';
+
+// ── BOUNDARY HELPERS ─────────────────────────────────────────────
+
+function stitchOuterRing(ways) {
+  if (ways.length === 0) return [];
+  if (ways.length === 1) return ways[0];
+  const EPS = 1e-6;
+  const close = (a, b) => Math.abs(a[0] - b[0]) < EPS && Math.abs(a[1] - b[1]) < EPS;
+  const remaining = ways.map(w => w.slice());
+  const ring = remaining.shift();
+  while (remaining.length > 0) {
+    const tail = ring[ring.length - 1];
+    let joined = false;
+    for (let i = 0; i < remaining.length; i++) {
+      const w = remaining[i];
+      if (close(w[0], tail)) {
+        ring.push(...w.slice(1)); remaining.splice(i, 1); joined = true; break;
+      }
+      if (close(w[w.length - 1], tail)) {
+        ring.push(...w.slice(0, -1).reverse()); remaining.splice(i, 1); joined = true; break;
+      }
+    }
+    if (!joined) { for (const w of remaining) ring.push(...w); break; }
+  }
+  return ring;
+}
+
+async function fetchOSMCemeteryBoundary(lat, lng, cemeteryName = null) {
+  const query = `
+    [out:json][timeout:15];
+    (
+      way[landuse=cemetery](around:1000,${lat},${lng});
+      way[amenity=grave_yard](around:1000,${lat},${lng});
+      relation[landuse=cemetery](around:1000,${lat},${lng});
+      relation[amenity=grave_yard](around:1000,${lat},${lng});
+    );
+    out geom;
+  `;
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const nameKey = cemeteryName ? cemeteryName.toLowerCase() : null;
+    const candidates = [];
+
+    for (const el of (data.elements || [])) {
+      const elName = (el.tags?.name || '').toLowerCase();
+      const nameMatch = nameKey ? elName.includes(nameKey) : false;
+      if (el.geometry && el.geometry.length > 2) {
+        candidates.push({ pts: el.geometry.map(pt => [pt.lat, pt.lon]), isRelation: false, nameMatch });
+      } else if (el.type === 'relation' && el.members) {
+        try {
+          const outerWays = el.members
+            .filter(m => m.role === 'outer' && m.geometry?.length > 1)
+            .map(m => m.geometry.map(pt => [pt.lat, pt.lon]));
+          if (outerWays.length > 0) {
+            const stitched = stitchOuterRing(outerWays);
+            if (stitched.length > 2 && stitched.length <= 2000) {
+              candidates.push({ pts: stitched, isRelation: true, nameMatch });
+            }
+          }
+        } catch { /* skip bad relation */ }
+      }
+    }
+
+    if (candidates.length === 0) return null;
+
+    const scored = candidates.map(({ pts, isRelation, nameMatch }) => {
+      const lats = pts.map(p => p[0]);
+      const lngs = pts.map(p => p[1]);
+      const area = (Math.max(...lats) - Math.min(...lats)) * (Math.max(...lngs) - Math.min(...lngs));
+      const containsGrave = lat >= Math.min(...lats) && lat <= Math.max(...lats) &&
+                            lng >= Math.min(...lngs) && lng <= Math.max(...lngs);
+      return { pts, area, containsGrave, isRelation, nameMatch };
+    });
+
+    const containing = scored.filter(s => s.containsGrave);
+    const pool = containing.length > 0 ? containing : scored;
+    pool.sort((a, b) => {
+      if (a.nameMatch !== b.nameMatch) return a.nameMatch ? -1 : 1;
+      if (a.isRelation !== b.isRelation) return a.isRelation ? -1 : 1;
+      return a.area - b.area;
+    });
+
+    // Convert [lat, lon] → react-native-maps {latitude, longitude}
+    return pool[0].pts.map(([latitude, longitude]) => ({ latitude, longitude }));
+  } catch {
+    return null;
+  }
+}
 
 // Geographic center of the contiguous US — used before any graves are located
 const DEFAULT_REGION = {
@@ -29,6 +123,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
   const mapRef = useRef(null);
   const [mappedStories, setMappedStories] = useState([]);
   const [geocoding, setGeocoding] = useState(true);
+  const [boundaryCoords, setBoundaryCoords] = useState([]);
 
   useEffect(() => {
     resolveStories();
@@ -66,6 +161,17 @@ export default function CemeteryMapScreen({ navigation, route }) {
     setGeocoding(false);
 
     if (resolved.length === 0) return;
+
+    // Fetch the cemetery boundary polygon from OSM
+    const primaryStory = focusStory
+      ? resolved.find(s => s.timestamp === focusStory.timestamp) || resolved[0]
+      : resolved[0];
+    if (primaryStory?.gps) {
+      const cemeteryName = (primaryStory.location || '').split(',')[0].trim();
+      fetchOSMCemeteryBoundary(primaryStory.gps.lat, primaryStory.gps.lng, cemeteryName)
+        .then(coords => { if (coords) setBoundaryCoords(coords); })
+        .catch(() => {});
+    }
 
     // Animate map to the appropriate position after geocoding
     setTimeout(() => {
@@ -160,6 +266,15 @@ export default function CemeteryMapScreen({ navigation, route }) {
           style={styles.map}
           initialRegion={DEFAULT_REGION}
         >
+          {boundaryCoords.length > 0 && (
+            <Polygon
+              coordinates={boundaryCoords}
+              strokeColor="rgba(160,120,48,0.8)"
+              fillColor="rgba(160,120,48,0.06)"
+              strokeWidth={2}
+            />
+          )}
+
           {mappedStories.map((story, i) => (
             <Marker
               key={story.timestamp ?? i}

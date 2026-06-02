@@ -134,13 +134,19 @@ export default function CameraScreen({ navigation }) {
 
       // Portrait fallback: if the stone showed only a surname (e.g. "HOUDINI"),
       // the single-token guard skipped the initial Wikipedia fetch. Now that the
-      // biography has resolved the full name (e.g. "Harry Houdini"), retry.
+      // biography has resolved the full name, retry — but split on " and " first
+      // because bio.name is often a combined string ("Harry Houdini and Bess Houdini")
+      // that would fail the Wikipedia title-match guard when passed as-is.
       let resolvedPortraits = portraits;
       if (resolvedPortraits.length === 0 && bioResult.name) {
         const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
-        const bioTokens = bioResult.name.toLowerCase().replace(/[.,'"()]/g,'').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w));
-        if (bioTokens.length >= 2) {
-          resolvedPortraits = await fetchWikipediaPortraits(bioResult.name, bioResult.dates);
+        const nameParts = bioResult.name.split(/\s+and\s+/i).map(n => n.trim()).filter(Boolean);
+        for (const namePart of nameParts) {
+          const tokens = namePart.toLowerCase().replace(/[.,'"()]/g, '').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w));
+          if (tokens.length >= 2) {
+            const fetched = await fetchWikipediaPortraits(namePart, bioResult.dates);
+            if (fetched.length > 0) { resolvedPortraits = fetched; break; }
+          }
         }
       }
 

@@ -419,10 +419,10 @@ function stitchOuterRing(ways) {
 }
 
 // ── FETCH OSM CEMETERY OR ESTATE BOUNDARY POLYGON ───────────────
-async function fetchOSMCemeteryBoundary(lat, lng, skipEstateFallback = false) {
-  // Pass 1 — look for a cemetery boundary at/around this location.
-  // Radius widened to 1000m because pinpoint grave coords sit well inside large cemeteries
-  // (e.g. Lake View Cemetery in Seattle is ~600m across; 200m would miss the boundary).
+// cemeteryName: first-segment of the location string (e.g. "Machpelah Cemetery").
+// When present, candidates whose OSM name matches are ranked first — prevents the
+// dense Cypress Hills complex (8 adjacent cemeteries) from drawing the wrong polygon.
+async function fetchOSMCemeteryBoundary(lat, lng, skipEstateFallback = false, cemeteryName = null) {
   const cemeteryQuery = `
     [out:json][timeout:15];
     (
@@ -441,38 +441,53 @@ async function fetchOSMCemeteryBoundary(lat, lng, skipEstateFallback = false) {
     if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
     const data = await res.json();
 
-    // Build candidates from both ways (el.geometry) and relations (el.members[].geometry).
-    // Relations need their outer-ring ways stitched in order — Overpass returns them in
-    // arbitrary sequence, and naively concatenating them produces crossed lines.
+    const nameKey = cemeteryName ? cemeteryName.toLowerCase() : null;
+
     const candidates = [];
     for (const el of (data.elements || [])) {
+      const elName = (el.tags?.name || '').toLowerCase();
+      const nameMatch = nameKey ? elName.includes(nameKey) : false;
+
       if (el.geometry && el.geometry.length > 2) {
-        candidates.push({ pts: el.geometry.map(pt => [pt.lat, pt.lon]), isRelation: false });
+        candidates.push({
+          pts: el.geometry.map(pt => [pt.lat, pt.lon]),
+          isRelation: false, nameMatch,
+        });
       } else if (el.type === 'relation' && el.members) {
-        const outerWays = el.members
-          .filter(m => m.role === 'outer' && m.geometry?.length)
-          .map(m => m.geometry.map(pt => [pt.lat, pt.lon]));
-        if (outerWays.length > 0) {
-          const stitched = stitchOuterRing(outerWays);
-          if (stitched.length > 2) candidates.push({ pts: stitched, isRelation: true });
+        try {
+          const outerWays = el.members
+            .filter(m => m.role === 'outer' && m.geometry?.length > 1)
+            .map(m => m.geometry.map(pt => [pt.lat, pt.lon]));
+          if (outerWays.length > 0) {
+            const stitched = stitchOuterRing(outerWays);
+            // Skip huge stitched polygons — they're almost always a whole-district
+            // relation (e.g. the entire Cypress Hills complex) not a single cemetery.
+            if (stitched.length > 2 && stitched.length <= 2000) {
+              candidates.push({ pts: stitched, isRelation: true, nameMatch });
+            }
+          }
+        } catch(e) {
+          console.log('Relation stitching failed, skipping:', e);
         }
       }
     }
 
     if (candidates.length > 0) {
-      const scored = candidates.map(({ pts, isRelation }) => {
+      const scored = candidates.map(({ pts, isRelation, nameMatch }) => {
         const lats = pts.map(p => p[0]);
         const lngs = pts.map(p => p[1]);
         const area = (Math.max(...lats) - Math.min(...lats)) * (Math.max(...lngs) - Math.min(...lngs));
         const containsGrave = lat >= Math.min(...lats) && lat <= Math.max(...lats) &&
                               lng >= Math.min(...lngs) && lng <= Math.max(...lngs);
-        return { pts, area, containsGrave, isRelation };
+        return { pts, area, containsGrave, isRelation, nameMatch };
       });
       const containing = scored.filter(s => s.containsGrave);
       const pool = containing.length > 0 ? containing : scored;
-      // Relations are the full cemetery outline; prefer them over tiny sub-ways,
-      // then pick smallest within each type to avoid huge district polygons.
+      // Sort: name match first → relation over way → smallest area.
+      // Name matching is the primary key so dense complexes (Cypress Hills) don't
+      // swallow the specific cemetery the user searched for.
       pool.sort((a, b) => {
+        if (a.nameMatch !== b.nameMatch) return a.nameMatch ? -1 : 1;
         if (a.isRelation !== b.isRelation) return a.isRelation ? -1 : 1;
         return a.area - b.area;
       });
@@ -614,7 +629,8 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
     // If any grave was confirmed as cemetery by the geocoder, skip estate fallback.
     // For camera-GPS stories (no geocoder call), assume unknown and allow estate search.
     const knownCemetery = graves.some(g => g._isCemetery === true);
-    await loadAndDrawBoundary(centerLat, centerLng, knownCemetery);
+    const cemeteryName = (largest.graves[0].location || '').split(',')[0].trim();
+    await loadAndDrawBoundary(centerLat, centerLng, knownCemetery, cemeteryName);
   }
 
   // If multiple graves with no boundary yet, fit to grave markers
@@ -627,9 +643,8 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
 
 let currentBoundaryLayer = null;
 
-async function loadAndDrawBoundary(lat, lng, knownCemetery = false) {
-  // Try OSM boundary (skipEstateFallback=true when we already know it's a cemetery)
-  const osmBoundary = await fetchOSMCemeteryBoundary(lat, lng, knownCemetery);
+async function loadAndDrawBoundary(lat, lng, knownCemetery = false, cemeteryName = null) {
+  const osmBoundary = await fetchOSMCemeteryBoundary(lat, lng, knownCemetery, cemeteryName);
   if (osmBoundary) {
     drawBoundary(osmBoundary, 'osm');
     fitMapToBoundary(osmBoundary);

@@ -1,8 +1,27 @@
 // Direct Wikipedia fetch — no proxy needed.
+import * as ImageManipulator from 'expo-image-manipulator';
+
 const WIKI_HEADERS = {
   'User-Agent': 'GraveStory/1.0 (https://github.com/J3K420/Gravestory; gravestory mobile app)',
   'Api-User-Agent': 'GraveStory/1.0',
 };
+
+// Download a remote image and resize it to a local JPEG so React Native's
+// Image component always gets a local file URI it can decode reliably.
+// Falls back to the original URL if resize fails (e.g. unsupported format).
+async function resizeForDisplay(url) {
+  if (!url) return null;
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      url,
+      [{ resize: { width: 800 } }],
+      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    return result.uri;
+  } catch {
+    return url;
+  }
+}
 
 function imageFilenameMatchesPerson(imageUrl, queriedNameSet) {
   if (!imageUrl || !queriedNameSet || queriedNameSet.size === 0) return true;
@@ -77,18 +96,14 @@ export async function fetchWikipediaPortraits(name, dates) {
 
     const images = [];
 
-    // Prefer thumbnail over originalimage: Wikipedia's thumbnail is always a
-    // web-safe JPEG regardless of the source format (TIFF, SVG, etc.), and is
-    // appropriately sized for mobile. originalimage can be 4000+ px / multi-MB
-    // TIFFs that React Native decodes as a black rectangle.
-    const lead = summary?.thumbnail?.source || summary?.originalimage?.source || null;
-    if (lead && imageFilenameMatchesPerson(lead, nameSet)) {
-      images.push(lead);
+    const leadRaw = summary?.thumbnail?.source || summary?.originalimage?.source || null;
+
+    // Collect raw secondary URLs first, then resize everything in parallel
+    const rawUrls = [];
+    if (leadRaw && imageFilenameMatchesPerson(leadRaw, nameSet)) {
+      rawUrls.push(leadRaw);
     }
 
-    // Fetch up to 4 secondary images in parallel.
-    // Use iiurlwidth=800 so Wikipedia serves a sized JPEG thumbnail — this
-    // converts TIFFs/SVGs/PNGs to a safe format and caps the file size.
     try {
       const imagesUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=images&titles=${encodeURIComponent(title)}&imlimit=15&format=json&origin=*`;
       const imagesRes = await fetch(imagesUrl, { headers: WIKI_HEADERS });
@@ -102,33 +117,36 @@ export async function fetchWikipediaPortraits(name, dates) {
           .map(i => i.title)
           .filter(t => /\.(jpe?g|png|tiff?|svg)$/i.test(t))
           .filter(t => !/logo|icon|signature|map|flag|coat[-_ ]of[-_ ]arms|birth|death|burial|gravesite/i.test(t))
-          .filter(t => lead ? !lead.includes(encodeURIComponent(t.replace(/^File:/, ''))) : true)
+          .filter(t => leadRaw ? !leadRaw.includes(encodeURIComponent(t.replace(/^File:/, ''))) : true)
           .slice(0, 4);
 
-        const resolved = await Promise.allSettled(
+        const resolvedRaw = await Promise.allSettled(
           candidates.map(async (candidate) => {
             const resolveUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(candidate)}&prop=imageinfo&iiprop=url|thumbnail&iiurlwidth=800&format=json&origin=*`;
             const resolveRes = await fetch(resolveUrl, { headers: WIKI_HEADERS });
             if (!resolveRes.ok) return null;
             const resolveData = await resolveRes.json();
             const resolvedPage = Object.values(resolveData?.query?.pages || {})[0];
-            // thumburl is the width-constrained JPEG; fall back to url for formats
-            // Wikipedia won't thumbnail (already JPEG/PNG under the size limit)
             const url = resolvedPage?.imageinfo?.[0]?.thumburl
                      || resolvedPage?.imageinfo?.[0]?.url
                      || null;
             return (url && imageFilenameMatchesPerson(url, nameSet)) ? url : null;
           })
         );
-
-        for (const r of resolved) {
-          if (r.status === 'fulfilled' && r.value) {
-            images.push(r.value);
-            if (images.length >= 5) break;
+        for (const r of resolvedRaw) {
+          if (r.status === 'fulfilled' && r.value && rawUrls.length < 5) {
+            rawUrls.push(r.value);
           }
         }
       }
     } catch {}
+
+    // Resize all collected URLs in parallel → local JPEG URIs React Native
+    // can always decode, regardless of original format or file size.
+    const resized = await Promise.allSettled(rawUrls.map(u => resizeForDisplay(u)));
+    for (const r of resized) {
+      if (r.status === 'fulfilled' && r.value) images.push(r.value);
+    }
 
     return images;
   } catch (err) {

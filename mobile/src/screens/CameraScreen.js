@@ -176,14 +176,13 @@ export default function CameraScreen({ navigation }) {
 
       setStepIndex(4);
 
-      // Refine GPS via Nominatim + Overpass grave-node search, same as web pipeline.
-      // Uses primary_name (single OCR name) for a reliable token-match threshold.
-      // Falls back to EXIF/device GPS if geocoding returns nothing.
+      // forwardGeocode resolves the cemetery and, if the grave is tagged in OSM,
+      // the precise node. But camera EXIF / device GPS is always more accurate for
+      // pin placement — the user was physically standing at the grave. Prefer real
+      // GPS over Nominatim coords; only fall back to Nominatim when GPS is absent.
       const primaryName = graveData.primary_name || graveData.names?.[0] || '';
       const geoResult = await forwardGeocode(bioResult.location, primaryName, bioResult.dates);
-      const refinedGps = geoResult
-        ? { lat: geoResult.lat, lng: geoResult.lng }
-        : gps;
+      const refinedGps = gps ?? (geoResult ? { lat: geoResult.lat, lng: geoResult.lng } : null);
       const lowConfidence = geoResult?.lowConfidence || undefined;
 
       // Read default visibility from user metadata

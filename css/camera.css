@@ -34,6 +34,18 @@
     text-align: center;
   }
 
+  @keyframes stone-flicker {
+    0%, 100% { opacity: 1; }
+    8%        { opacity: 0.3; }
+    10%       { opacity: 1; }
+    12%       { opacity: 0.5; }
+    14%       { opacity: 1; }
+    55%       { opacity: 0.75; }
+    60%       { opacity: 1; }
+    65%       { opacity: 0.35; }
+    67%       { opacity: 1; }
+  }
+
   /* Stone-as-upload-zone.
      Resting state: the stone silhouette is the tap target.
      With a photo: the stone hides and the photo shows fully (no clip, no crop). */
@@ -45,6 +57,10 @@
     background: transparent;
     transition: filter 0.3s ease;
     margin: 0 auto;
+  }
+
+  .upload-zone:not(.has-photo) {
+    animation: stone-flicker 2.5s ease-in-out infinite;
   }
 
   /* When a photo is loaded, expand to a landscape-friendly box so the photo

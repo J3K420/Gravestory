@@ -32,6 +32,28 @@ export default function CameraScreen({ navigation }) {
   const [rejected, setRejected] = useState(null);
   const [pipelineError, setPipelineError] = useState(null);
 
+  const stoneOpacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const flicker = Animated.loop(
+      Animated.sequence([
+        Animated.delay(600),
+        Animated.timing(stoneOpacity, { toValue: 0.3,  duration: 50,  useNativeDriver: true }),
+        Animated.timing(stoneOpacity, { toValue: 1,    duration: 50,  useNativeDriver: true }),
+        Animated.timing(stoneOpacity, { toValue: 0.5,  duration: 50,  useNativeDriver: true }),
+        Animated.timing(stoneOpacity, { toValue: 1,    duration: 50,  useNativeDriver: true }),
+        Animated.delay(500),
+        Animated.timing(stoneOpacity, { toValue: 0.65, duration: 250, useNativeDriver: true }),
+        Animated.timing(stoneOpacity, { toValue: 1,    duration: 200, useNativeDriver: true }),
+        Animated.delay(400),
+        Animated.timing(stoneOpacity, { toValue: 0.35, duration: 50,  useNativeDriver: true }),
+        Animated.timing(stoneOpacity, { toValue: 1,    duration: 50,  useNativeDriver: true }),
+        Animated.delay(400),
+      ])
+    );
+    flicker.start();
+    return () => flicker.stop();
+  }, []);
+
   async function pickAndAnalyze(fromCamera) {
     setRejected(null);
     setPipelineError(null);
@@ -221,30 +243,32 @@ export default function CameraScreen({ navigation }) {
         <Text style={styles.title}>Photograph the Stone</Text>
         <Text style={styles.subtitle}>Frame the gravestone clearly for best results</Text>
 
-        <TouchableOpacity style={styles.stoneZone} onPress={showSourcePicker} activeOpacity={0.8}>
-          <Svg width={220} height={240} viewBox="0 0 100 100" fill="none" strokeWidth={1.5}>
-            <Defs>
-              <LinearGradient id="camStoneGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <Stop offset="0%" stopColor="#e8d4a0" />
-                <Stop offset="100%" stopColor="#8a6f3a" />
-              </LinearGradient>
-            </Defs>
-            <Rect x="22" y="84" width="56" height="6" stroke="url(#camStoneGrad)" fill="none" />
-            <Path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="url(#camStoneGrad)" fill="none" />
-            <Path d="M36 80 L36 38 Q36 24 50 24 Q64 24 64 38 L64 80" stroke="url(#camStoneGrad)" strokeOpacity={0.4} fill="none" />
-            <Line x1="40" y1="58" x2="60" y2="58" stroke="url(#camStoneGrad)" strokeOpacity={0.45} strokeWidth={0.7} />
-            <Line x1="42" y1="64" x2="58" y2="64" stroke="url(#camStoneGrad)" strokeOpacity={0.4} strokeWidth={0.7} />
-            <Line x1="44" y1="70" x2="56" y2="70" stroke="url(#camStoneGrad)" strokeOpacity={0.35} strokeWidth={0.7} />
-            <Line x1="18" y1="92" x2="82" y2="92" stroke="url(#camStoneGrad)" strokeOpacity={0.5} />
-          </Svg>
-
-          <View style={styles.stoneInner}>
-            <Svg width={34} height={34} viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M3 7.5h3l1.5-2h9L18 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z" />
-              <Circle cx="12" cy="13" r="3.5" />
+        <TouchableOpacity style={styles.stoneZone} onPress={showSourcePicker} activeOpacity={0.85}>
+          <Animated.View style={{ opacity: stoneOpacity }}>
+            <Svg width={220} height={240} viewBox="0 0 100 100" fill="none" strokeWidth={1.5}>
+              <Defs>
+                <LinearGradient id="camStoneGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <Stop offset="0%" stopColor="#e8d4a0" />
+                  <Stop offset="100%" stopColor="#8a6f3a" />
+                </LinearGradient>
+              </Defs>
+              <Rect x="22" y="84" width="56" height="6" stroke="url(#camStoneGrad)" fill="none" />
+              <Path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="url(#camStoneGrad)" fill="none" />
+              <Path d="M36 80 L36 38 Q36 24 50 24 Q64 24 64 38 L64 80" stroke="url(#camStoneGrad)" strokeOpacity={0.4} fill="none" />
+              <Line x1="40" y1="58" x2="60" y2="58" stroke="url(#camStoneGrad)" strokeOpacity={0.45} strokeWidth={0.7} />
+              <Line x1="42" y1="64" x2="58" y2="64" stroke="url(#camStoneGrad)" strokeOpacity={0.4} strokeWidth={0.7} />
+              <Line x1="44" y1="70" x2="56" y2="70" stroke="url(#camStoneGrad)" strokeOpacity={0.35} strokeWidth={0.7} />
+              <Line x1="18" y1="92" x2="82" y2="92" stroke="url(#camStoneGrad)" strokeOpacity={0.5} />
             </Svg>
-            <Text style={styles.stoneText}>Tap to take or{'\n'}choose photo</Text>
-          </View>
+
+            <View style={styles.stoneInner}>
+              <Svg width={34} height={34} viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
+                <Path d="M3 7.5h3l1.5-2h9L18 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z" />
+                <Circle cx="12" cy="13" r="3.5" />
+              </Svg>
+              <Text style={styles.stoneText}>Tap</Text>
+            </View>
+          </Animated.View>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -353,9 +377,9 @@ const styles = StyleSheet.create({
   },
   stoneText: {
     color: STONE, fontStyle: 'italic',
-    fontSize: 13, textAlign: 'center',
-    lineHeight: 20, marginTop: 8,
-    opacity: 0.9,
+    fontSize: 16, textAlign: 'center',
+    marginTop: 10, opacity: 0.9,
+    letterSpacing: 1,
   },
 
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },

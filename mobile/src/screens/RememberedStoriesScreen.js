@@ -1,13 +1,14 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, StatusBar, Alert, RefreshControl,
+  StyleSheet, StatusBar, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudDeleteStory } from '../lib/sync';
+import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
 import { Headstone } from '../components/Icons';
@@ -51,7 +52,6 @@ export default function RememberedStoriesScreen({ navigation }) {
   const [loaded, setLoaded] = useState(false);
   const [sortBy, setSortBy] = useState('recent');
   const [expandedCemeteries, setExpandedCemeteries] = useState(new Set());
-  const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -93,14 +93,12 @@ export default function RememberedStoriesScreen({ navigation }) {
       }));
   }, [stories, sortBy]);
 
-  async function onRefresh() {
-    setRefreshing(true);
+  const { refreshControl } = useRefresh(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     const uid = session?.user?.id ?? null;
     const local = await loadStories(uid);
     setStories(local);
-    setRefreshing(false);
-  }
+  });
 
   function toggleCemetery(name) {
     setExpandedCemeteries(prev => {
@@ -166,7 +164,7 @@ export default function RememberedStoriesScreen({ navigation }) {
 
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+        refreshControl={refreshControl}
       >
         {loaded && stories.length === 0 ? (
           <View style={styles.emptyState}>

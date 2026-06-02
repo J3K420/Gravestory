@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Animated, ScrollView, Modal, Alert, RefreshControl,
+  Animated, ScrollView, Modal, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Rect, Path, Line, Circle } from 'react-native-svg';
@@ -9,6 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
+import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { verifyIsGravestone, readGravestone } from '../lib/api-gemini';
 import { searchForPerson } from '../lib/api-tavily';
@@ -34,7 +35,6 @@ export default function CameraScreen({ navigation }) {
   const [rejected, setRejected] = useState(null);
   const [pipelineError, setPipelineError] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
   const stoneOpacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
@@ -58,12 +58,10 @@ export default function CameraScreen({ navigation }) {
     return () => flicker.stop();
   }, []);
 
-  function onRefresh() {
-    setRefreshing(true);
+  const { refreshControl } = useRefresh(() => {
     setRejected(null);
     setPipelineError(null);
-    setRefreshing(false);
-  }
+  });
 
   async function pickAndAnalyze(fromCamera) {
     setRejected(null);
@@ -321,7 +319,7 @@ export default function CameraScreen({ navigation }) {
 
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+        refreshControl={refreshControl}
       >
         <Text style={styles.title}>Photograph the Stone</Text>
         <Text style={styles.subtitle}>Frame the gravestone clearly for best results</Text>

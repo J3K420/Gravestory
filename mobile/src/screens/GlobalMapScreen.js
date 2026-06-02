@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, RefreshControl,
+  View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Callout } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
+import { rowToStory } from '../lib/sync';
+import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { Globe } from '../components/Icons';
 
@@ -20,7 +22,6 @@ export default function GlobalMapScreen({ navigation }) {
   const [user, setUser]         = useState(null);
   const [stories, setStories]   = useState([]);
   const [loading, setLoading]   = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -45,18 +46,8 @@ export default function GlobalMapScreen({ navigation }) {
       const mapped = (data || [])
         .filter(row => row.latitude != null && row.longitude != null)
         .map(row => ({
-          id: row.id,
-          timestamp: row.client_timestamp || new Date(row.created_at).getTime(),
-          name: row.name, dates: row.dates, biography: row.biography,
-          location: row.location, inscription: row.inscription, symbols: row.symbols,
-          family_name: row.family_name, notes: row.notes,
-          sources: row.sources, source_urls: row.source_urls,
-          gps: { lat: row.latitude, lng: row.longitude },
-          userCorrected: row.user_corrected, _lowConfidence: row.low_confidence,
+          ...rowToStory(row),
           is_public: true,
-          image_url: row.image_url || null,
-          portrait_left_url: row.portrait_left_url || null,
-          portrait_right_url: row.portrait_right_url || null,
           _contributor: row.contributor_name || 'Anonymous',
           _isGlobal: true,
         }));
@@ -86,13 +77,11 @@ export default function GlobalMapScreen({ navigation }) {
     }
   }
 
-  async function onRefresh() {
-    setRefreshing(true);
+  const { refreshControl } = useRefresh(async () => {
     _cache = null;
     const { data: { session } } = await supabase.auth.getSession();
     await fetchStories(session?.user ?? null);
-    setRefreshing(false);
-  }
+  });
 
   function flyTo(story) {
     if (!story.gps) return;
@@ -169,7 +158,7 @@ export default function GlobalMapScreen({ navigation }) {
         <ScrollView
           style={styles.graveList}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+          refreshControl={refreshControl}
         >
           {stories.length === 0 && !loading ? (
             <Text style={styles.emptyText}>

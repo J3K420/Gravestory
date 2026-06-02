@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Switch,
-  StyleSheet, Alert, ScrollView, ActivityIndicator, RefreshControl,
+  StyleSheet, Alert, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 
 export default function SettingsScreen({ navigation }) {
@@ -12,7 +13,6 @@ export default function SettingsScreen({ navigation }) {
   const [displayName, setDisplayName]   = useState('');
   const [defaultPublic, setDefaultPublic] = useState(false);
   const [saving, setSaving]             = useState(false);
-  const [refreshing, setRefreshing]     = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -23,16 +23,14 @@ export default function SettingsScreen({ navigation }) {
     });
   }, []);
 
-  async function onRefresh() {
-    setRefreshing(true);
+  const { refreshControl } = useRefresh(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
       setUser(session.user);
       setDisplayName(session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '');
       setDefaultPublic(session.user.user_metadata?.default_public ?? false);
     }
-    setRefreshing(false);
-  }
+  });
 
   async function saveProfile() {
     setSaving(true);
@@ -69,7 +67,7 @@ export default function SettingsScreen({ navigation }) {
 
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+        refreshControl={refreshControl}
       >
         <Text style={styles.title}>Account</Text>
 

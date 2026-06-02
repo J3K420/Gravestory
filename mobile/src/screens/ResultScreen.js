@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Linking, Share, Image, Alert, FlatList, Dimensions, RefreshControl,
+  Linking, Share, Image, Alert, FlatList, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory, cloudDeleteStory } from '../lib/sync';
 import { normalizePortraits } from '../lib/api-wikipedia';
+import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { MapStack, ShareIcon, Globe } from '../components/Icons';
 
@@ -19,7 +20,6 @@ export default function ResultScreen({ navigation, route }) {
   const [sharing, setSharing]           = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
-  const [refreshing, setRefreshing]     = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -27,14 +27,12 @@ export default function ResultScreen({ navigation, route }) {
     });
   }, []);
 
-  async function onRefresh() {
-    setRefreshing(true);
+  const { refreshControl } = useRefresh(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     const all = await loadStories(session?.user?.id ?? null);
     const fresh = all.find(s => s.timestamp === story?.timestamp);
     if (fresh) setStory(fresh);
-    setRefreshing(false);
-  }
+  });
 
   if (!story) {
     return (
@@ -110,7 +108,7 @@ export default function ResultScreen({ navigation, route }) {
 
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+        refreshControl={refreshControl}
       >
 
         {/* Image carousel — gravestone photo + portrait images */}

@@ -1,19 +1,19 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  StyleSheet, StatusBar, RefreshControl,
+  StyleSheet, StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { syncOnSignIn, syncDelta } from '../lib/sync';
+import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
 import { MapStack, Globe } from '../components/Icons';
 
 export default function HomeScreen({ navigation }) {
   const [user, setUser] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -41,12 +41,10 @@ export default function HomeScreen({ navigation }) {
     }, [])
   );
 
-  async function onRefresh() {
-    setRefreshing(true);
+  const { refreshControl } = useRefresh(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) await syncDelta(session.user);
-    setRefreshing(false);
-  }
+  });
 
   const displayName = user?.user_metadata?.full_name
     || user?.email?.split('@')[0]
@@ -65,7 +63,7 @@ export default function HomeScreen({ navigation }) {
 
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+        refreshControl={refreshControl}
       >
 
         {/* Logo */}

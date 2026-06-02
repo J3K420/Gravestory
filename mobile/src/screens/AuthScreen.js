@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, RefreshControl,
+  StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../lib/supabase';
+import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
 
@@ -17,15 +18,11 @@ export default function AuthScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [status, setStatus]     = useState('');
   const [loading, setLoading]   = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-
-  function onRefresh() {
-    setRefreshing(true);
+  const { refreshControl } = useRefresh(() => {
     setEmail('');
     setPassword('');
     setStatus('');
-    setRefreshing(false);
-  }
+  });
 
   async function signIn() {
     if (!email || !password) { setStatus('Email and password required'); return; }
@@ -80,7 +77,7 @@ export default function AuthScreen({ navigation }) {
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.flame} colors={[colors.flame]} />}
+          refreshControl={refreshControl}
         >
 
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>

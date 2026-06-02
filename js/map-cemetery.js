@@ -257,7 +257,11 @@ async function initCemeteryMap() {
   if (textOnly.length > 0) {
     document.getElementById('map-cemetery-name').textContent = '📍 Locating…';
     for (const story of textOnly) {
-      const coords = await forwardGeocode(story.location, story.name, story.dates);
+      // Use primary_name (single person from OCR) not story.name (biography combined name
+      // like "Harry Houdini and Bess Houdini") — combined names inflate the token count
+      // and push the Overpass match threshold above what OSM nodes can actually score.
+      const searchName = story.graveData?.primary_name || story.name;
+      const coords = await forwardGeocode(story.location, searchName, story.dates);
       if (coords) {
         // Write coords back to the canonical saved story so they persist
         story.gps = { lat: coords.lat, lng: coords.lng };
@@ -629,7 +633,7 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
     // If any grave was confirmed as cemetery by the geocoder, skip estate fallback.
     // For camera-GPS stories (no geocoder call), assume unknown and allow estate search.
     const knownCemetery = graves.some(g => g._isCemetery === true);
-    const cemeteryName = (largest.graves[0].location || '').split(',')[0].trim();
+    const cemeteryName = (graves[0]?.location || '').split(',')[0].trim();
     await loadAndDrawBoundary(centerLat, centerLng, knownCemetery, cemeteryName);
   }
 

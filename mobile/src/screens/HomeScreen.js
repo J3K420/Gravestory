@@ -95,7 +95,7 @@ export default function HomeScreen({ navigation }) {
 
         {/* Logo */}
         <View style={styles.logoArea}>
-          <GravestoneLogo size={180} />
+          <GravestoneLogo size={240} />
           <Text style={styles.logoTitle}>GraveStory</Text>
           <Text style={styles.logoSubtitle}>every life deserves to be remembered</Text>
         </View>

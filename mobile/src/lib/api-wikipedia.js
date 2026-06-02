@@ -33,9 +33,10 @@ function imageFilenameMatchesPerson(imageUrl, queriedNameSet) {
   }
 }
 
+// Returns an array of image URLs (up to 5). Old callers expecting { left, right }
+// should use normalizePortraits() in the display layer for backward compatibility.
 export async function fetchWikipediaPortraits(name, dates) {
-  const result = { left: null, right: null };
-  if (!name || name.toLowerCase().includes('unknown')) return result;
+  if (!name || name.toLowerCase().includes('unknown')) return [];
 
   const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
   const significantTokens = name
@@ -43,7 +44,7 @@ export async function fetchWikipediaPortraits(name, dates) {
     .replace(/[.,'"()]/g, '')
     .split(/\s+/)
     .filter(w => w.length > 1 && !SKIP.has(w));
-  if (significantTokens.length < 2) return result;
+  if (significantTokens.length < 2) return [];
 
   try {
     const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
@@ -55,64 +56,73 @@ export async function fetchWikipediaPortraits(name, dates) {
     if (!searchRes.ok) throw new Error(`search ${searchRes.status}`);
     const searchData = await searchRes.json();
     const hits = searchData?.query?.search || [];
-    if (hits.length === 0) return result;
+    if (hits.length === 0) return [];
 
-    const required = name
-      .toLowerCase()
-      .replace(/[.,'"()]/g, '')
-      .split(/\s+/)
-      .filter(w => w.length > 1 && !SKIP.has(w));
+    const required = significantTokens; // already computed above
+    const nameSet = new Set(required);
 
     let title = null;
     for (const hit of hits) {
       const t = (hit.title || '').toLowerCase();
       if (required.every(w => t.includes(w))) { title = hit.title; break; }
     }
-    if (!title) return result;
+    if (!title) return [];
 
-    const summaryRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, { headers: WIKI_HEADERS });
+    const summaryRes = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+      { headers: WIKI_HEADERS }
+    );
     if (!summaryRes.ok) throw new Error(`summary ${summaryRes.status}`);
     const summary = await summaryRes.json();
 
+    const images = [];
+
     const lead = summary?.originalimage?.source || summary?.thumbnail?.source || null;
-    const nameSet = new Set(required);
     if (lead && imageFilenameMatchesPerson(lead, nameSet)) {
-      result.left = lead;
+      images.push(lead);
     }
 
-    if (lead) {
-      try {
-        const imagesUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=images&titles=${encodeURIComponent(title)}&imlimit=5&format=json&origin=*`;
-        const imagesRes = await fetch(imagesUrl, { headers: WIKI_HEADERS });
-        if (imagesRes.ok) {
-          const imagesData = await imagesRes.json();
-          const pages = imagesData?.query?.pages || {};
-          const firstPage = Object.values(pages)[0];
-          const imageList = firstPage?.images || [];
-          const candidates = imageList
-            .map(i => i.title)
-            .filter(t => /\.(jpe?g|png)$/i.test(t))
-            .filter(t => !/logo|icon|signature|map|flag|coat[-_ ]of[-_ ]arms/i.test(t))
-            .filter(t => !lead.includes(encodeURIComponent(t.replace(/^File:/, ''))));
+    // Fetch up to 4 secondary images in parallel
+    try {
+      const imagesUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=images&titles=${encodeURIComponent(title)}&imlimit=15&format=json&origin=*`;
+      const imagesRes = await fetch(imagesUrl, { headers: WIKI_HEADERS });
+      if (imagesRes.ok) {
+        const imagesData = await imagesRes.json();
+        const pages = imagesData?.query?.pages || {};
+        const firstPage = Object.values(pages)[0];
+        const imageList = firstPage?.images || [];
 
-          if (candidates.length > 0) {
-            const resolveUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(candidates[0])}&prop=imageinfo&iiprop=url&format=json&origin=*`;
+        const candidates = imageList
+          .map(i => i.title)
+          .filter(t => /\.(jpe?g|png)$/i.test(t))
+          .filter(t => !/logo|icon|signature|map|flag|coat[-_ ]of[-_ ]arms|birth|death|burial|gravesite/i.test(t))
+          .filter(t => lead ? !lead.includes(encodeURIComponent(t.replace(/^File:/, ''))) : true)
+          .slice(0, 4);
+
+        const resolved = await Promise.allSettled(
+          candidates.map(async (candidate) => {
+            const resolveUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(candidate)}&prop=imageinfo&iiprop=url&format=json&origin=*`;
             const resolveRes = await fetch(resolveUrl, { headers: WIKI_HEADERS });
-            if (resolveRes.ok) {
-              const resolveData = await resolveRes.json();
-              const resolvedPage = Object.values(resolveData?.query?.pages || {})[0];
-              const secondUrl = resolvedPage?.imageinfo?.[0]?.url || null;
-              if (secondUrl && imageFilenameMatchesPerson(secondUrl, nameSet)) {
-                result.right = secondUrl;
-              }
-            }
+            if (!resolveRes.ok) return null;
+            const resolveData = await resolveRes.json();
+            const resolvedPage = Object.values(resolveData?.query?.pages || {})[0];
+            const url = resolvedPage?.imageinfo?.[0]?.url || null;
+            return (url && imageFilenameMatchesPerson(url, nameSet)) ? url : null;
+          })
+        );
+
+        for (const r of resolved) {
+          if (r.status === 'fulfilled' && r.value) {
+            images.push(r.value);
+            if (images.length >= 5) break;
           }
         }
-      } catch {}
-    }
+      }
+    } catch {}
+
+    return images;
   } catch (err) {
     console.warn('Wikipedia portrait fetch failed:', err.message);
+    return [];
   }
-
-  return result;
 }

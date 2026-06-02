@@ -1,8 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Linking, Share, Image, Alert,
+  Linking, Share, Image, Alert, FlatList, Dimensions,
 } from 'react-native';
+
+const SCREEN_W = Dimensions.get('window').width;
+
+// Handles both old saved stories ({ left, right }) and new array format
+function normalizePortraits(portraits) {
+  if (!portraits) return [];
+  if (Array.isArray(portraits)) return portraits.filter(Boolean);
+  return [portraits.left, portraits.right].filter(Boolean);
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
@@ -15,6 +24,7 @@ export default function ResultScreen({ navigation, route }) {
   const [user, setUser]                 = useState(null);
   const [sharing, setSharing]           = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
+  const [carouselIndex, setCarouselIndex] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -37,6 +47,11 @@ export default function ResultScreen({ navigation, route }) {
 
   const { name, dates, biography, sources = [], source_urls = [], location, portraits, graveData } = story;
   const paragraphs = (biography || '').split('\n\n').filter(Boolean);
+
+  const carouselImages = [
+    story.image_url ? { uri: story.image_url, label: 'Gravestone' } : null,
+    ...normalizePortraits(portraits).map(uri => ({ uri, label: 'Portrait' })),
+  ].filter(Boolean);
 
   async function handleDelete() {
     if (story._isGlobal) return;
@@ -91,16 +106,34 @@ export default function ResultScreen({ navigation, route }) {
 
       <ScrollView contentContainerStyle={styles.scroll}>
 
-        {/* Gravestone photo */}
-        {!!story.image_url && (
-          <Image source={{ uri: story.image_url }} style={styles.gravestonePhoto} resizeMode="cover" />
-        )}
-
-        {/* Portraits */}
-        {(portraits?.left || portraits?.right) && (
-          <View style={styles.portraitsRow}>
-            {portraits.left && <Image source={{ uri: portraits.left }} style={styles.portrait} resizeMode="cover" />}
-            {portraits.right && <Image source={{ uri: portraits.right }} style={styles.portrait} resizeMode="cover" />}
+        {/* Image carousel — gravestone photo + portrait images */}
+        {carouselImages.length > 0 && (
+          <View style={styles.carouselOuter}>
+            <FlatList
+              data={carouselImages}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(_, i) => String(i)}
+              renderItem={({ item }) => (
+                <View style={styles.carouselSlide}>
+                  <Image source={{ uri: item.uri }} style={styles.carouselImage} resizeMode="cover" />
+                  <View style={styles.carouselLabelBadge}>
+                    <Text style={styles.carouselLabelText}>{item.label}</Text>
+                  </View>
+                </View>
+              )}
+              onMomentumScrollEnd={e => {
+                setCarouselIndex(Math.round(e.nativeEvent.contentOffset.x / SCREEN_W));
+              }}
+            />
+            {carouselImages.length > 1 && (
+              <View style={styles.dots}>
+                {carouselImages.map((_, i) => (
+                  <View key={i} style={[styles.dot, i === carouselIndex && styles.dotActive]} />
+                ))}
+              </View>
+            )}
           </View>
         )}
 
@@ -209,12 +242,19 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: colors.ash, fontFamily: fonts.bodyItalic },
 
-  gravestonePhoto: {
-    width: '100%', height: 240, borderRadius: radius.sm,
-    borderWidth: 1, borderColor: colors.line, marginBottom: 20,
+  // Break out of the 24px horizontal padding so carousel spans full screen width
+  carouselOuter: { marginHorizontal: -24, marginBottom: 24 },
+  carouselSlide: { width: SCREEN_W, height: 260, position: 'relative' },
+  carouselImage: { width: SCREEN_W, height: 260 },
+  carouselLabelBadge: {
+    position: 'absolute', bottom: 10, left: 12,
+    backgroundColor: 'rgba(20,16,11,0.72)',
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4,
   },
-  portraitsRow: { flexDirection: 'row', gap: 12, marginBottom: 24, justifyContent: 'center' },
-  portrait: { width: 140, height: 160, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line },
+  carouselLabelText: { color: colors.ash, fontSize: 11, fontFamily: fonts.body, letterSpacing: 0.5 },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.line },
+  dotActive: { backgroundColor: colors.flame },
 
   name: {
     color: colors.parchment, fontSize: 30, fontFamily: fonts.title,

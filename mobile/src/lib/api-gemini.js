@@ -127,6 +127,7 @@ Return ONLY a valid JSON object with these exact fields:
   "family_name": "the deceased's surname ONLY IF it is clearly theirs (e.g. shown as a standalone surname banner, or in a family plot context). Leave empty/null if the only surname on the stone appears inside a relational phrase about someone else.",
   "name_confidence": "high if the name is clearly legible, medium if partially weathered or ambiguous, low if significantly uncertain",
   "alternate_names": ["if name_confidence is medium or low, list 1-2 plausible alternate readings of primary_name due to weathering or OCR ambiguity — otherwise empty array"],
+  "multiple_subjects": "true if this photo clearly shows multiple SEPARATE, DISTINCT gravestones or memorial markers in the same frame (not a single shared family stone) — false otherwise",
   "notes": "any other text, observations, or ambiguity flags"
 }
 
@@ -143,6 +144,6 @@ If multiple deceased people share the stone, use the names array and pick the mo
   return safeParseJSON(text, {
     names: [], primary_name: 'Unknown', birth_date: '', death_date: '',
     inscription: '', symbols: [], family_name: '', notes: '',
-    name_confidence: 'high', alternate_names: [],
+    name_confidence: 'high', alternate_names: [], multiple_subjects: false,
   });
 }

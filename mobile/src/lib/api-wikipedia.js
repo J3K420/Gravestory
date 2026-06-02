@@ -58,6 +58,57 @@ function imageFilenameMatchesPerson(imageUrl, queriedNameSet) {
   }
 }
 
+// Fetches the Wikipedia article lead text for a person. Returns { title, extract, url }
+// or null if no matching article is found. Does not download any images.
+export async function fetchWikipediaArticleSummary(name, dates) {
+  if (!name || name.toLowerCase().includes('unknown')) return null;
+
+  const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
+  const significantTokens = name
+    .toLowerCase()
+    .replace(/[.,'"()]/g, '')
+    .split(/\s+/)
+    .filter(w => w.length > 1 && !SKIP.has(w));
+  if (significantTokens.length < 2) return null;
+
+  try {
+    const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
+    const deathYear = yearMatch?.length > 0 ? yearMatch[yearMatch.length - 1] : '';
+    const searchQuery = encodeURIComponent(`${name} ${deathYear}`.trim());
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${searchQuery}&srlimit=3&format=json&origin=*`;
+
+    const searchRes = await fetch(searchUrl, { headers: WIKI_HEADERS });
+    if (!searchRes.ok) return null;
+    const searchData = await searchRes.json();
+    const hits = searchData?.query?.search || [];
+    if (hits.length === 0) return null;
+
+    let title = null;
+    for (const hit of hits) {
+      const t = (hit.title || '').toLowerCase();
+      if (significantTokens.every(w => t.includes(w))) { title = hit.title; break; }
+    }
+    if (!title) return null;
+
+    const summaryRes = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+      { headers: WIKI_HEADERS }
+    );
+    if (!summaryRes.ok) return null;
+    const summary = await summaryRes.json();
+    if (summary.type === 'disambiguation' || !summary.extract || summary.extract.length < 80) return null;
+
+    return {
+      title: summary.title,
+      extract: summary.extract.slice(0, 2000),
+      url: summary.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+    };
+  } catch (err) {
+    console.warn('Wikipedia article summary fetch failed:', err.message);
+    return null;
+  }
+}
+
 // Returns an array of image URLs (up to 5). Old callers expecting { left, right }
 // should use normalizePortraits() in the display layer for backward compatibility.
 export async function fetchWikipediaPortraits(name, dates) {

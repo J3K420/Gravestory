@@ -1,6 +1,89 @@
 import { PROXY_BASE } from './config';
 import { safeParseJSON } from './util-json';
 
+// Build a cross-source corroboration summary for the biography prompt.
+// Detects name/date agreement and conflicts across WikiTree, FindAGrave, obituaries,
+// BillionGraves, and Chronicling America so the model can cite with appropriate confidence
+// instead of silently blending conflicting claims.
+function buildCorroborationSummary(graveData, searchResults, wikiData) {
+  const lines = [];
+  const stoneName = (graveData.primary_name || graveData.names?.[0] || '').toLowerCase();
+  const stoneBirth = graveData.birth_date?.match(/\d{4}/)?.[0];
+  const stoneDeath = graveData.death_date?.match(/\d{4}/)?.[0];
+  const stoneFirst = stoneName.split(' ')[0];
+  const stoneLast  = stoneName.split(' ').pop();
+
+  // Count independent source types that mention the same person's name
+  const nameConfirmers = new Set();
+  if (wikiData?.name) {
+    const wikiFirst = wikiData.name.toLowerCase().split(' ')[0];
+    if (stoneFirst && wikiFirst && (wikiFirst.startsWith(stoneFirst) || stoneFirst.startsWith(wikiFirst))) {
+      nameConfirmers.add('WikiTree');
+    }
+  }
+  const SOURCE_LABEL = {
+    memorial: 'FindAGrave',
+    obituary: 'Obituary',
+    verified_transcription: 'BillionGraves',
+    public_domain: 'Chronicling America',
+  };
+  for (const r of searchResults) {
+    const label = SOURCE_LABEL[r.source_type];
+    if (!label || !stoneName) continue;
+    const hay = ((r.title || '') + ' ' + (r.content || '')).toLowerCase();
+    const hasFirst = stoneFirst && stoneFirst.length > 1 && hay.includes(stoneFirst);
+    const hasLast  = stoneLast && stoneLast.length > 2 && hay.includes(stoneLast);
+    if (hasFirst && hasLast) nameConfirmers.add(label);
+  }
+
+  if (nameConfirmers.size >= 2) {
+    lines.push(`Name independently corroborated by: ${[...nameConfirmers].join(' + ')} — higher confidence in identity.`);
+  } else if (nameConfirmers.size === 1) {
+    lines.push(`Name confirmed by: ${[...nameConfirmers][0]}.`);
+  }
+
+  // Date corroboration and conflict between stone and WikiTree
+  const wikiDeath = wikiData?.death?.slice(0, 4);
+  const wikiBirth = wikiData?.birth?.slice(0, 4);
+
+  if (stoneDeath && wikiDeath) {
+    const diff = Math.abs(parseInt(stoneDeath, 10) - parseInt(wikiDeath, 10));
+    if (diff <= 2) {
+      lines.push(`Death year corroborated: stone (${stoneDeath}) matches WikiTree (${wikiDeath}).`);
+    } else {
+      lines.push(`DATE CONFLICT: stone death year ${stoneDeath} vs WikiTree ${wikiDeath} — trust the stone; WikiTree may refer to a different person.`);
+    }
+  }
+  if (stoneBirth && wikiBirth) {
+    const diff = Math.abs(parseInt(stoneBirth, 10) - parseInt(wikiBirth, 10));
+    if (diff <= 2) {
+      lines.push(`Birth year corroborated: stone (${stoneBirth}) matches WikiTree (${wikiBirth}).`);
+    } else {
+      lines.push(`DATE CONFLICT: stone birth year ${stoneBirth} vs WikiTree ${wikiBirth} — trust the stone.`);
+    }
+  }
+
+  if (lines.length === 0) return '';
+  return 'SOURCE CORROBORATION:\n' + lines.map(l => `- ${l}`).join('\n');
+}
+
+// Strip [N] citation markers whose index exceeds the supplied sources array length.
+// Prevents orphan citations that appear authoritative but point to nothing.
+function validateCitations(bioResult) {
+  if (!bioResult?.biography) return bioResult;
+  const sources = bioResult.sources || [];
+  if (sources.length === 0) return bioResult;
+
+  let bio = bioResult.biography.replace(/\[(\d+)\]/g, (match, nStr) => {
+    const n = parseInt(nStr, 10);
+    return (n >= 1 && n <= sources.length) ? match : '';
+  });
+  // Tidy up double spaces left by stripped markers
+  bio = bio.replace(/[ \t]{2,}/g, ' ').replace(/\s+([.,;!?])/g, '$1');
+
+  return { ...bioResult, biography: bio };
+}
+
 const PRIMARY  = 'gemini-3.1-flash-lite';
 const FALLBACK = 'gemini-2.5-flash';
 
@@ -19,8 +102,8 @@ async function geminiText(payload) {
   return res2.json().catch(() => ({ error: { message: 'Invalid JSON' } }));
 }
 
-export async function generateBiography(graveData, searchResults, wikiData, location) {
-  const hasRealSources = (searchResults && searchResults.length > 0) || (wikiData != null);
+export async function generateBiography(graveData, searchResults, wikiData, location, wikipediaSummary) {
+  const hasRealSources = (searchResults && searchResults.length > 0) || (wikiData != null) || (wikipediaSummary != null);
   if (!hasRealSources) {
     const who = graveData.primary_name || graveData.names?.[0] || 'an individual';
     const bday = graveData.birth_date ? `, born ${graveData.birth_date}` : '';
@@ -48,10 +131,19 @@ export async function generateBiography(graveData, searchResults, wikiData, loca
     obituary:               '[Obituary]',
     web:                    '[Web]',
   };
-  const searchContext = searchResults.length > 0
+
+  // Numbered sources: search results first, Wikipedia article appended if available
+  const allSources = [...searchResults];
+  const wikiSourceIndex = wikipediaSummary ? allSources.length + 1 : null;
+  const searchContext = allSources.length > 0 || wikipediaSummary
     ? 'Web research found (numbered sources — use [N] markers in the biography to cite specific claims):\n' +
-      searchResults.map((r, i) => `[${i + 1}] ${TYPE_LABELS[r.source_type] || '[Web]'} ${r.title}: ${r.content}`).join('\n')
+      allSources.map((r, i) => `[${i + 1}] ${TYPE_LABELS[r.source_type] || '[Web]'} ${r.title}: ${r.content}`).join('\n') +
+      (wikipediaSummary
+        ? `\n[${wikiSourceIndex}] [Wikipedia article] ${wikipediaSummary.title}: ${wikipediaSummary.extract}`
+        : '')
     : 'No additional web results found.';
+
+  const corroborationContext = buildCorroborationSummary(graveData, searchResults, wikiData);
 
   const wikiContext = wikiData
     ? `WikiTree genealogy record found: ${JSON.stringify(wikiData)}`
@@ -71,6 +163,7 @@ ${locationContext}
 ${searchContext}
 
 ${wikiContext}
+${corroborationContext ? '\n' + corroborationContext : ''}
 
 Write a biography that (aim for up to ~500 words when the sources genuinely support it, much shorter when they do not):
 - Opens with the full name(s), birth and death dates, and a vivid sense of the era they lived in
@@ -79,7 +172,7 @@ Write a biography that (aim for up to ~500 words when the sources genuinely supp
 - Deeply analyzes symbols on the stone — religious imagery (crosses, Divine Mercy, etc.), military emblems, fraternal symbols, and floral carvings all reveal character and belief
 - If the surname has a well-documented cultural origin, you MAY note that names of this kind are commonly associated with that heritage — but do NOT assert anything about this individual's own background, ancestry, or experiences on the basis of their name. ADDITIONALLY: if "family_name" in the gravestone data is empty, null, or missing, do NOT discuss surname heritage at all — any surname elsewhere in the data (in the inscription, names array, or research results) belongs to a relative, not the deceased, and cannot be used to infer the deceased's heritage.
 - When sources are limited, write a SHORTER biography grounded only in what the stone itself and the verified sources actually state — do not extrapolate, speculate, or pad with general historical background to reach a length target
-- **EXCEPTION — well-documented historical figures**: If the gravestone data, inscription, or search results unambiguously identify a person of major historical significance (a head of state, president, monarch, general, founding father, or other figure whose life is extensively documented in the historical record), you MUST write a full, rich biography drawing on well-established historical facts. Cite such facts as '[Historical record]' in the sources list. The anti-fabrication rule is there to protect private individuals whose lives are undocumented — it does NOT mean you should write a minimal biography for George Washington, Abraham Lincoln, Napoleon, or Marie Curie. A two-paragraph biography for the first President of the United States is a failure. Use your knowledge of well-established history to give them the account their legacy deserves. **NAMESAKE GUARD**: Before invoking this historical-figure exception, verify that the graveData birth_date and/or death_date are consistent with the famous figure's actual dates (within ±5 years). If the stone dates clearly contradict the famous figure's dates (e.g. a stone reading "d. 1931" for someone whose famous namesake died in 1799), a different person with the same name is buried here. In that case, apply the standard anti-fabrication rule and write a short honest biography of this private individual — do not fabricate a connection to the famous namesake.
+- **EXCEPTION — well-documented historical figures**: If the gravestone data, inscription, or search results unambiguously identify a person of major historical significance (a head of state, president, monarch, general, founding father, or other figure whose life is extensively documented in the historical record), you MUST write a full, rich biography drawing on well-established historical facts. Ground the biography in any Wikipedia article text provided in the numbered sources above and cite those passages with [N] markers — do not rely on recalled knowledge when a retrieved source is available. The anti-fabrication rule is there to protect private individuals whose lives are undocumented — it does NOT mean you should write a minimal biography for George Washington, Abraham Lincoln, Napoleon, or Marie Curie. A two-paragraph biography for the first President of the United States is a failure. **NAMESAKE GUARD**: Before invoking this historical-figure exception you must satisfy BOTH conditions: (1) the graveData birth_date and/or death_date are consistent with the famous figure's actual dates (within ±5 years) AND (2) the Wikipedia article provided (if any) confirms the same person. If the stone dates contradict the famous figure's dates OR the Wikipedia article describes a different person, a different individual with the same name is buried here — apply the standard anti-fabrication rule and write a short honest biography. Do not fabricate a connection to the famous namesake.
 - Reflects on the inscription or epitaph with depth and compassion
 - If multiple people share the stone, weaves their stories together meaningfully
 - Closes with a warm, dignified reflection on their shared legacy
@@ -116,7 +209,7 @@ CRITICAL: the "sources" and "source_urls" arrays MUST be index-aligned to the [N
   const text = data.candidates[0].content.parts[0].text;
   console.warn('BIOGRAPHY length:', text.length, 'chars');
   const parsed = safeParseJSON(text, null);
-  if (parsed?.biography) return parsed;
+  if (parsed?.biography) return validateCitations(parsed);
 
   const who = graveData.primary_name || graveData.names?.[0] || 'an individual';
   return {

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Animated, ScrollView, Modal,
+  Animated, ScrollView, Modal, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Rect, Path, Line, Circle } from 'react-native-svg';
@@ -13,7 +13,7 @@ import { colors, fonts, radius } from '../lib/theme';
 import { verifyIsGravestone, readGravestone } from '../lib/api-gemini';
 import { searchForPerson } from '../lib/api-tavily';
 import { searchWikiTree } from '../lib/api-wikitree';
-import { fetchWikipediaPortraits } from '../lib/api-wikipedia';
+import { fetchWikipediaPortraits, fetchWikipediaArticleSummary } from '../lib/api-wikipedia';
 import { generateBiography } from '../lib/biography';
 import { saveStories, loadStories } from '../lib/storage';
 import { cloudSaveStory, cloudUpdateStory } from '../lib/sync';
@@ -125,18 +125,28 @@ export default function CameraScreen({ navigation }) {
       setStepIndex(1);
       const graveData = await readGravestone(base64, locationHint);
 
+      // Inform the user if multiple distinct gravestones are visible — the bio
+      // focuses on the primary inscription; best results come from one stone per scan.
+      if (graveData.multiple_subjects === true) {
+        Alert.alert(
+          'Multiple Gravestones Detected',
+          'This photo appears to show more than one separate gravestone. The biography will focus on the primary inscription. For best results, photograph each stone individually.',
+          [{ text: 'OK' }]
+        );
+      }
+
       setStepIndex(2);
-      const [searchResults, wikiData, portraits] = await Promise.all([
+      const primaryOcrName = graveData.primary_name || graveData.names?.[0] || '';
+      const datesStr = [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ');
+      const [searchResults, wikiData, portraits, wikipediaSummary] = await Promise.all([
         searchForPerson(graveData, locationHint),
         searchWikiTree(graveData, locationHint),
-        fetchWikipediaPortraits(
-          graveData.primary_name || graveData.names?.[0] || '',
-          [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ')
-        ),
+        fetchWikipediaPortraits(primaryOcrName, datesStr),
+        fetchWikipediaArticleSummary(primaryOcrName, datesStr),
       ]);
 
       setStepIndex(3);
-      const bioResult = await generateBiography(graveData, searchResults, wikiData, locationHint);
+      const bioResult = await generateBiography(graveData, searchResults, wikiData, locationHint, wikipediaSummary);
 
       // Portrait fallback: if the stone showed only a surname (e.g. "HOUDINI"),
       // the single-token guard skipped the initial Wikipedia fetch. Now that the

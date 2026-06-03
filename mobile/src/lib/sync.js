@@ -27,6 +27,8 @@ export function rowToStory(row) {
     portrait_right_url: row.portrait_right_url || null,
     _deletedAt: row.deleted_at || null,
     _updatedAt: row.updated_at,
+    grave_id: row.grave_id || null,
+    source: row.source || 'library',
   };
 }
 
@@ -52,6 +54,8 @@ function storyToRow(story, userId) {
     portrait_left_url: story.portrait_left_url || null,
     portrait_right_url: story.portrait_right_url || null,
     client_timestamp: story.timestamp || null,
+    grave_id: story.grave_id || null,
+    source: story.source || 'library',
   };
 }
 
@@ -234,6 +238,41 @@ export async function syncDelta(user) {
   await saveStories(stories, user.id);
   stories = await pushLocalOnly(user, stories);
   return stories;
+}
+
+// Atomically finds or creates a canonical grave record.
+// Returns the grave UUID, or null on failure (non-fatal).
+export async function findOrCreateGrave(name, lat, lng, isPublic = false) {
+  if (!name || lat == null || lng == null) return null;
+  try {
+    const { data, error } = await supabase.rpc('find_or_create_grave', {
+      p_name: name,
+      p_lat: lat,
+      p_lng: lng,
+      p_is_public: isPublic,
+    });
+    if (error) throw error;
+    return data;
+  } catch (e) {
+    console.warn('findOrCreateGrave failed:', e.message);
+    return null;
+  }
+}
+
+// Updates the canonical pin location for a grave.
+// Only applies if the grave has not already been user-corrected.
+export async function updateGraveLocation(graveId, lat, lng) {
+  if (!graveId) return;
+  try {
+    const { error } = await supabase.rpc('update_grave_location', {
+      p_grave_id: graveId,
+      p_lat: lat,
+      p_lng: lng,
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.warn('updateGraveLocation failed:', e.message);
+  }
 }
 
 // Called on sign-in: always does a full pull so cloud is authoritative.

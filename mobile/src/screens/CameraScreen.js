@@ -17,7 +17,7 @@ import { searchWikiTree } from '../lib/api-wikitree';
 import { fetchWikipediaPortraits, fetchWikipediaArticleSummary } from '../lib/api-wikipedia';
 import { generateBiography } from '../lib/biography';
 import { saveStories, loadStories } from '../lib/storage';
-import { cloudSaveStory, cloudUpdateStory } from '../lib/sync';
+import { cloudSaveStory, cloudUpdateStory, findOrCreateGrave } from '../lib/sync';
 import { uploadGravestoneImage } from '../lib/api-r2';
 import { forwardGeocode, reverseGeocode } from '../lib/api-nominatim';
 
@@ -100,10 +100,10 @@ export default function CameraScreen({ navigation }) {
 
     if (!gps) gps = deviceGps;
 
-    await runPipeline(manipResult.base64, false, gps);
+    await runPipeline(manipResult.base64, false, gps, fromCamera);
   }
 
-  async function runPipeline(base64, skipVerify = false, gps = null) {
+  async function runPipeline(base64, skipVerify = false, gps = null, fromCamera = false) {
     setLoading(true);
     setStepIndex(0);
 
@@ -118,7 +118,7 @@ export default function CameraScreen({ navigation }) {
           await verifyIsGravestone(base64);
         } catch (err) {
           if (err.__verificationRejection) {
-            setRejected({ reason: err.reason, base64, gps });
+            setRejected({ reason: err.reason, base64, gps, fromCamera });
             setLoading(false);
             return;
           }
@@ -187,6 +187,12 @@ export default function CameraScreen({ navigation }) {
       const { data: { session } } = await supabase.auth.getSession();
       const defaultPublic = session?.user?.user_metadata?.default_public ?? false;
 
+      // Link to canonical grave (deduplicates multiple scans of the same stone)
+      let graveId = null;
+      if (session?.user && refinedGps && primaryName) {
+        graveId = await findOrCreateGrave(primaryName, refinedGps.lat, refinedGps.lng, defaultPublic);
+      }
+
       let story = {
         ...bioResult,
         graveData,
@@ -195,6 +201,8 @@ export default function CameraScreen({ navigation }) {
         _lowConfidence: lowConfidence,
         timestamp: Date.now(),
         is_public: defaultPublic,
+        source: fromCamera ? 'camera' : 'library',
+        grave_id: graveId,
       };
 
       // Save locally first so the story is always accessible offline
@@ -264,7 +272,7 @@ export default function CameraScreen({ navigation }) {
         <View style={styles.rejectedBox}>
           <Text style={styles.rejectedTitle}>Not a Gravestone</Text>
           <Text style={styles.rejectedReason}>{rejected.reason}</Text>
-          <TouchableOpacity style={styles.tryAnyway} onPress={() => runPipeline(rejected.base64, true, rejected.gps)}>
+          <TouchableOpacity style={styles.tryAnyway} onPress={() => runPipeline(rejected.base64, true, rejected.gps, rejected.fromCamera)}>
             <Text style={styles.tryAnywayText}>Use it anyway</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.retryBtn} onPress={() => setRejected(null)}>

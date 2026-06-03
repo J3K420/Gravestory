@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory, cloudDeleteStory } from '../lib/sync';
+import { getTributes, setTribute } from '../lib/api-tributes';
 import { normalizePortraits } from '../lib/api-wikipedia';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
@@ -20,12 +21,20 @@ export default function ResultScreen({ navigation, route }) {
   const [sharing, setSharing]           = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [tributes, setTributes]         = useState({ candles: 0, flowers: 0, userTribute: null });
+  const [tributeLoading, setTributeLoading] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
   }, []);
+
+  useEffect(() => {
+    if (story?.grave_id) {
+      getTributes(story.grave_id).then(setTributes);
+    }
+  }, [story?.grave_id]);
 
   const { refreshControl } = useRefresh(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -95,6 +104,17 @@ export default function ResultScreen({ navigation, route }) {
     setStory(updated);
     if (updated.id) setStory(await cloudUpdateStory(updated, user));
     setTogglingPublic(false);
+  }
+
+  async function handleTribute(type) {
+    if (!user || !story.grave_id || tributeLoading) return;
+    setTributeLoading(true);
+    // Tapping the same type toggles it off; tapping a different type switches
+    const newType = tributes.userTribute === type ? null : type;
+    await setTribute(story.grave_id, newType);
+    const fresh = await getTributes(story.grave_id);
+    setTributes(fresh);
+    setTributeLoading(false);
   }
 
   const showPublicToggle = user && !story._isGlobal;
@@ -191,6 +211,44 @@ export default function ResultScreen({ navigation, route }) {
                 </Text>
               </TouchableOpacity>
             ))}
+          </View>
+        )}
+
+        {/* Tributes */}
+        {story.grave_id && (
+          <View style={styles.tributeSection}>
+            <Text style={styles.tributeLabel}>Tributes at this grave</Text>
+            <View style={styles.tributeCounts}>
+              <Text style={styles.tributeCountText}>
+                {tributes.candles} {tributes.candles === 1 ? 'candle' : 'candles'}
+              </Text>
+              <Text style={styles.tributeSep}>·</Text>
+              <Text style={styles.tributeCountText}>
+                {tributes.flowers} {tributes.flowers === 1 ? 'flower' : 'flowers'}
+              </Text>
+            </View>
+            {story.source === 'camera' && !story._isGlobal && user && (
+              <View style={styles.tributeButtons}>
+                <TouchableOpacity
+                  style={[styles.tributeBtn, tributes.userTribute === 'candle' && styles.tributeBtnActive]}
+                  onPress={() => handleTribute('candle')}
+                  disabled={tributeLoading}
+                >
+                  <Text style={[styles.tributeBtnText, tributes.userTribute === 'candle' && styles.tributeBtnTextActive]}>
+                    {tributes.userTribute === 'candle' ? '✓ Candle left' : 'Leave a candle'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tributeBtn, tributes.userTribute === 'flower' && styles.tributeBtnActive]}
+                  onPress={() => handleTribute('flower')}
+                  disabled={tributeLoading}
+                >
+                  <Text style={[styles.tributeBtnText, tributes.userTribute === 'flower' && styles.tributeBtnTextActive]}>
+                    {tributes.userTribute === 'flower' ? '✓ Flower left' : 'Leave a flower'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
@@ -326,4 +384,31 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(160,60,60,0.06)', alignItems: 'center',
   },
   deleteBtnText: { color: colors.danger, fontFamily: fonts.body, letterSpacing: 0.5, fontSize: 14 },
+
+  tributeSection: {
+    marginBottom: 20,
+    paddingVertical: 16, paddingHorizontal: 14,
+    backgroundColor: colors.stone2,
+    borderWidth: 1, borderColor: colors.line,
+    borderRadius: radius.sm,
+  },
+  tributeLabel: {
+    color: colors.ashDim, fontSize: 10, letterSpacing: 3,
+    textTransform: 'uppercase', fontFamily: fonts.body, marginBottom: 10,
+  },
+  tributeCounts: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  tributeCountText: { color: colors.parchment, fontSize: 14, fontFamily: fonts.name },
+  tributeSep: { color: colors.ashDim, fontSize: 14, fontFamily: fonts.body },
+  tributeButtons: { flexDirection: 'row', gap: 10 },
+  tributeBtn: {
+    flex: 1, paddingVertical: 11, alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
+    borderRadius: radius.sm,
+  },
+  tributeBtnActive: {
+    borderColor: colors.flame,
+    backgroundColor: 'rgba(201,168,76,0.1)',
+  },
+  tributeBtnText: { color: colors.ash, fontFamily: fonts.body, fontSize: 13, letterSpacing: 0.3 },
+  tributeBtnTextActive: { color: colors.flame },
 });

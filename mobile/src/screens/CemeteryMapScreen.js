@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import Svg, { Rect, Path, Line } from 'react-native-svg';
 import { loadStories, saveStories } from '../lib/storage';
-import { cloudUpdateStory } from '../lib/sync';
+import { cloudUpdateStory, updateGraveLocation } from '../lib/sync';
 import { supabase } from '../lib/supabase';
 import { forwardGeocode } from '../lib/api-nominatim';
 import { useRefresh } from '../lib/use-refresh';
@@ -216,6 +216,10 @@ export default function CemeteryMapScreen({ navigation, route }) {
             }
             if (session?.user) {
               await cloudUpdateStory(updated, session.user);
+            }
+            // Propagate correction to the canonical grave pin (first correction wins)
+            if (story.grave_id) {
+              await updateGraveLocation(story.grave_id, newGps.lat, newGps.lng);
             }
           },
         },

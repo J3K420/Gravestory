@@ -6,6 +6,14 @@ export default {
     scheme: 'gravestory',
     version: '1.0.0',
     orientation: 'portrait',
+    updates: {
+      url: 'https://u.expo.dev/f26f7a8b-2c63-4a68-bb44-903d7ed01b30',
+      enabled: true,
+      fallbackToCacheTimeout: 0,
+    },
+    runtimeVersion: {
+      policy: 'sdkVersion',
+    },
     icon: './assets/icon.png',
     userInterfaceStyle: 'dark',
     splash: {

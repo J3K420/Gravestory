@@ -53,21 +53,38 @@ export default function GlobalMapScreen({ navigation }) {
           _contributor: row.contributor_name || 'Anonymous',
           _isGlobal: true,
         }));
-      _cache = mapped;
+
+      // One pin per canonical grave: deduplicate by grave_id, then by ~20 m GPS cell
+      const deduped = [];
+      const seenGraves = new Set();
+      const seenCells = new Set();
+      for (const s of mapped) {
+        if (s.grave_id) {
+          if (seenGraves.has(s.grave_id)) continue;
+          seenGraves.add(s.grave_id);
+        } else if (s.gps) {
+          const cell = `${Math.round(s.gps.lat * 5000)},${Math.round(s.gps.lng * 5000)}`;
+          if (seenCells.has(cell)) continue;
+          seenCells.add(cell);
+        }
+        deduped.push(s);
+      }
+
+      _cache = deduped;
       _cacheTime = Date.now();
       _cacheUserId = cacheKey;
-      setStories(mapped);
+      setStories(deduped);
       setLoading(false);
-      if (mapped.length > 0) {
+      if (deduped.length > 0) {
         setTimeout(() => {
-          if (mapped.length === 1) {
+          if (deduped.length === 1) {
             mapRef.current?.animateToRegion(
-              { latitude: mapped[0].gps.lat, longitude: mapped[0].gps.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 },
+              { latitude: deduped[0].gps.lat, longitude: deduped[0].gps.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 },
               800
             );
           } else {
             mapRef.current?.fitToCoordinates(
-              mapped.map(s => ({ latitude: s.gps.lat, longitude: s.gps.lng })),
+              deduped.map(s => ({ latitude: s.gps.lat, longitude: s.gps.lng })),
               { edgePadding: { top: 60, right: 40, bottom: 280, left: 40 }, animated: true }
             );
           }

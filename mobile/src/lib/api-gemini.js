@@ -3,6 +3,16 @@ import { safeParseJSON } from './util-json';
 
 const PRIMARY  = 'gemini-3.1-flash-lite';
 const FALLBACK = 'gemini-2.5-flash';
+const TIMEOUT_MS = 30000;
+
+function fetchWithTimeout(url, init) {
+  return Promise.race([
+    fetch(url, init),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Gemini request timed out')), TIMEOUT_MS)
+    ),
+  ]);
+}
 
 async function geminiCallWithFallback(payload) {
   const init = {
@@ -24,14 +34,14 @@ async function geminiCallWithFallback(payload) {
   };
 
   try {
-    const res = await fetch(`${PROXY_BASE}/gemini/${PRIMARY}`, init);
+    const res = await fetchWithTimeout(`${PROXY_BASE}/gemini/${PRIMARY}`, init);
     const data = await res.json().catch(() => ({ error: { message: 'Invalid JSON' } }));
     if (!shouldFallback(res, data)) return { data, model: PRIMARY };
   } catch (err) {
     console.warn(`Primary fetch failed (${err.message}) — falling back`);
   }
 
-  const res2 = await fetch(`${PROXY_BASE}/gemini/${FALLBACK}`, init);
+  const res2 = await fetchWithTimeout(`${PROXY_BASE}/gemini/${FALLBACK}`, init);
   const data2 = await res2.json().catch(() => ({ error: { message: 'Invalid JSON from fallback' } }));
   return { data: data2, model: FALLBACK };
 }

@@ -22,6 +22,7 @@ export default function GlobalMapScreen({ navigation }) {
   const [user, setUser]         = useState(null);
   const [stories, setStories]   = useState([]);
   const [loading, setLoading]   = useState(true);
+  const [fetchError, setFetchError] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -39,6 +40,7 @@ export default function GlobalMapScreen({ navigation }) {
       return;
     }
     setLoading(true);
+    setFetchError(null);
     try {
       const limit = currentUser ? 500 : 50;
       const { data, error } = await supabase.rpc('global_public_stories', { p_limit: limit });
@@ -73,6 +75,7 @@ export default function GlobalMapScreen({ navigation }) {
       }
     } catch (e) {
       console.warn('GlobalMapScreen fetch failed:', e.message);
+      setFetchError('Could not load shared stories. Pull down to retry.');
       setLoading(false);
     }
   }
@@ -93,9 +96,11 @@ export default function GlobalMapScreen({ navigation }) {
 
   const panelTitle = loading
     ? 'Loading shared stories…'
-    : stories.length === 0
-      ? 'No shared stories yet'
-      : `${stories.length} shared ${stories.length === 1 ? 'story' : 'stories'}`;
+    : fetchError
+      ? 'Failed to load'
+      : stories.length === 0
+        ? 'No shared stories yet'
+        : `${stories.length} shared ${stories.length === 1 ? 'story' : 'stories'}`;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -160,7 +165,9 @@ export default function GlobalMapScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
           refreshControl={refreshControl}
         >
-          {stories.length === 0 && !loading ? (
+          {fetchError ? (
+            <Text style={styles.errorText}>{fetchError}</Text>
+          ) : stories.length === 0 && !loading ? (
             <Text style={styles.emptyText}>
               No public stories yet.{'\n'}Share one of yours from its bio page to be first on the map.
             </Text>
@@ -265,6 +272,10 @@ const styles = StyleSheet.create({
 
   emptyText: {
     color: colors.ash, fontFamily: fonts.bodyItalic,
+    textAlign: 'center', lineHeight: 22, marginTop: 8,
+  },
+  errorText: {
+    color: '#a03c3c', fontFamily: fonts.body,
     textAlign: 'center', lineHeight: 22, marginTop: 8,
   },
 });

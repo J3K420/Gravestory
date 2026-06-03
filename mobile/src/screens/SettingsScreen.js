@@ -47,9 +47,22 @@ export default function SettingsScreen({ navigation }) {
     }
   }
 
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    navigation.goBack();
+  function handleSignOut() {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await supabase.auth.signOut();
+            navigation.goBack();
+          },
+        },
+      ]
+    );
   }
 
   const provider = user?.app_metadata?.provider;

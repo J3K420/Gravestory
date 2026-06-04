@@ -173,9 +173,14 @@ export async function searchForPerson(graveData, location) {
       queries.push(`site:findagrave.com "${allVariants[1]}"${yr ? ' ' + yr : ''} buried`.trim());
     }
 
-    // Slot 5: Era-appropriate source
-    if (effectiveDeath && deathYrNum <= 1922) {
-      queries.push(`site:chroniclingamerica.loc.gov "${primaryVar}" ${effectiveDeath} obituary`);
+    // Slot 5: Era-appropriate source.
+    // Pre-1924 Chronicling America is now queried directly via api-chroniclingamerica.js
+    // (better quality, zero Tavily credit). Use this freed slot for a general historical
+    // obituary search without a site restriction.
+    if (effectiveDeath && deathYrNum <= 1924) {
+      const histParts = [`"${primaryVar}" obituary`];
+      if (effectiveDeath) histParts.push(effectiveDeath);
+      queries.push(histParts.join(' ') + ' death');
     } else {
       queries.push(`site:legacy.com "${primaryVar}" obituary${loc ? ' ' + loc : ''}`.trim());
     }

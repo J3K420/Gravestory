@@ -55,6 +55,8 @@
 <script src="js/grave-cache.js"></script>
 <script src="js/util-image.js"></script>
 <script src="js/api-nominatim.js"></script>
+<script src="js/api-wikidata.js"></script>
+<script src="js/api-chroniclingamerica.js"></script>
 <script src="js/api-wikitree.js"></script>
 <script src="js/api-tavily.js"></script>
 <script src="js/api-wikipedia.js"></script>
@@ -940,25 +942,56 @@ async function startAnalysis() {
       console.log('⚠️ Multiple gravestones detected in frame');
     }
 
-    // 3. Search web + WikiTree + Wikipedia article(s) in parallel
+    // 3. Search web + WikiTree + Wikidata + Chronicling America + Wikipedia in parallel
     setStep(3);
     const primaryOcrName = graveData.primary_name || graveData.names?.[0] || '';
     const datesStr = [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ');
+    const effectiveDeath = graveData.death_date?.match(/\d{4}/)?.[0] || '';
+    const deathYrNum = effectiveDeath ? parseInt(effectiveDeath, 10) : 0;
     const wikiNames = (graveData.multiple_subjects && graveData.names?.length > 1)
       ? graveData.names.slice(0, 3)
       : [primaryOcrName];
-    const [searchResults, wikiData, ...wikiSummaryResults] = await Promise.all([
+
+    // For multi-person stones, search WikiTree for each of the first 2 people.
+    // Spreads genealogy coverage across subjects rather than focusing on person 1 only.
+    const wikiTreeTargets = (graveData.multiple_subjects && graveData.names?.length > 1)
+      ? graveData.names.slice(0, 2)
+      : [primaryOcrName];
+
+    const allParallel = await Promise.all([
       searchForPerson(graveData, locationStr),
-      searchWikiTree(graveData, locationStr),
+      ...wikiTreeTargets.map(name => searchWikiTree({ ...graveData, primary_name: name }, locationStr)),
+      // Wikidata: only when OCR confidence is high to avoid false matches on uncertain names
+      graveData.name_confidence === 'high'
+        ? queryWikidata(primaryOcrName, effectiveDeath)
+        : Promise.resolve(null),
+      // Chronicling America: direct API replaces the Tavily slot for pre-1924 deaths
+      (effectiveDeath && deathYrNum <= 1924)
+        ? searchChroniclingAmerica(primaryOcrName, effectiveDeath)
+        : Promise.resolve([]),
       ...wikiNames.map(n => fetchWikipediaArticleSummary(n, datesStr)),
     ]);
+
+    let idx = 0;
+    const searchResults     = allParallel[idx++];
+    const wikiTreeResults   = allParallel.slice(idx, idx += wikiTreeTargets.length);
+    const wikidataResult    = allParallel[idx++];
+    const chronResults      = allParallel[idx++];
+    const wikiSummaryResults = allParallel.slice(idx);
+
+    // Primary WikiTree result; pass all as array when multiple subjects
+    const wikiData = wikiTreeTargets.length > 1 ? wikiTreeResults.filter(Boolean) : wikiTreeResults[0];
+
+    // Merge Chronicling America results into searchResults — same source_type as Tavily's old slot
+    const mergedSearchResults = [...searchResults, ...(chronResults || [])];
+
     const wikipediaSummary = wikiSummaryResults.length === 1
       ? wikiSummaryResults[0]
       : wikiSummaryResults;
 
     // 5. Generate full biography with Gemini
     setStep(5);
-    const story = await generateBiography(graveData, searchResults, wikiData, locationStr, wikipediaSummary);
+    const story = await generateBiography(graveData, mergedSearchResults, wikiData, locationStr, wikipediaSummary, wikidataResult);
 
     // 5.5 — Fetch Wikipedia portraits (best-effort, doesn't block on failure)
     const portraits = await fetchWikipediaPortraits(story.name, story.dates);
@@ -1011,6 +1044,13 @@ async function startAnalysis() {
         resolvedGps = { lat: +raw.lat.toFixed(6), lng: +raw.lng.toFixed(6) };
         gpsLowConfidence = true;
       }
+    }
+
+    // If no EXIF/device GPS was captured, use Wikidata burial coordinates as a fallback
+    // for confirmed notable figures. More precise than forwardGeocode for famous graves.
+    if (!resolvedGps && wikidataResult?.burialCoords) {
+      resolvedGps = wikidataResult.burialCoords;
+      gpsLowConfidence = false;
     }
 
     // Link to canonical grave — deduplicates multiple scans of the same stone.

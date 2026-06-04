@@ -2,21 +2,23 @@ import { PROXY_BASE } from './config';
 import { safeParseJSON } from './util-json';
 
 // Build a cross-source corroboration summary for the biography prompt.
-// Detects name/date agreement and conflicts across WikiTree, FindAGrave, obituaries,
-// BillionGraves, and Chronicling America so the model can cite with appropriate confidence
-// instead of silently blending conflicting claims.
-function buildCorroborationSummary(graveData, searchResults, wikiData) {
+// Detects name/date agreement and conflicts across WikiTree, Wikidata, FindAGrave,
+// obituaries, BillionGraves, and Chronicling America so the model can cite with
+// appropriate confidence instead of silently blending conflicting claims.
+// wikidataResult: optional { birthDate, deathDate, burialPlaceLabel } from queryWikidata().
+function buildCorroborationSummary(graveData, searchResults, wikiData, wikidataResult) {
   const lines = [];
+  // Use first WikiTree result for corroboration (primary person on multi-subject stones)
+  const primaryWikiData = Array.isArray(wikiData) ? wikiData[0] : wikiData;
   const stoneName = (graveData.primary_name || graveData.names?.[0] || '').toLowerCase();
   const stoneBirth = graveData.birth_date?.match(/\d{4}/)?.[0];
   const stoneDeath = graveData.death_date?.match(/\d{4}/)?.[0];
   const stoneFirst = stoneName.split(' ')[0];
   const stoneLast  = stoneName.split(' ').pop();
 
-  // Count independent source types that mention the same person's name
   const nameConfirmers = new Set();
-  if (wikiData?.name) {
-    const wikiFirst = wikiData.name.toLowerCase().split(' ')[0];
+  if (primaryWikiData?.name) {
+    const wikiFirst = primaryWikiData.name.toLowerCase().split(' ')[0];
     if (stoneFirst && wikiFirst && (wikiFirst.startsWith(stoneFirst) || stoneFirst.startsWith(wikiFirst))) {
       nameConfirmers.add('WikiTree');
     }
@@ -42,10 +44,8 @@ function buildCorroborationSummary(graveData, searchResults, wikiData) {
     lines.push(`Name confirmed by: ${[...nameConfirmers][0]}.`);
   }
 
-  // Date corroboration and conflict between stone and WikiTree
-  const wikiDeath = wikiData?.death?.slice(0, 4);
-  const wikiBirth = wikiData?.birth?.slice(0, 4);
-
+  const wikiDeath = primaryWikiData?.death?.slice(0, 4);
+  const wikiBirth = primaryWikiData?.birth?.slice(0, 4);
   if (stoneDeath && wikiDeath) {
     const diff = Math.abs(parseInt(stoneDeath, 10) - parseInt(wikiDeath, 10));
     if (diff <= 2) {
@@ -60,6 +60,29 @@ function buildCorroborationSummary(graveData, searchResults, wikiData) {
       lines.push(`Birth year corroborated: stone (${stoneBirth}) matches WikiTree (${wikiBirth}).`);
     } else {
       lines.push(`DATE CONFLICT: stone birth year ${stoneBirth} vs WikiTree ${wikiBirth} — trust the stone.`);
+    }
+  }
+
+  // Wikidata date corroboration (independent structured source)
+  if (wikidataResult) {
+    const wdDeath = wikidataResult.deathDate?.slice(0, 4);
+    const wdBirth = wikidataResult.birthDate?.slice(0, 4);
+    if (stoneDeath && wdDeath) {
+      const diff = Math.abs(parseInt(stoneDeath, 10) - parseInt(wdDeath, 10));
+      if (diff <= 2) {
+        lines.push(`Death year corroborated by Wikidata: stone (${stoneDeath}) matches Wikidata (${wdDeath}).`);
+      } else {
+        lines.push(`DATE CONFLICT: stone death year ${stoneDeath} vs Wikidata ${wdDeath} — possible different person.`);
+      }
+    }
+    if (stoneBirth && wdBirth) {
+      const diff = Math.abs(parseInt(stoneBirth, 10) - parseInt(wdBirth, 10));
+      if (diff <= 2) {
+        lines.push(`Birth year corroborated by Wikidata: stone (${stoneBirth}) matches Wikidata (${wdBirth}).`);
+      }
+    }
+    if (wikidataResult.burialPlaceLabel) {
+      lines.push(`Wikidata confirms burial place: "${wikidataResult.burialPlaceLabel}".`);
     }
   }
 
@@ -111,7 +134,8 @@ async function geminiText(payload) {
   return res2.json().catch(() => ({ error: { message: 'Invalid JSON' } }));
 }
 
-export async function generateBiography(graveData, searchResults, wikiData, location, wikipediaSummary) {
+// wikidataResult: optional result from queryWikidata() — structured dates + burial place.
+export async function generateBiography(graveData, searchResults, wikiData, location, wikipediaSummary, wikidataResult) {
   const hasRealSources = (searchResults && searchResults.length > 0) || (wikiData != null) ||
     (Array.isArray(wikipediaSummary) ? wikipediaSummary.some(Boolean) : wikipediaSummary != null);
   if (!hasRealSources) {
@@ -142,6 +166,8 @@ export async function generateBiography(graveData, searchResults, wikiData, loca
     public_domain:          '[Chronicling America]',
     memorial:               '[Find A Grave]',
     obituary:               '[Obituary]',
+    wikidata:               '[Wikidata]',
+    wikitree:               '[WikiTree]',
     web:                    '[Web]',
   };
 
@@ -180,11 +206,21 @@ export async function generateBiography(graveData, searchResults, wikiData, loca
       wikiSummaries.map((ws, j) => `\n[${allSources.length + j + 1}] [Wikipedia article] ${ws.title}: ${ws.extract}`).join('')
     : 'No additional web results found.';
 
-  const corroborationContext = buildCorroborationSummary(graveData, searchResults, wikiData);
+  const corroborationContext = buildCorroborationSummary(graveData, searchResults, wikiData, wikidataResult);
 
-  const wikiContext = wikiData
-    ? `WikiTree genealogy record found: ${JSON.stringify(wikiData)}`
+  // wikiData may be an array (multi-person stones with one WikiTree result per person)
+  const wikiDataItems = Array.isArray(wikiData) ? wikiData.filter(Boolean) : (wikiData ? [wikiData] : []);
+  const wikiContext = wikiDataItems.length > 0
+    ? wikiDataItems.map((wd, i) =>
+        wikiDataItems.length > 1
+          ? `WikiTree genealogy record (person ${i + 1}): ${JSON.stringify(wd)}`
+          : `WikiTree genealogy record found: ${JSON.stringify(wd)}`
+      ).join('\n')
     : 'No WikiTree record found.';
+
+  const wikidataContext = wikidataResult
+    ? `Wikidata record: burial place "${wikidataResult.burialPlaceLabel || 'unknown'}", birth ${wikidataResult.birthDate || '?'}, death ${wikidataResult.deathDate || '?'}.`
+    : '';
 
   const locationContext = location
     ? `Cemetery location: ${location}`
@@ -206,6 +242,7 @@ ${locationContext}
 ${searchContext}
 
 ${wikiContext}
+${wikidataContext ? '\n' + wikidataContext : ''}
 ${corroborationContext ? '\n' + corroborationContext : ''}
 
 LENGTH — follow the evidence, do not pad to a target:

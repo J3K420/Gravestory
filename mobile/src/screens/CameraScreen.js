@@ -14,6 +14,8 @@ import { colors, fonts, radius } from '../lib/theme';
 import { verifyIsGravestone, readGravestone } from '../lib/api-gemini';
 import { searchForPerson } from '../lib/api-tavily';
 import { searchWikiTree } from '../lib/api-wikitree';
+import { queryWikidata } from '../lib/api-wikidata';
+import { searchChroniclingAmerica } from '../lib/api-chroniclingamerica';
 import { fetchWikipediaPortraits, fetchWikipediaArticleSummary } from '../lib/api-wikipedia';
 import { generateBiography } from '../lib/biography';
 import { saveStories, loadStories } from '../lib/storage';
@@ -144,28 +146,56 @@ export default function CameraScreen({ navigation }) {
       setStepIndex(2);
       const primaryOcrName = graveData.primary_name || graveData.names?.[0] || '';
       const datesStr = [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ');
+      const effectiveDeath = graveData.death_date?.match(/\d{4}/)?.[0] || '';
+      const deathYrNum = effectiveDeath ? parseInt(effectiveDeath, 10) : 0;
       const wikiNames = (graveData.multiple_subjects && graveData.names?.length > 1)
         ? graveData.names.slice(0, 3)
         : [primaryOcrName];
+
+      // For multi-person stones, search WikiTree for each of the first 2 people.
+      const wikiTreeTargets = (graveData.multiple_subjects && graveData.names?.length > 1)
+        ? graveData.names.slice(0, 2)
+        : [primaryOcrName];
+
       // Fetch portraits for every person on the stone (wikiNames), not just the
       // primary name — on multi-person stones the primary subject (e.g. Cynthia Levy)
       // may have no Wikipedia article while a second person (Amy Winehouse) does.
-      const [searchResults, wikiData, ...rest] = await Promise.all([
+      const allParallel = await Promise.all([
         searchForPerson(graveData, locationHint),
-        searchWikiTree(graveData, locationHint),
+        ...wikiTreeTargets.map(name => searchWikiTree({ ...graveData, primary_name: name }, locationHint)),
+        // Wikidata: only when OCR confidence is high to avoid false matches
+        graveData.name_confidence === 'high'
+          ? queryWikidata(primaryOcrName, effectiveDeath)
+          : Promise.resolve(null),
+        // Chronicling America: direct API for pre-1924 deaths (frees a Tavily slot)
+        (effectiveDeath && deathYrNum <= 1924)
+          ? searchChroniclingAmerica(primaryOcrName, effectiveDeath)
+          : Promise.resolve([]),
         ...wikiNames.map(n => fetchWikipediaPortraits(n, datesStr)),
         ...wikiNames.map(n => fetchWikipediaArticleSummary(n, datesStr)),
       ]);
-      // rest = [portraitsForName1, portraitsForName2?, ..., summaryForName1, summaryForName2?]
-      const portraitArrays = rest.slice(0, wikiNames.length);
-      const wikiSummaryResults = rest.slice(wikiNames.length);
+
+      let idx = 0;
+      const searchResults     = allParallel[idx++];
+      const wikiTreeResults   = allParallel.slice(idx, idx += wikiTreeTargets.length);
+      const wikidataResult    = allParallel[idx++];
+      const chronResults      = allParallel[idx++];
+      const portraitArrays    = allParallel.slice(idx, idx += wikiNames.length);
+      const wikiSummaryResults = allParallel.slice(idx);
+
+      // Primary WikiTree result; pass all as array when multiple subjects
+      const wikiData = wikiTreeTargets.length > 1 ? wikiTreeResults.filter(Boolean) : wikiTreeResults[0];
+
+      // Merge Chronicling America results into searchResults
+      const mergedSearchResults = [...searchResults, ...(chronResults || [])];
+
       const portraits = portraitArrays.flat();
       const wikipediaSummary = wikiSummaryResults.length === 1
         ? wikiSummaryResults[0]
         : wikiSummaryResults;
 
       setStepIndex(3);
-      const bioResult = await generateBiography(graveData, searchResults, wikiData, locationHint, wikipediaSummary);
+      const bioResult = await generateBiography(graveData, mergedSearchResults, wikiData, locationHint, wikipediaSummary, wikidataResult);
 
       // Portrait fallback: if the stone showed only a surname (e.g. "HOUDINI"),
       // the single-token guard skipped the initial Wikipedia fetch. Now that the
@@ -193,7 +223,9 @@ export default function CameraScreen({ navigation }) {
       // GPS over Nominatim coords; only fall back to Nominatim when GPS is absent.
       const primaryName = graveData.primary_name || graveData.names?.[0] || '';
       const geoResult = await forwardGeocode(bioResult.location, primaryName, bioResult.dates);
-      const refinedGps = gps ?? (geoResult ? { lat: geoResult.lat, lng: geoResult.lng } : null);
+      // Wikidata burial coords are a precise fallback for famous figures when no GPS was captured
+      const wikidataCoords = wikidataResult?.burialCoords || null;
+      const refinedGps = gps ?? (geoResult ? { lat: geoResult.lat, lng: geoResult.lng } : null) ?? wikidataCoords;
       const lowConfidence = geoResult?.lowConfidence || undefined;
 
       // Read default visibility from user metadata

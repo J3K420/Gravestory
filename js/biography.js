@@ -232,10 +232,11 @@ ${wikiContext}
 ${wikidataContext ? '\n' + wikidataContext : ''}
 ${corroborationContext ? '\n' + corroborationContext : ''}
 
-LENGTH — follow the evidence, do not pad to a target:
+LENGTH — scale to the evidence available:
 - Stone only, or a single weak/uncorroborated source: 1–2 short paragraphs.
 - Two corroborating sources: 2–4 paragraphs.
-- Three or more independent sources: a full biography, up to ~1000 words.
+- Three or more independent sources: a full biography, up to ~1500 words.
+- Well-documented historical figure (Wikipedia article confirmed in sources AND 3+ independent sources): write a comprehensive life history up to ~2500 words. Cover their early life and origins, career arc and major achievements, personal life and relationships, cultural impact, and legacy. Use the full allowance — do not stop at a surface summary when the sources support depth.
 
 WRITE A BIOGRAPHY THAT:
 - Opens with the full name(s), birth/death dates, and the era they lived in

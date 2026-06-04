@@ -83,7 +83,8 @@ async function generateBiography(graveData, searchResults, wikiData, location, w
   // Confidence floor — if no web results, no WikiTree record, and no Wikipedia
   // summary came back, do not call the LLM at all: return a short biography drawn
   // strictly from the stone itself to prevent hallucination.
-  const hasRealSources = (searchResults && searchResults.length > 0) || (wikiData != null) || (wikipediaSummary != null);
+  const hasRealSources = (searchResults && searchResults.length > 0) || (wikiData != null) ||
+    (Array.isArray(wikipediaSummary) ? wikipediaSummary.some(Boolean) : wikipediaSummary != null);
   if (!hasRealSources) {
     console.log('📜 No real sources — returning stone-only biography, skipping LLM.');
     const allPeople = (graveData.names || []).filter(Boolean);
@@ -118,15 +119,16 @@ async function generateBiography(graveData, searchResults, wikiData, location, w
     web:                    '[Web]'
   };
 
-  // Numbered sources: search results first, Wikipedia article appended if available
+  // Numbered sources: search results first, Wikipedia article(s) appended.
+  // wikipediaSummary may be a single object or an array (multi-person stones).
   const allSources = [...searchResults];
-  const wikiSourceIndex = wikipediaSummary ? allSources.length + 1 : null;
-  const searchContext = allSources.length > 0 || wikipediaSummary
+  const wikiSummaries = Array.isArray(wikipediaSummary)
+    ? wikipediaSummary.filter(Boolean)
+    : (wikipediaSummary ? [wikipediaSummary] : []);
+  const searchContext = allSources.length > 0 || wikiSummaries.length > 0
     ? 'Web research found (numbered sources — use [N] markers in the biography to cite specific claims):\n' +
       allSources.map((r, i) => `[${i + 1}] ${TYPE_LABELS[r.source_type] || '[Web]'} ${r.title}: ${r.content}`).join('\n') +
-      (wikipediaSummary
-        ? `\n[${wikiSourceIndex}] [Wikipedia article] ${wikipediaSummary.title}: ${wikipediaSummary.extract}`
-        : '')
+      wikiSummaries.map((ws, j) => `\n[${allSources.length + j + 1}] [Wikipedia article] ${ws.title}: ${ws.extract}`).join('')
     : 'No additional web results found.';
 
   const corroborationContext = _buildCorroborationSummary(graveData, searchResults, wikiData);

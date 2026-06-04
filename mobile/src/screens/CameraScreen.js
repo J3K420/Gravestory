@@ -144,12 +144,18 @@ export default function CameraScreen({ navigation }) {
       setStepIndex(2);
       const primaryOcrName = graveData.primary_name || graveData.names?.[0] || '';
       const datesStr = [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ');
-      const [searchResults, wikiData, portraits, wikipediaSummary] = await Promise.all([
+      const wikiNames = (graveData.multiple_subjects && graveData.names?.length > 1)
+        ? graveData.names.slice(0, 3)
+        : [primaryOcrName];
+      const [searchResults, wikiData, portraits, ...wikiSummaryResults] = await Promise.all([
         searchForPerson(graveData, locationHint),
         searchWikiTree(graveData, locationHint),
         fetchWikipediaPortraits(primaryOcrName, datesStr),
-        fetchWikipediaArticleSummary(primaryOcrName, datesStr),
+        ...wikiNames.map(n => fetchWikipediaArticleSummary(n, datesStr)),
       ]);
+      const wikipediaSummary = wikiSummaryResults.length === 1
+        ? wikiSummaryResults[0]
+        : wikiSummaryResults;
 
       setStepIndex(3);
       const bioResult = await generateBiography(graveData, searchResults, wikiData, locationHint, wikipediaSummary);

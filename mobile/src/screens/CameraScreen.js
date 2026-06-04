@@ -143,74 +143,131 @@ export default function CameraScreen({ navigation }) {
         );
       }
 
-      setStepIndex(2);
+      // Primary OCR name — used for cache lookup and grave linking
       const primaryOcrName = graveData.primary_name || graveData.names?.[0] || '';
-      const datesStr = [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ');
-      const effectiveDeath = graveData.death_date?.match(/\d{4}/)?.[0] || '';
-      const deathYrNum = effectiveDeath ? parseInt(effectiveDeath, 10) : 0;
-      const wikiNames = (graveData.multiple_subjects && graveData.names?.length > 1)
-        ? graveData.names.slice(0, 3)
-        : [primaryOcrName];
 
-      // For multi-person stones, search WikiTree for each of the first 2 people.
-      const wikiTreeTargets = (graveData.multiple_subjects && graveData.names?.length > 1)
-        ? graveData.names.slice(0, 2)
-        : [primaryOcrName];
+      // 1.5 — Biography cache: skip expensive research + Gemini when a recent
+      // public story already covers this stone (90-day TTL). Only fires for
+      // signed-in users with GPS — guests and GPS-less scans run the full pipeline.
+      let cachedBio = null;
+      let wikidataResult = null;
+      const { data: { session: cacheSession } } = await supabase.auth.getSession();
+      if (cacheSession?.user && gps && primaryOcrName) {
+        try {
+          const { data: cachedGraveId } = await supabase.rpc('find_grave', {
+            p_name: primaryOcrName,
+            p_lat: gps.lat,
+            p_lng: gps.lng,
+          });
+          if (cachedGraveId) {
+            const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+            const { data: row } = await supabase
+              .from('stories')
+              .select('name,dates,biography,location,inscription,symbols,sources,source_urls,portrait_left_url,portrait_right_url,portraits,grave_id')
+              .eq('grave_id', cachedGraveId)
+              .eq('is_public', true)
+              .is('deleted_at', null)
+              .gt('updated_at', cutoff)
+              .order('updated_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (row?.biography) {
+              cachedBio = row;
+              setStepIndex(3); // jump to near-done visually
+              console.warn('🏛️ Biography cache hit for', primaryOcrName);
+            }
+          }
+        } catch (e) {
+          console.warn('🏛️ Cache lookup failed (non-fatal):', e.message);
+        }
+      }
 
-      // Fetch portraits for every person on the stone (wikiNames), not just the
-      // primary name — on multi-person stones the primary subject (e.g. Cynthia Levy)
-      // may have no Wikipedia article while a second person (Amy Winehouse) does.
-      const allParallel = await Promise.all([
-        searchForPerson(graveData, locationHint),
-        ...wikiTreeTargets.map(name => searchWikiTree({ ...graveData, primary_name: name }, locationHint)),
-        // Wikidata: only when OCR confidence is high to avoid false matches
-        graveData.name_confidence === 'high'
-          ? queryWikidata(primaryOcrName, effectiveDeath)
-          : Promise.resolve(null),
-        // Chronicling America: direct API for pre-1924 deaths (frees a Tavily slot)
-        (effectiveDeath && deathYrNum <= 1924)
-          ? searchChroniclingAmerica(primaryOcrName, effectiveDeath)
-          : Promise.resolve([]),
-        ...wikiNames.map(n => fetchWikipediaPortraits(n, datesStr)),
-        ...wikiNames.map(n => fetchWikipediaArticleSummary(n, datesStr)),
-      ]);
+      let bioResult;
+      let resolvedPortraits;
+      if (cachedBio) {
+        bioResult = {
+          name: cachedBio.name,
+          dates: cachedBio.dates,
+          biography: cachedBio.biography,
+          location: cachedBio.location,
+          inscription: cachedBio.inscription,
+          symbols: cachedBio.symbols,
+          sources: cachedBio.sources,
+          source_urls: cachedBio.source_urls,
+        };
+        // Use portrait URLs stored with the cached story if available
+        resolvedPortraits = Array.isArray(cachedBio.portraits) && cachedBio.portraits.length > 0
+          ? cachedBio.portraits
+          : [cachedBio.portrait_left_url, cachedBio.portrait_right_url].filter(Boolean);
+      } else {
+        setStepIndex(2);
+        const datesStr = [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ');
+        const effectiveDeath = graveData.death_date?.match(/\d{4}/)?.[0] || '';
+        const deathYrNum = effectiveDeath ? parseInt(effectiveDeath, 10) : 0;
+        const wikiNames = (graveData.multiple_subjects && graveData.names?.length > 1)
+          ? graveData.names.slice(0, 3)
+          : [primaryOcrName];
 
-      let idx = 0;
-      const searchResults     = allParallel[idx++];
-      const wikiTreeResults   = allParallel.slice(idx, idx += wikiTreeTargets.length);
-      const wikidataResult    = allParallel[idx++];
-      const chronResults      = allParallel[idx++];
-      const portraitArrays    = allParallel.slice(idx, idx += wikiNames.length);
-      const wikiSummaryResults = allParallel.slice(idx);
+        // For multi-person stones, search WikiTree for each of the first 2 people.
+        const wikiTreeTargets = (graveData.multiple_subjects && graveData.names?.length > 1)
+          ? graveData.names.slice(0, 2)
+          : [primaryOcrName];
 
-      // Primary WikiTree result; pass all as array when multiple subjects
-      const wikiData = wikiTreeTargets.length > 1 ? wikiTreeResults.filter(Boolean) : wikiTreeResults[0];
+        // Fetch portraits for every person on the stone (wikiNames), not just the
+        // primary name — on multi-person stones the primary subject (e.g. Cynthia Levy)
+        // may have no Wikipedia article while a second person (Amy Winehouse) does.
+        const allParallel = await Promise.all([
+          searchForPerson(graveData, locationHint),
+          ...wikiTreeTargets.map(name => searchWikiTree({ ...graveData, primary_name: name }, locationHint)),
+          // Wikidata: only when OCR confidence is high to avoid false matches
+          graveData.name_confidence === 'high'
+            ? queryWikidata(primaryOcrName, effectiveDeath)
+            : Promise.resolve(null),
+          // Chronicling America: direct API for pre-1924 deaths (frees a Tavily slot)
+          (effectiveDeath && deathYrNum <= 1924)
+            ? searchChroniclingAmerica(primaryOcrName, effectiveDeath)
+            : Promise.resolve([]),
+          ...wikiNames.map(n => fetchWikipediaPortraits(n, datesStr)),
+          ...wikiNames.map(n => fetchWikipediaArticleSummary(n, datesStr)),
+        ]);
 
-      // Merge Chronicling America results into searchResults
-      const mergedSearchResults = [...searchResults, ...(chronResults || [])];
+        let idx = 0;
+        const searchResults      = allParallel[idx++];
+        const wikiTreeResults    = allParallel.slice(idx, idx += wikiTreeTargets.length);
+        wikidataResult           = allParallel[idx++];
+        const chronResults       = allParallel[idx++];
+        const portraitArrays     = allParallel.slice(idx, idx += wikiNames.length);
+        const wikiSummaryResults = allParallel.slice(idx);
 
-      const portraits = portraitArrays.flat();
-      const wikipediaSummary = wikiSummaryResults.length === 1
-        ? wikiSummaryResults[0]
-        : wikiSummaryResults;
+        // Primary WikiTree result; pass all as array when multiple subjects
+        const wikiData = wikiTreeTargets.length > 1 ? wikiTreeResults.filter(Boolean) : wikiTreeResults[0];
 
-      setStepIndex(3);
-      const bioResult = await generateBiography(graveData, mergedSearchResults, wikiData, locationHint, wikipediaSummary, wikidataResult);
+        // Merge Chronicling America results into searchResults
+        const mergedSearchResults = [...searchResults, ...(chronResults || [])];
 
-      // Portrait fallback: if the stone showed only a surname (e.g. "HOUDINI"),
-      // the single-token guard skipped the initial Wikipedia fetch. Now that the
-      // biography has resolved the full name, retry — but split on " and " first
-      // because bio.name is often a combined string ("Harry Houdini and Bess Houdini")
-      // that would fail the Wikipedia title-match guard when passed as-is.
-      let resolvedPortraits = portraits;
-      if (resolvedPortraits.length === 0 && bioResult.name) {
-        const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
-        const nameParts = bioResult.name.split(/\s+(?:and|&)\s+/i).map(n => n.trim()).filter(Boolean);
-        for (const namePart of nameParts) {
-          const tokens = namePart.toLowerCase().replace(/[.,'"()]/g, '').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w));
-          if (tokens.length >= 2) {
-            const fetched = await fetchWikipediaPortraits(namePart, bioResult.dates);
-            if (fetched.length > 0) { resolvedPortraits = fetched; break; }
+        const portraits = portraitArrays.flat();
+        const wikipediaSummary = wikiSummaryResults.length === 1
+          ? wikiSummaryResults[0]
+          : wikiSummaryResults;
+
+        setStepIndex(3);
+        bioResult = await generateBiography(graveData, mergedSearchResults, wikiData, locationHint, wikipediaSummary, wikidataResult);
+
+        // Portrait fallback: if the stone showed only a surname (e.g. "HOUDINI"),
+        // the single-token guard skipped the initial Wikipedia fetch. Now that the
+        // biography has resolved the full name, retry — but split on " and " first
+        // because bio.name is often a combined string ("Harry Houdini and Bess Houdini")
+        // that would fail the Wikipedia title-match guard when passed as-is.
+        resolvedPortraits = portraits;
+        if (resolvedPortraits.length === 0 && bioResult.name) {
+          const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
+          const nameParts = bioResult.name.split(/\s+(?:and|&)\s+/i).map(n => n.trim()).filter(Boolean);
+          for (const namePart of nameParts) {
+            const tokens = namePart.toLowerCase().replace(/[.,'"()]/g, '').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w));
+            if (tokens.length >= 2) {
+              const fetched = await fetchWikipediaPortraits(namePart, bioResult.dates);
+              if (fetched.length > 0) { resolvedPortraits = fetched; break; }
+            }
           }
         }
       }
@@ -221,7 +278,7 @@ export default function CameraScreen({ navigation }) {
       // the precise node. But camera EXIF / device GPS is always more accurate for
       // pin placement — the user was physically standing at the grave. Prefer real
       // GPS over Nominatim coords; only fall back to Nominatim when GPS is absent.
-      const primaryName = graveData.primary_name || graveData.names?.[0] || '';
+      const primaryName = primaryOcrName || bioResult.name || '';
       const geoResult = await forwardGeocode(bioResult.location, primaryName, bioResult.dates);
       // Wikidata burial coords are a precise fallback for famous figures when no GPS was captured
       const wikidataCoords = wikidataResult?.burialCoords || null;
@@ -232,9 +289,10 @@ export default function CameraScreen({ navigation }) {
       const { data: { session } } = await supabase.auth.getSession();
       const defaultPublic = session?.user?.user_metadata?.default_public ?? false;
 
-      // Link to canonical grave (deduplicates multiple scans of the same stone)
-      let graveId = null;
-      if (session?.user && refinedGps && primaryName) {
+      // Link to canonical grave — on a cache hit the grave_id is already known;
+      // otherwise call find_or_create to dedup multiple scans of the same stone.
+      let graveId = cachedBio?.grave_id || null;
+      if (!graveId && session?.user && refinedGps && primaryName) {
         graveId = await findOrCreateGrave(primaryName, refinedGps.lat, refinedGps.lng, defaultPublic);
       }
 

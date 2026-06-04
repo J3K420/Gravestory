@@ -63,19 +63,31 @@ function _buildCorroborationSummary(graveData, searchResults, wikiData) {
   return 'SOURCE CORROBORATION:\n' + lines.map(l => `- ${l}`).join('\n');
 }
 
-// Strip [N] citation markers whose index exceeds the supplied sources array length.
-// Prevents orphan citations that appear authoritative but point to nothing.
-function _validateCitations(bioResult) {
-  if (!bioResult?.biography) return bioResult;
-  const sources = bioResult.sources || [];
-  if (sources.length === 0) return bioResult;
+// Validate and normalise the structured citations returned by Gemini.
+// Sorts by n, remaps any non-sequential numbers to 1,2,3..., strips orphan
+// [N] markers, and produces sources/source_urls arrays for backwards-compat
+// with storage and display code.
+function _validateCitations(parsed) {
+  if (!parsed?.biography) return parsed;
+  const raw = (parsed.citations || []).filter(c => c && Number.isInteger(c.n) && c.n >= 1);
+  const sorted = [...raw].sort((a, b) => a.n - b.n);
 
-  let bio = bioResult.biography.replace(/\[(\d+)\]/g, (match, nStr) => {
-    const n = parseInt(nStr, 10);
-    return (n >= 1 && n <= sources.length) ? match : '';
+  // Build a remap so non-sequential n values align to 1-based sources array
+  const nMap = {};
+  sorted.forEach((c, i) => { nMap[c.n] = i + 1; });
+
+  let bio = parsed.biography.replace(/\[(\d+)\]/g, (match, nStr) => {
+    const mapped = nMap[parseInt(nStr, 10)];
+    return mapped ? `[${mapped}]` : '';
   });
   bio = bio.replace(/[ \t]{2,}/g, ' ').replace(/\s+([.,;!?])/g, '$1');
-  return { ...bioResult, biography: bio };
+
+  return {
+    ...parsed,
+    biography: bio,
+    sources:     sorted.map(c => c.description || ''),
+    source_urls: sorted.map(c => c.url || ''),
+  };
 }
 
 // ── GEMINI: GENERATE BIOGRAPHY ───────────────────────────────────
@@ -112,11 +124,34 @@ async function generateBiography(graveData, searchResults, wikiData, location, w
   }
 
   const TYPE_LABELS = {
-    verified_transcription: '[BillionGraves — GPS-verified transcription]',
-    public_domain:          '[Chronicling America — public-domain newspaper]',
-    memorial:               '[Find A Grave memorial]',
+    verified_transcription: '[BillionGraves]',
+    public_domain:          '[Chronicling America]',
+    memorial:               '[Find A Grave]',
     obituary:               '[Obituary]',
-    web:                    '[Web]'
+    web:                    '[Web]',
+  };
+
+  const RESPONSE_SCHEMA = {
+    type: 'object',
+    properties: {
+      name:      { type: 'string' },
+      dates:     { type: 'string' },
+      biography: { type: 'string' },
+      citations: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            n:           { type: 'integer' },
+            description: { type: 'string' },
+            url:         { type: 'string' },
+          },
+          required: ['n', 'description', 'url'],
+        },
+      },
+      location: { type: 'string' },
+    },
+    required: ['name', 'dates', 'biography', 'citations', 'location'],
   };
 
   // Numbered sources: search results first, Wikipedia article(s) appended.
@@ -144,7 +179,8 @@ async function generateBiography(graveData, searchResults, wikiData, location, w
     ? `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${graveData.names.join(' and ')}. You MUST write a combined biography that gives each person meaningful, proportional coverage — do not focus exclusively on the most notable or primary subject. Weave their stories together and, where the stone or research reveals their relationship (e.g. grandmother and granddaughter, husband and wife), honour that connection explicitly.\n`
     : '';
 
-  const prompt = `You are GraveStory AI, a compassionate and thoughtful historian. Using the gravestone data and research below, write a respectful, moving life history for ${isMultiSubject ? 'ALL people commemorated on this stone' : 'this person'}.
+  const prompt = `You are GraveStory AI, a careful historian writing a respectful life history.
+Accuracy and dignity matter more than length or eloquence. Write only from the gravestone data and the numbered sources below. Do not use facts from memory or general knowledge unless a numbered source supports them. Never fabricate facts, relationships, events, or characterizations. A short, honest biography builds trust; an invented one destroys it.
 
 GRAVESTONE DATA:
 ${JSON.stringify(graveData, null, 2)}
@@ -156,43 +192,56 @@ ${searchContext}
 ${wikiContext}
 ${corroborationContext ? '\n' + corroborationContext : ''}
 
-Write a biography that (aim for up to ~500 words when the sources genuinely support it, much shorter when they do not):
-- Opens with the full name(s), birth and death dates, and a vivid sense of the era they lived in
-- Paints a picture of their world — historical events, cultural shifts, and local context of their lifetime
-- Weaves in known details about family, marriage, faith, community, or relationships
-- Deeply analyzes symbols on the stone — religious imagery (crosses, Divine Mercy, etc.), military emblems, fraternal symbols, and floral carvings all reveal character and belief
-- If the surname has a well-documented cultural origin, you MAY note that names of this kind are commonly associated with that heritage — but do NOT assert anything about this individual's own background, ancestry, or experiences on the basis of their name. ADDITIONALLY: if "family_name" in the gravestone data is empty, null, or missing, do NOT discuss surname heritage at all — any surname elsewhere in the data (in the inscription, names array, or research results) belongs to a relative, not the deceased, and cannot be used to infer the deceased's heritage.
-- When sources are limited, write a SHORTER biography grounded only in what the stone itself and the verified sources actually state — do not extrapolate, speculate, or pad with general historical background to reach a length target
-- **EXCEPTION — well-documented historical figures**: If the gravestone data, inscription, or search results unambiguously identify a person of major historical significance (a head of state, president, monarch, general, founding father, or other figure whose life is extensively documented in the historical record), you MUST write a full, rich biography drawing on well-established historical facts. Ground the biography in any Wikipedia article text provided in the numbered sources above and cite those passages with [N] markers — do not rely on recalled knowledge when a retrieved source is available. The anti-fabrication rule is there to protect private individuals whose lives are undocumented — it does NOT mean you should write a minimal biography for George Washington, Abraham Lincoln, Napoleon, or Marie Curie. A two-paragraph biography for the first President of the United States is a failure. **NAMESAKE GUARD**: Before invoking this historical-figure exception you must satisfy BOTH conditions: (1) the graveData birth_date and/or death_date are consistent with the famous figure's actual dates (within ±5 years) AND (2) the Wikipedia article provided (if any) confirms the same person. If the stone dates contradict the famous figure's dates OR the Wikipedia article describes a different person, a different individual with the same name is buried here — apply the standard anti-fabrication rule and write a short honest biography. Do not fabricate a connection to the famous namesake.
-- Reflects on the inscription or epitaph with depth and compassion
-- For stones commemorating multiple people: devotes proportional space to each person, weaves their stories together, and closes with a warm reflection on their shared legacy and relationship
-- If an inscription seems unusual or sad, approaches it with extra warmth and humanity
-- Length should follow the evidence: a well-documented life earns a full biography; a sparsely-documented one gets a short, honest one. A brief accurate account builds trust; an invented one destroys it. Never fabricate facts, relationships, events, or characterizations that are not in the sources or well-established historical record
+LENGTH — follow the evidence, do not pad to a target:
+- Stone only, or a single weak/uncorroborated source: 1–2 short paragraphs.
+- Two corroborating sources: 2–4 paragraphs.
+- Three or more independent sources: a full biography, up to ~1000 words.
 
-CITATIONS — required when sources are present:
-- After EACH specific factual claim drawn from a numbered source above, append the bracketed source number, e.g. "Lee was buried at Lake View Cemetery in Seattle [2]." Multiple sources for one claim: "[2][4]"
-- Cite ONLY claims actually supported by that numbered source — do not attach a citation to a sentence the source does not back up
-- Do NOT cite gravestone-inscription claims (the stone is shown to the reader directly); cite only claims that came from research
-- Prefer citing [BillionGraves — GPS-verified transcription] and [Chronicling America — public-domain newspaper] sources when they support a claim; they are higher-credibility than generic web
-- If no numbered source supports a claim, do NOT invent a citation — and consider whether the claim itself should be removed
+WRITE A BIOGRAPHY THAT:
+- Opens with the full name(s), birth/death dates, and the era they lived in
+- Sets historical and local context for their lifetime — only at a depth the sources support; do not pad with generic background
+- Weaves in verified details of family, marriage, faith, community, and relationships
+- Explains any symbols on the stone by their conventional meaning in that era and region — e.g. an anchor often signified hope or a maritime life; a Masonic square-and-compass indicated Freemasonry membership; clasped hands often marked marriage or farewell. Describe what the symbol conventionally meant; do not assert it as fact about this individual's beliefs or inner life
+- Reflects on the inscription with restraint and humanity — let the feeling come from the facts, not from added sentiment
+${isMultiSubject ? '- Devotes proportional space to each person on the stone, weaves their stories together, and closes with a brief reflection on their shared legacy and relationship' : ''}
 
-For the location field: this MUST be the BURIAL location — where the body lies — NOT where the person was born, lived, died, or was famous. These are often different places. For example: Bruce Lee died in Hong Kong but is buried at Lake View Cemetery in Seattle, Washington. Marilyn Monroe died in Los Angeles and is buried at Westwood Village Memorial Park in Los Angeles — same city. Napoleon died on St. Helena but is buried at Les Invalides in Paris. Always read the research results carefully for words like "buried", "interred", "laid to rest", "grave at", "final resting place", or a cemetery name — these signal burial location. Words like "died in", "born in", "passed away in", or "lived in" are NOT burial location signals. IMPORTANT: if this person is a well-known historical or public figure whose burial place is common knowledge, trust your own knowledge of where they are buried OVER ambiguous search snippets that emphasize their birthplace or deathplace. Search results often over-represent where someone lived or died because that's where most articles about them are written. If a GPS location was provided above, use it exactly. Format as: "Cemetery Name, City, State/Country" (e.g. "St. Casimir Cemetery, Baldwin, Pennsylvania" or "Lake View Cemetery, Seattle, Washington"). For famous figures buried on estates, use the specific tomb/vault name. If the research clearly identifies a burial cemetery, use it. If only a city/region is mentioned as burial place, format as "Cemetery near City, State". If burial location cannot be determined from research, leave it empty — do NOT substitute the death or birth place.
+SURNAME / IDENTITY:
+- You may note that a surname is commonly associated with a cultural heritage, but do not infer anything about this person's ancestry or experience from their name alone
+- If "family_name" is empty, null, or missing, do not discuss surname heritage at all — any surname elsewhere belongs to a relative, not the deceased
+- If "name_confidence" is "low", hedge identity ("the stone appears to commemorate…") and suppress all surname-heritage discussion
 
-Return ONLY valid JSON with these exact fields:
-{
-  "name": "full name(s) — join with ' & ' when multiple people share the stone (e.g. 'Cynthia Levy & Amy Jade Winehouse')",
-  "dates": "date range(s) — use ' · ' to separate when multiple people (e.g. '1927–2006 · 1983–2011')",
-  "biography": "biography text with [N] citation markers inline, paragraphs separated by \\n\\n",
-  "sources": ["description for [1]", "description for [2]", "..."],
-  "source_urls": ["url for [1]", "url for [2]", "..."],
-  "location": "Cemetery Name, City, State — as specific as possible, empty string if unknown"
-}
+CONFLICTING SOURCES:
+- For vital dates, prefer the stone. Surface the discrepancy in the text rather than silently choosing — e.g. "an obituary records 1896, though the stone reads 1895"
 
-CRITICAL: the "sources" and "source_urls" arrays MUST be index-aligned to the [N] markers used in the biography. sources[0] / source_urls[0] is what "[1]" in the text points to, sources[1] / source_urls[1] is "[2]", and so on. Only include sources you actually cited with a marker. If no citations were used (e.g. nothing in the biography came from web research), return empty arrays for both.`;
+WELL-DOCUMENTED HISTORICAL FIGURES (narrow exception):
+- A figure of major historical significance earns a fuller biography only when all of the following hold:
+    (1) graveData birth/death dates are within ±5 years of the famous figure's actual dates
+    (2) A [Wikipedia] article confirming the same person is present in the numbered sources above
+    (3) Every claim in the fuller biography is supported by a numbered source with an [N] marker
+- If any condition fails — including no Wikipedia article being present in the numbered sources — write the short source-grounded biography. Memory is not a source. A fabricated famous figure is worse than a brief accurate one.
+
+CITATIONS:
+- After each specific factual claim drawn from a numbered source, append the source number: "Buried at Lake View Cemetery [2]." Multiple: "[2][4]"
+- Cite only claims the numbered source actually supports. If no source supports a claim, remove the claim — never invent a citation
+- Do not cite inscription claims; the stone is shown to the reader directly
+- Prefer [BillionGraves] and [Chronicling America] over [Web] when both apply
+
+BURIAL LOCATION (the "location" output field):
+- This is where the body lies, not where the person was born, lived, died, or was famous
+- Format: "Cemetery Name, City, State/Country" — empty string if undeterminable
+- Do not substitute birth place or death place for burial location
+- For well-known figures, prefer the burial location confirmed by a numbered source over ambiguous search snippets about where they lived or died
+
+For each [N] marker used, include a matching entry in the "citations" output array with its number (n), a short description, and the source URL. Name field: join with " & " for multiple people. Dates field: separate with " · " for multiple people.`;
 
   const { data } = await geminiCallWithFallback({
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 8000 }
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 8000,
+      responseMimeType: 'application/json',
+      responseSchema: RESPONSE_SCHEMA,
+    }
   });
   if (data.error) throw new Error(data.error.message);
 

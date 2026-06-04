@@ -1,9 +1,31 @@
 // Direct Wikipedia fetch — no proxy needed.
+import * as ImageManipulator from 'expo-image-manipulator';
 
 const WIKI_HEADERS = {
   'User-Agent': 'GraveStory/1.0 (https://github.com/J3K420/Gravestory; gravestory mobile app)',
   'Api-User-Agent': 'GraveStory/1.0',
 };
+
+// Downloads a remote image and saves it as a local JPEG via ImageManipulator.
+// This is required for display — React Native's Image component (Fresco on Android)
+// cannot reliably load Wikipedia CDN URLs directly. ImageManipulator's native
+// bitmap decoder handles them fine and produces a local file:// URI that Fresco
+// can always read. Falls back to the original URL if download/resize fails.
+// NOTE: the output file:// URI lives in a temp directory and will not survive
+// app restarts. Persistence across restarts requires expo-file-system (future work).
+async function resizeForDisplay(url) {
+  if (!url) return null;
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      url,
+      [{ resize: { width: 800 } }],
+      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    return result.uri;
+  } catch {
+    return url;
+  }
+}
 
 function imageFilenameMatchesPerson(imageUrl, queriedNameSet) {
   if (!imageUrl || !queriedNameSet || queriedNameSet.size === 0) return true;
@@ -196,7 +218,13 @@ export async function fetchWikipediaPortraits(name, dates) {
       }
     } catch {}
 
-    return rawUrls;
+    // Download and resize each URL to a local JPEG via native bitmap decoder.
+    // Required because Fresco (React Native Image on Android) cannot reliably
+    // load Wikipedia CDN URLs directly — ImageManipulator's native path can.
+    const resized = await Promise.allSettled(rawUrls.map(u => resizeForDisplay(u)));
+    return resized
+      .filter(r => r.status === 'fulfilled' && r.value)
+      .map(r => r.value);
   } catch (err) {
     console.warn('Wikipedia portrait fetch failed:', err.message);
     return [];

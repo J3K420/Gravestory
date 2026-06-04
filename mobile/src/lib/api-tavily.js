@@ -216,7 +216,7 @@ export async function searchForPerson(graveData, location) {
       const res = await fetch(`${PROXY_BASE}/tavily`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, search_depth: 'basic', max_results: 3, include_answer: false }),
+        body: JSON.stringify({ query, search_depth: 'basic', max_results: 2, include_answer: false }),
       });
       const data = await res.json();
       if (data.results) {

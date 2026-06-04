@@ -273,7 +273,7 @@ async function searchForPerson(graveData, location) {
         body: JSON.stringify({
           query,
           search_depth: 'basic',
-          max_results: 3,
+          max_results: 2,
           include_answer: false
         })
       });

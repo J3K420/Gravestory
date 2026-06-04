@@ -40,6 +40,10 @@ function parseAgeAtDeath(graveData) {
   return null;
 }
 
+// Session-level cache: prevents re-querying the same person in a single app session.
+// Key: "${normalizedName}|${deathYear}". Lives until the app is force-quit.
+const _searchCache = new Map();
+
 // Maps symbol keywords (lowercased) to extra Tavily query suffixes.
 // Each entry fires one additional query per matched symbol group, using the
 // primary name as the subject, so we find fraternal records and service rolls.
@@ -120,54 +124,88 @@ export async function searchForPerson(graveData, location) {
 
   const loc = location ? location.split(',').slice(0, 2).map(s => s.trim()).join(' ') : '';
   const inscr = (graveData.inscription || '').trim();
-
-  const queries = [];
-  allVariants.forEach(name => {
-    queries.push(`"${name}" buried cemetery grave location`.trim());
-    queries.push(`site:findagrave.com "${name}" buried`.trim());
-    queries.push(`site:billiongraves.com "${name}"`.trim());
-    if (effectiveDeath) queries.push(`site:chroniclingamerica.loc.gov "${name}" ${effectiveDeath} obituary`.trim());
-  });
-  allVariants.forEach(name => {
-    const yr = effectiveDeath || effectiveBirth;
-    queries.push(`site:findagrave.com "${name}" ${yr}`.trim());
-    queries.push(`site:legacy.com "${name}" obituary ${loc}`.trim());
-    queries.push(`"${name}" obituary ${yr} ${loc}`.trim());
-  });
-  if (graveData.family_name) {
-    queries.push(`site:newspapers.com "${graveData.family_name}" ${loc} ${effectiveDeath}`.trim());
-  }
-  if (loc) {
-    queries.push(`site:atlasobscura.com ${loc} cemetery history`.trim());
-    queries.push(`historic cemetery ${loc} history abandoned`.trim());
-  }
-
-  // High-priority disambiguation: when name is a bare surname with no dates (e.g. historical
-  // monuments where the stone reads "TOMB OF WASHINGTON"), use the inscription text itself as
-  // the search query — far more specific than the name alone.
   const primaryName = cleanNames[0] || '';
-  const isBare = primaryName && !primaryName.includes(' ');
-  if (isBare && inscr.length > 15) {
-    const ctx = inscr.slice(0, 55).replace(/"/g, '').trim();
-    queries.unshift(`"${primaryName}" ${ctx}`);
-  }
-  if (!effectiveDeath && !effectiveBirth && inscr.length > 30) {
-    const phrase = inscr.slice(0, 55).replace(/"/g, '').trim();
-    queries.unshift(`"${phrase}"`);
+
+  // Session cache: skip Tavily entirely if this person was already searched this session.
+  // Handles family plots where the same name appears on multiple stones.
+  const cacheKey = `${primaryName.toLowerCase().trim()}|${effectiveDeath}`;
+  if (primaryName && effectiveDeath && _searchCache.has(cacheKey)) {
+    return _searchCache.get(cacheKey);
   }
 
-  // Symbol-guided queries: each recognised emblem/affiliation generates one
-  // targeted query that routes the search toward the right record repositories.
-  if (graveData.symbols?.length > 0) {
-    const symbolStr = graveData.symbols.join(' ').toLowerCase();
-    const primaryVar = allVariants[0] || '';
-    for (const [key, suffixes] of Object.entries(SYMBOL_QUERIES)) {
-      if (symbolStr.includes(key)) {
-        suffixes.forEach(suffix => {
-          if (primaryVar) queries.push(`"${primaryVar}" ${suffix}`);
-        });
+  const primaryVar = allVariants[0] || '';
+  const yr = effectiveDeath || effectiveBirth;
+  const deathYrNum = effectiveDeath ? parseInt(effectiveDeath, 10) : 0;
+
+  // Build priority-ordered query list.
+  // Previous approach appended symbol queries and the general obituary query to the end of a
+  // 10+ item list — both were always cut off by the slice(0,6) cap and never fired.
+  // Duplicate FindAGrave queries also wasted a slot. Fixed below.
+  const queries = [];
+
+  if (primaryVar) {
+    // Slot 1: FindAGrave — merged into one query (was two separate FindAGrave slots before)
+    queries.push(`site:findagrave.com "${primaryVar}"${yr ? ' ' + yr : ''} buried`.trim());
+
+    // Slot 2: BillionGraves
+    queries.push(`site:billiongraves.com "${primaryVar}"`);
+
+    // Slot 3: General obituary + year + location (was at position ~6 — never fired before)
+    const obitParts = [`"${primaryVar}" obituary`];
+    if (yr) obitParts.push(yr);
+    if (loc) obitParts.push(loc);
+    queries.push(obitParts.join(' '));
+
+    // Slot 4: Symbol-guided (was appended to end — never fired before)
+    //         OR expanded/formal name FindAGrave variant (e.g. "Wm" → "William")
+    let slot4Used = false;
+    if (graveData.symbols?.length > 0) {
+      const symbolStr = graveData.symbols.join(' ').toLowerCase();
+      for (const [key, suffixes] of Object.entries(SYMBOL_QUERIES)) {
+        if (symbolStr.includes(key)) {
+          queries.push(`"${primaryVar}" ${suffixes[0]}`);
+          slot4Used = true;
+          break;
+        }
       }
     }
+    if (!slot4Used && allVariants[1] && allVariants[1] !== primaryVar) {
+      queries.push(`site:findagrave.com "${allVariants[1]}"${yr ? ' ' + yr : ''} buried`.trim());
+    }
+
+    // Slot 5: Era-appropriate source
+    if (effectiveDeath && deathYrNum <= 1922) {
+      queries.push(`site:chroniclingamerica.loc.gov "${primaryVar}" ${effectiveDeath} obituary`);
+    } else {
+      queries.push(`site:legacy.com "${primaryVar}" obituary${loc ? ' ' + loc : ''}`.trim());
+    }
+
+    // Slot 6: Secondary fallback
+    if (effectiveDeath && deathYrNum <= 1922) {
+      queries.push(`site:legacy.com "${primaryVar}" obituary${loc ? ' ' + loc : ''}`.trim());
+    } else if (graveData.family_name) {
+      queries.push(`site:newspapers.com "${graveData.family_name}"${loc ? ' ' + loc : ''}${effectiveDeath ? ' ' + effectiveDeath : ''}`.trim());
+    }
+  }
+
+  // Alternate OCR readings for low-confidence names: append (fire only if budget allows)
+  if (graveData.name_confidence !== 'high' && graveData.alternate_names?.length > 0) {
+    graveData.alternate_names.slice(0, 1).forEach(alt => {
+      const clean = (alt || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+      if (clean && !variantSeen.has(clean)) {
+        queries.push(`site:findagrave.com "${clean}"${yr ? ' ' + yr : ''} buried`.trim());
+      }
+    });
+  }
+
+  // Inscription-based disambiguation: unshift to highest priority.
+  // Bare surname with inscription context, or no dates at all — the inscription
+  // phrase is more specific than the name alone.
+  if (!effectiveDeath && !effectiveBirth && inscr.length > 30) {
+    queries.unshift(`"${inscr.slice(0, 55).replace(/"/g, '').trim()}"`);
+  }
+  if (primaryName && !primaryName.includes(' ') && inscr.length > 15) {
+    queries.unshift(`"${primaryName}" ${inscr.slice(0, 55).replace(/"/g, '').trim()}`);
   }
 
   const results = [];
@@ -203,5 +241,6 @@ export async function searchForPerson(graveData, location) {
     } catch (e) { console.warn('Tavily query failed:', query, e?.message); }
   }
 
+  if (primaryName && effectiveDeath) _searchCache.set(cacheKey, results);
   return results;
 }

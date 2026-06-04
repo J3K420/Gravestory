@@ -105,18 +105,21 @@ async function geminiText(payload) {
 export async function generateBiography(graveData, searchResults, wikiData, location, wikipediaSummary) {
   const hasRealSources = (searchResults && searchResults.length > 0) || (wikiData != null) || (wikipediaSummary != null);
   if (!hasRealSources) {
-    const who = graveData.primary_name || graveData.names?.[0] || 'an individual';
+    const allPeople = (graveData.names || []).filter(Boolean);
+    const who = allPeople.length > 1
+      ? allPeople.join(' and ')
+      : (graveData.primary_name || allPeople[0] || 'an individual');
     const bday = graveData.birth_date ? `, born ${graveData.birth_date}` : '';
     const dday = graveData.death_date ? ` and passed ${graveData.death_date}` : '';
     const insc = graveData.inscription ? ` Their stone bears the words: "${graveData.inscription}".` : '';
     return {
-      name: graveData.primary_name || graveData.names?.[0] || 'Unknown',
+      name: allPeople.length > 1 ? allPeople.join(' & ') : (graveData.primary_name || allPeople[0] || 'Unknown'),
       dates: (graveData.birth_date && graveData.death_date)
         ? `born ${graveData.birth_date} — died ${graveData.death_date}` : '',
       biography:
-        `This stone marks the life of ${who}${bday}${dday}.${insc} ` +
+        `This stone marks the ${allPeople.length > 1 ? 'lives' : 'life'} of ${who}${bday}${dday}.${insc} ` +
         `Beyond what the stone itself records, the available sources do not ` +
-        `yield further verifiable details about this person. What endures here ` +
+        `yield further verifiable details. What endures here ` +
         `is the marker they were given and the words chosen to remember them.`,
       sources: ['Gravestone inscription (primary source)'],
       source_urls: [''],
@@ -153,11 +156,16 @@ export async function generateBiography(graveData, searchResults, wikiData, loca
     ? `Cemetery location: ${location}`
     : 'Cemetery location: unknown — infer from research results if possible.';
 
-  const prompt = `You are GraveStory AI, a compassionate and thoughtful historian. Using the gravestone data and research below, write a respectful, moving life history for this person.
+  const isMultiSubject = graveData.multiple_subjects === true && (graveData.names?.length > 1);
+  const multiSubjectBlock = isMultiSubject
+    ? `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${graveData.names.join(' and ')}. You MUST write a combined biography that gives each person meaningful, proportional coverage — do not focus exclusively on the most notable or primary subject. Weave their stories together and, where the stone or research reveals their relationship (e.g. grandmother and granddaughter, husband and wife), honour that connection explicitly.\n`
+    : '';
+
+  const prompt = `You are GraveStory AI, a compassionate and thoughtful historian. Using the gravestone data and research below, write a respectful, moving life history for ${isMultiSubject ? 'ALL people commemorated on this stone' : 'this person'}.
 
 GRAVESTONE DATA:
 ${JSON.stringify(graveData, null, 2)}
-
+${multiSubjectBlock}
 ${locationContext}
 
 ${searchContext}
@@ -174,8 +182,7 @@ Write a biography that (aim for up to ~500 words when the sources genuinely supp
 - When sources are limited, write a SHORTER biography grounded only in what the stone itself and the verified sources actually state — do not extrapolate, speculate, or pad with general historical background to reach a length target
 - **EXCEPTION — well-documented historical figures**: If the gravestone data, inscription, or search results unambiguously identify a person of major historical significance (a head of state, president, monarch, general, founding father, or other figure whose life is extensively documented in the historical record), you MUST write a full, rich biography drawing on well-established historical facts. Ground the biography in any Wikipedia article text provided in the numbered sources above and cite those passages with [N] markers — do not rely on recalled knowledge when a retrieved source is available. The anti-fabrication rule is there to protect private individuals whose lives are undocumented — it does NOT mean you should write a minimal biography for George Washington, Abraham Lincoln, Napoleon, or Marie Curie. A two-paragraph biography for the first President of the United States is a failure. **NAMESAKE GUARD**: Before invoking this historical-figure exception you must satisfy BOTH conditions: (1) the graveData birth_date and/or death_date are consistent with the famous figure's actual dates (within ±5 years) AND (2) the Wikipedia article provided (if any) confirms the same person. If the stone dates contradict the famous figure's dates OR the Wikipedia article describes a different person, a different individual with the same name is buried here — apply the standard anti-fabrication rule and write a short honest biography. Do not fabricate a connection to the famous namesake.
 - Reflects on the inscription or epitaph with depth and compassion
-- If multiple people share the stone, weaves their stories together meaningfully
-- Closes with a warm, dignified reflection on their shared legacy
+- For stones commemorating multiple people: devotes proportional space to each person, weaves their stories together, and closes with a warm reflection on their shared legacy and relationship
 - If an inscription seems unusual or sad, approaches it with extra warmth and humanity
 - Length should follow the evidence: a well-documented life earns a full biography; a sparsely-documented one gets a short, honest one. A brief accurate account builds trust; an invented one destroys it. Never fabricate facts, relationships, events, or characterizations that are not in the sources or well-established historical record
 
@@ -190,8 +197,8 @@ For the location field: this MUST be the BURIAL location — where the body lies
 
 Return ONLY valid JSON with these exact fields:
 {
-  "name": "full name",
-  "dates": "born [date] — died [date]",
+  "name": "full name(s) — join with ' & ' when multiple people share the stone (e.g. 'Cynthia Levy & Amy Jade Winehouse')",
+  "dates": "date range(s) — use ' · ' to separate when multiple people (e.g. '1927–2006 · 1983–2011')",
   "biography": "biography text with [N] citation markers inline, paragraphs separated by \\n\\n",
   "sources": ["description for [1]", "description for [2]", "..."],
   "source_urls": ["url for [1]", "url for [2]", "..."],

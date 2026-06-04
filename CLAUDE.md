@@ -394,3 +394,10 @@ mobile/
 - iOS TestFlight build (requires $99/yr Apple Developer account)
 - Grave photo gallery: `grave_photos` table linked to `grave_id`; when a second user scans a known grave, their photo is added to the canonical grave's photo pool; ResultScreen carousel pulls from grave photos in addition to the local story's images
 - **Portrait persistence**: add `expo-file-system` to package.json; in `api-wikipedia.js` `resizeForDisplay()`, after `ImageManipulator.manipulateAsync()` produces a temp `file://` URI, copy it to `FileSystem.documentDirectory + 'portraits/'` with a URL-hash filename and return the permanent path. Check for existing file before re-downloading. Currently portraits are lost on app restart because ImageManipulator writes to a temp directory that the OS clears; `expo-file-system` is required for the copy step and cannot be added via OTA — needs a new build.
+
+---
+
+## Known limitations
+
+- **3-person stones — Tavily research gap**: `searchForPerson` fires up to 6 Tavily query slots per scan. Slot 4 is assigned to the second person on a multi-subject stone (FindAGrave only); the third person gets no dedicated Tavily slot and their biography section relies solely on the stone inscription and any Wikipedia article found. Portraits and Wikipedia article summaries ARE fetched for all 3 people (via `wikiNames.slice(0, 3)`). A fix would require restructuring the 6 slots to distribute 2 slots per person for a 3-person stone (e.g. FindAGrave + obituary for each), reducing per-person depth in exchange for breadth. Not worth the complexity until 3-person stones prove common in the wild.
+  - **User-facing disclaimer**: when `graveData.multiple_subjects === true` and `graveData.names?.length >= 3`, the existing multi-person Alert/loading-step warning (web and mobile) should include an extra line: "For stones with 3 or more people, research depth is reduced for the third person and beyond. For a full biography, photograph each stone individually." This can be added to the Alert text in `CameraScreen.js` and the `setLoadingStep` call in `index.html` with a simple length check on `graveData.names`.

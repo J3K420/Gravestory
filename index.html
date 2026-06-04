@@ -993,8 +993,20 @@ async function startAnalysis() {
     setStep(5);
     const story = await generateBiography(graveData, mergedSearchResults, wikiData, locationStr, wikipediaSummary, wikidataResult);
 
-    // 5.5 — Fetch Wikipedia portraits (best-effort, doesn't block on failure)
-    const portraits = await fetchWikipediaPortraits(story.name, story.dates);
+    // 5.5 — Fetch Wikipedia portraits (best-effort, doesn't block on failure).
+    // If the bio name is a combined string ("A & B"), split and try each part so
+    // a pen name or alias doesn't block the match (e.g. "Samuel Langhorne Clemens & Mark Twain").
+    let portraits = await fetchWikipediaPortraits(story.name, story.dates);
+    if (!portraits?.left && !portraits?.right && story.name?.includes(' & ')) {
+      const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
+      for (const part of story.name.split(' & ').map(s => s.trim())) {
+        const tokens = part.toLowerCase().replace(/[.,'"()]/g, '').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w));
+        if (tokens.length >= 2) {
+          const attempt = await fetchWikipediaPortraits(part, story.dates);
+          if (attempt?.left || attempt?.right) { portraits = attempt; break; }
+        }
+      }
+    }
 
     clearInterval(stepInterval);
     // Use GPS-derived location if available, otherwise fall back to location inferred by Gemini from research

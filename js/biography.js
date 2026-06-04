@@ -272,7 +272,7 @@ BURIAL LOCATION (the "location" output field):
 - Do not substitute birth place or death place for burial location
 - For well-known figures, prefer the burial location confirmed by a numbered source over ambiguous search snippets about where they lived or died
 
-For each [N] marker used, include a matching entry in the "citations" output array with its number (n), a short description, and the source URL. Name field: join with " & " for multiple people. Dates field: separate with " · " for multiple people.`;
+For each [N] marker used, include a matching entry in the "citations" output array with its number (n), a short description, and the source URL. Name field: when multiple_subjects is false, use primary_name only — do not join aliases or pen names with " & " (e.g. if the stone lists both "Samuel Langhorne Clemens" and "Mark Twain", the name field should be "Mark Twain" — use whichever form is most widely recognised). When multiple_subjects is true, join all subjects with " & ". Dates field: separate with " · " for multiple people.`;
 
   const { data } = await geminiCallWithFallback({
     contents: [{ parts: [{ text: prompt }] }],

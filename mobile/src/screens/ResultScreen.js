@@ -23,6 +23,7 @@ export default function ResultScreen({ navigation, route }) {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [tributes, setTributes]         = useState({ candles: 0, flowers: 0, userTribute: null });
   const [tributeLoading, setTributeLoading] = useState(false);
+  const [gravePhotos, setGravePhotos]   = useState([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -35,6 +36,21 @@ export default function ResultScreen({ navigation, route }) {
       getTributes(story.grave_id).then(setTributes);
     }
   }, [story?.grave_id]);
+
+  // Global map bios: fetch all community photos of this stone
+  useEffect(() => {
+    if (!story?._isGlobal || !story?.grave_id) return;
+    supabase
+      .from('grave_photos')
+      .select('image_url')
+      .eq('grave_id', story.grave_id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+      .then(({ data }) => {
+        const urls = (data || []).map(r => r.image_url).filter(Boolean);
+        if (urls.length > 0) setGravePhotos(urls);
+      });
+  }, [story?.grave_id, story?._isGlobal]);
 
   const { refreshControl } = useRefresh(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -59,8 +75,17 @@ export default function ResultScreen({ navigation, route }) {
   const { name, dates, biography, sources = [], source_urls = [], location, portraits, graveData } = story;
   const paragraphs = (biography || '').split('\n\n').filter(Boolean);
 
+  // Global map bios: show all community photos of this stone when available.
+  // Own stories: show only the user's own gravestone photo.
+  const graveSlots = (story._isGlobal && gravePhotos.length > 0)
+    ? gravePhotos.map((uri, i) => ({
+        uri,
+        label: gravePhotos.length > 1 ? `Photo ${i + 1} of ${gravePhotos.length}` : 'Gravestone',
+      }))
+    : (story.image_url ? [{ uri: story.image_url, label: 'Gravestone' }] : []);
+
   const carouselImages = [
-    story.image_url ? { uri: story.image_url, label: 'Gravestone' } : null,
+    ...graveSlots,
     ...normalizePortraits(portraits).map(uri => ({ uri, label: 'Portrait' })),
   ].filter(Boolean);
 

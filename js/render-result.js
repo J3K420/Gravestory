@@ -37,6 +37,12 @@ function renderResult(story) {
     imgContainer.style.display = 'none';
   }
 
+  // Global map bios: async-load all photos of this stone into a scrollable gallery.
+  // Fires after the initial single-image render so the screen is never blank.
+  if (story._isGlobal && story.grave_id) {
+    _loadGravePhotoGallery(story.grave_id, leftSrc, rightSrc);
+  }
+
   document.getElementById('result-name').textContent = story.name || 'Unknown';
   document.getElementById('result-dates').textContent = story.dates || '';
 
@@ -294,4 +300,43 @@ function renderTributeSection(story) {
 
     renderButtons(tributes);
   });
+}
+
+// Load all community photos of a grave and replace the image container with a
+// horizontal scrollable gallery. Only called for global map bios (_isGlobal).
+// Fires after the initial single-image render so the screen is never blank.
+async function _loadGravePhotoGallery(graveId, leftPortrait, rightPortrait) {
+  try {
+    const { data } = await supabaseClient
+      .from('grave_photos')
+      .select('image_url')
+      .eq('grave_id', graveId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    const photos = (data || []).map(r => r.image_url).filter(Boolean);
+    if (photos.length <= 1) return; // single photo — existing layout is fine
+
+    const portraits = [leftPortrait, rightPortrait].filter(Boolean);
+    const imgContainer = document.getElementById('result-image-container');
+    if (!imgContainer) return;
+
+    const graveSlides = photos.map((src, i) =>
+      `<div class="grave-gallery-slide">
+         <img src="${src}" alt="Gravestone photo ${i + 1}" loading="${i === 0 ? 'eager' : 'lazy'}">
+         <span class="grave-gallery-label">Photo ${i + 1} of ${photos.length}</span>
+       </div>`
+    ).join('');
+    const portraitSlides = portraits.map(src =>
+      `<div class="grave-gallery-slide portrait">
+         <img src="${src}" alt="Portrait" loading="lazy">
+         <span class="grave-gallery-label">Portrait</span>
+       </div>`
+    ).join('');
+
+    imgContainer.innerHTML =
+      `<div class="grave-gallery-strip">${graveSlides}${portraitSlides}</div>`;
+    imgContainer.style.display = 'block';
+  } catch (e) {
+    // Non-fatal — the initial single-image render remains visible
+  }
 }

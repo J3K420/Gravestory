@@ -321,6 +321,14 @@ export default function CameraScreen({ navigation }) {
         const imageUrl = await uploadGravestoneImage(base64);
         if (imageUrl) {
           story = await cloudUpdateStory({ ...story, image_url: imageUrl }, session.user);
+          // Contribute to the grave's community photo pool (non-blocking)
+          if (story.grave_id) {
+            supabase.from('grave_photos').insert({
+              grave_id: story.grave_id,
+              user_id: session.user.id,
+              image_url: imageUrl,
+            }).catch(e => console.warn('grave_photos insert failed (non-fatal):', e.message));
+          }
         }
       }
 

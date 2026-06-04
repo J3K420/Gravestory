@@ -195,6 +195,8 @@ Built for one-handed use in a cemetery. Service worker caches the app shell (`gr
 
 - **Web global map dedup** — `fetchGlobalStories()` in `map-global.js` deduplicates the raw Supabase rows before placing markers: first pass drops duplicate `grave_id`s (keeps the first/most-recent row per canonical grave); second pass drops stories whose GPS rounds to the same ~20 m cell (`Math.round(lat * 5000),Math.round(lng * 5000)`) as an already-kept pin. This matches the mobile `GlobalMapScreen` behaviour exactly.
 
+- **Grave photo gallery (global map bios only)** — `grave_photos` table (`supabase-migrations/003_grave_photos.sql`) holds one row per photo per story, FK to `grave_id`. Written by both web (`save-actions.js` after R2 upload) and mobile (`CameraScreen.js` after `cloudUpdateStory`) whenever `grave_id` and `image_url` are both present. **Own Remembered Stories show only the user's own photo.** Global map bios (`story._isGlobal === true`) fetch all `grave_photos` for that `grave_id` (up to 10, newest first) and replace the image area with a horizontal scrollable gallery — web uses `.grave-gallery-strip` CSS (scroll-snap, `result.css`); mobile extends the `FlatList` carousel via `gravePhotos` state loaded in a `useEffect`. Portraits append after the grave photos in both. **To activate: run `supabase-migrations/003_grave_photos.sql` in the Supabase SQL editor.**
+
 - **Android map screen bottom inset** — `CemeteryMapScreen` and `GlobalMapScreen` both use `edges={['top']}` on `SafeAreaView` so the map fills edge-to-edge. This means the bottom inset (Android 3-button nav bar / gesture bar) is NOT applied by SafeAreaView. Both screens import `useSafeAreaInsets` and apply `paddingBottom: insets.bottom + 8` directly to the `panel` View. Do not remove this or the bottom panel content will be hidden behind the nav bar.
 
 - **Global map low-confidence pins** — both web and mobile global maps indicate approximate locations visually and in the callout. Web: `makeGlobalIcon(lowConfidence)` renders a silver `?` badge and `opacity:0.75` on the icon; popup shows `⚠ approximate location` below the contributor line. Mobile: `markerLowConf` style fades the pin; floating overlay shows `⚠ approximate location` in `colors.ember`.
@@ -404,7 +406,7 @@ mobile/
 - ~~EAS Update (OTA): add `expo-updates` so JS-only fixes ship in seconds without a full rebuild~~ ✅ Done in Phase 8e — push updates via `npx eas update --branch preview --message "description"`
 - Payments: RevenueCat + Google Play Billing for subscriptions / consumable credit packs (mandatory for Play Store; 15–30% Google cut)
 - iOS TestFlight build (requires $99/yr Apple Developer account)
-- Grave photo gallery: `grave_photos` table linked to `grave_id`; when a second user scans a known grave, their photo is added to the canonical grave's photo pool; ResultScreen carousel pulls from grave photos in addition to the local story's images
+- ~~Grave photo gallery~~ ✅ Done — see below
 - **Portrait persistence**: add `expo-file-system` to package.json; in `api-wikipedia.js` `resizeForDisplay()`, after `ImageManipulator.manipulateAsync()` produces a temp `file://` URI, copy it to `FileSystem.documentDirectory + 'portraits/'` with a URL-hash filename and return the permanent path. Check for existing file before re-downloading. Currently portraits are lost on app restart because ImageManipulator writes to a temp directory that the OS clears; `expo-file-system` is required for the copy step and cannot be added via OTA — needs a new build.
 
 ---

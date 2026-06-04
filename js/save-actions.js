@@ -55,6 +55,16 @@ async function saveStory() {
     if (url) {
       currentStory.image_url = url;
       console.log('☁️ Image uploaded:', url);
+      // Contribute to the grave's community photo pool (non-blocking)
+      if (currentStory.grave_id && currentUser) {
+        supabaseClient.from('grave_photos').insert({
+          grave_id: currentStory.grave_id,
+          user_id: currentUser.id,
+          image_url: url,
+        }).then(({ error }) => {
+          if (error) console.warn('grave_photos insert failed (non-fatal):', error.message);
+        });
+      }
     } else {
       console.warn('☁️ Image upload failed — saving story without image');
     }

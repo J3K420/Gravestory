@@ -29,6 +29,57 @@
     position: relative;
   }
 
+  /* Horizontal scrollable gallery — global map bios with multiple photos */
+  .grave-gallery-strip {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 0.25rem;
+    height: 240px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 4px;
+  }
+  .grave-gallery-strip::-webkit-scrollbar { height: 3px; }
+  .grave-gallery-strip::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.4); border-radius: 2px; }
+
+  .grave-gallery-slide {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    position: relative;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .grave-gallery-slide img {
+    height: 100%;
+    width: auto;
+    max-width: 90vw;
+    object-fit: contain;
+    opacity: 0.9;
+    display: block;
+  }
+  .grave-gallery-slide.portrait img {
+    border-radius: 3px;
+    max-width: 60vw;
+  }
+  .grave-gallery-label {
+    position: absolute;
+    bottom: 0.4rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(26,20,16,0.75);
+    color: rgba(232,212,160,0.85);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 2px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
   .result-image-row {
     display: flex;
     align-items: center;

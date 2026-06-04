@@ -1,27 +1,9 @@
 // Direct Wikipedia fetch — no proxy needed.
-import * as ImageManipulator from 'expo-image-manipulator';
 
 const WIKI_HEADERS = {
   'User-Agent': 'GraveStory/1.0 (https://github.com/J3K420/Gravestory; gravestory mobile app)',
   'Api-User-Agent': 'GraveStory/1.0',
 };
-
-// Download a remote image and resize it to a local JPEG so React Native's
-// Image component always gets a local file URI it can decode reliably.
-// Falls back to the original URL if resize fails (e.g. unsupported format).
-async function resizeForDisplay(url) {
-  if (!url) return null;
-  try {
-    const result = await ImageManipulator.manipulateAsync(
-      url,
-      [{ resize: { width: 800 } }],
-      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-    );
-    return result.uri;
-  } catch {
-    return url;
-  }
-}
 
 function imageFilenameMatchesPerson(imageUrl, queriedNameSet) {
   if (!imageUrl || !queriedNameSet || queriedNameSet.size === 0) return true;
@@ -71,6 +53,10 @@ export async function fetchWikipediaArticleSummary(name, dates) {
     .filter(w => w.length > 1 && !SKIP.has(w));
   if (significantTokens.length < 2) return null;
 
+  // Match on first+last significant token only — middle names like "Jade" in
+  // "Amy Jade Winehouse" won't appear in the Wikipedia article title "Amy Winehouse".
+  const firstLast = [significantTokens[0], significantTokens[significantTokens.length - 1]];
+
   try {
     const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
     const deathYear = yearMatch?.length > 0 ? yearMatch[yearMatch.length - 1] : '';
@@ -86,7 +72,7 @@ export async function fetchWikipediaArticleSummary(name, dates) {
     let title = null;
     for (const hit of hits) {
       const t = (hit.title || '').toLowerCase();
-      if (significantTokens.every(w => t.includes(w))) { title = hit.title; break; }
+      if (firstLast.every(w => t.includes(w))) { title = hit.title; break; }
     }
     if (!title) return null;
 
@@ -117,8 +103,10 @@ export function normalizePortraits(portraits) {
   return [portraits.left, portraits.right].filter(Boolean);
 }
 
-// Returns an array of image URLs (up to 5). Old callers expecting { left, right }
-// should use normalizePortraits() for backward compatibility.
+// Returns an array of up to 5 remote Wikipedia image URLs (stable HTTPS JPEGs).
+// Returns remote URLs directly — no local file download needed, so portraits
+// persist across app restarts. Wikipedia's thumbnail URLs are always pre-rendered
+// JPEGs regardless of the original file format, safe for React Native's Image.
 export async function fetchWikipediaPortraits(name, dates) {
   if (!name || name.toLowerCase().includes('unknown')) return [];
 
@@ -129,6 +117,11 @@ export async function fetchWikipediaPortraits(name, dates) {
     .split(/\s+/)
     .filter(w => w.length > 1 && !SKIP.has(w));
   if (significantTokens.length < 2) return [];
+
+  // Match on first+last token only — avoids middle-name mismatches like
+  // "Amy Jade Winehouse" failing to match the "Amy Winehouse" article title.
+  const firstLast = [significantTokens[0], significantTokens[significantTokens.length - 1]];
+  const nameSet = new Set(significantTokens);
 
   try {
     const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
@@ -142,13 +135,10 @@ export async function fetchWikipediaPortraits(name, dates) {
     const hits = searchData?.query?.search || [];
     if (hits.length === 0) return [];
 
-    const required = significantTokens; // already computed above
-    const nameSet = new Set(required);
-
     let title = null;
     for (const hit of hits) {
       const t = (hit.title || '').toLowerCase();
-      if (required.every(w => t.includes(w))) { title = hit.title; break; }
+      if (firstLast.every(w => t.includes(w))) { title = hit.title; break; }
     }
     if (!title) return [];
 
@@ -159,11 +149,9 @@ export async function fetchWikipediaPortraits(name, dates) {
     if (!summaryRes.ok) throw new Error(`summary ${summaryRes.status}`);
     const summary = await summaryRes.json();
 
-    const images = [];
-
-    const leadRaw = summary?.thumbnail?.source || summary?.originalimage?.source || null;
-
-    // Collect raw secondary URLs first, then resize everything in parallel
+    // Use thumbnail.source only — always a pre-rendered JPEG served by Wikipedia.
+    // Avoid originalimage.source which can be raw TIFF/huge unresized files.
+    const leadRaw = summary?.thumbnail?.source || null;
     const rawUrls = [];
     if (leadRaw && imageFilenameMatchesPerson(leadRaw, nameSet)) {
       rawUrls.push(leadRaw);
@@ -185,6 +173,8 @@ export async function fetchWikipediaPortraits(name, dates) {
           .filter(t => leadRaw ? !leadRaw.includes(encodeURIComponent(t.replace(/^File:/, ''))) : true)
           .slice(0, 4);
 
+        // iiurlwidth=800 forces Wikipedia to render a JPEG thumbnail at 800px
+        // width for all source formats (TIFF, SVG, PNG → always returns JPEG thumburl).
         const resolvedRaw = await Promise.allSettled(
           candidates.map(async (candidate) => {
             const resolveUrl = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(candidate)}&prop=imageinfo&iiprop=url|thumbnail&iiurlwidth=800&format=json&origin=*`;
@@ -206,14 +196,7 @@ export async function fetchWikipediaPortraits(name, dates) {
       }
     } catch {}
 
-    // Resize all collected URLs in parallel → local JPEG URIs React Native
-    // can always decode, regardless of original format or file size.
-    const resized = await Promise.allSettled(rawUrls.map(u => resizeForDisplay(u)));
-    for (const r of resized) {
-      if (r.status === 'fulfilled' && r.value) images.push(r.value);
-    }
-
-    return images;
+    return rawUrls;
   } catch (err) {
     console.warn('Wikipedia portrait fetch failed:', err.message);
     return [];

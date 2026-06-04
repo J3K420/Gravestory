@@ -147,12 +147,19 @@ export default function CameraScreen({ navigation }) {
       const wikiNames = (graveData.multiple_subjects && graveData.names?.length > 1)
         ? graveData.names.slice(0, 3)
         : [primaryOcrName];
-      const [searchResults, wikiData, portraits, ...wikiSummaryResults] = await Promise.all([
+      // Fetch portraits for every person on the stone (wikiNames), not just the
+      // primary name — on multi-person stones the primary subject (e.g. Cynthia Levy)
+      // may have no Wikipedia article while a second person (Amy Winehouse) does.
+      const [searchResults, wikiData, ...rest] = await Promise.all([
         searchForPerson(graveData, locationHint),
         searchWikiTree(graveData, locationHint),
-        fetchWikipediaPortraits(primaryOcrName, datesStr),
+        ...wikiNames.map(n => fetchWikipediaPortraits(n, datesStr)),
         ...wikiNames.map(n => fetchWikipediaArticleSummary(n, datesStr)),
       ]);
+      // rest = [portraitsForName1, portraitsForName2?, ..., summaryForName1, summaryForName2?]
+      const portraitArrays = rest.slice(0, wikiNames.length);
+      const wikiSummaryResults = rest.slice(wikiNames.length);
+      const portraits = portraitArrays.flat();
       const wikipediaSummary = wikiSummaryResults.length === 1
         ? wikiSummaryResults[0]
         : wikiSummaryResults;
@@ -168,7 +175,7 @@ export default function CameraScreen({ navigation }) {
       let resolvedPortraits = portraits;
       if (resolvedPortraits.length === 0 && bioResult.name) {
         const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
-        const nameParts = bioResult.name.split(/\s+and\s+/i).map(n => n.trim()).filter(Boolean);
+        const nameParts = bioResult.name.split(/\s+(?:and|&)\s+/i).map(n => n.trim()).filter(Boolean);
         for (const namePart of nameParts) {
           const tokens = namePart.toLowerCase().replace(/[.,'"()]/g, '').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w));
           if (tokens.length >= 2) {

@@ -85,7 +85,7 @@ async function fetchGlobalStories() {
   try {
     const { data, error } = await supabaseClient.rpc('global_public_stories', { p_limit: limit });
     if (error) throw error;
-    const stories = (data || []).map(row => ({
+    const mapped = (data || []).map(row => ({
       id: row.id,
       timestamp: row.client_timestamp || new Date(row.created_at).getTime(),
       name: row.name,
@@ -105,9 +105,27 @@ async function fetchGlobalStories() {
       image_url: row.image_url || null,
       portrait_left_url: row.portrait_left_url || null,
       portrait_right_url: row.portrait_right_url || null,
+      grave_id: row.grave_id || null,
+      source: row.source || 'library',
       _contributor: row.contributor_name || 'Anonymous',
       _isGlobal: true
     }));
+
+    // One pin per canonical grave: deduplicate by grave_id, then by ~20 m GPS cell
+    const stories = [];
+    const seenGraves = new Set();
+    const seenCells = new Set();
+    for (const s of mapped) {
+      if (s.grave_id) {
+        if (seenGraves.has(s.grave_id)) continue;
+        seenGraves.add(s.grave_id);
+      } else if (s.gps) {
+        const cell = `${Math.round(s.gps.lat * 5000)},${Math.round(s.gps.lng * 5000)}`;
+        if (seenCells.has(cell)) continue;
+        seenCells.add(cell);
+      }
+      stories.push(s);
+    }
     try {
       sessionStorage.setItem(GLOBAL_MAP_CACHE_KEY, JSON.stringify({
         fetched_at: Date.now(),

@@ -66,6 +66,7 @@
 <script src="js/user-prefs.js"></script>
 <script src="js/persistence.js"></script>
 <script src="js/sync.js"></script>
+<script src="js/api-tributes.js"></script>
 <script src="js/render-result.js"></script>
 <script src="js/error-render.js"></script>
 <script src="js/photo-modal.js"></script>
@@ -476,6 +477,7 @@ async function uploadImageToR2(base64Data, contentType = 'image/jpeg') {
 }
 let currentPhotoFile = null;
 let currentExifLocation = null;
+let currentPhotoSource = 'library'; // 'camera' or 'library'
 let currentStory = null;
 let userLocation = null;
 // One-shot bypass for the gravestone pre-verification check.
@@ -792,6 +794,8 @@ async function handleImageUpload(input, isLiveCamera = false) {
   const file = input.files[0];
   if (!file) return;
 
+  currentPhotoSource = isLiveCamera ? 'camera' : 'library';
+
   // Ask permission before reading GPS from photo
   currentPhotoFile = file;
   await new Promise(resolve => {
@@ -873,6 +877,25 @@ async function handleImageUpload(input, isLiveCamera = false) {
   reader.readAsDataURL(file);
 }
 
+
+// Atomically finds or creates a canonical grave record via the Supabase RPC.
+// Returns the grave UUID string, or null on failure (non-fatal).
+async function findOrCreateGrave(name, lat, lng, isPublic) {
+  if (!name || lat == null || lng == null) return null;
+  try {
+    const { data, error } = await supabaseClient.rpc('find_or_create_grave', {
+      p_name: name,
+      p_lat: lat,
+      p_lng: lng,
+      p_is_public: !!isPublic,
+    });
+    if (error) throw error;
+    return data;
+  } catch (e) {
+    console.warn('findOrCreateGrave failed (non-fatal):', e.message);
+    return null;
+  }
+}
 
 // ── MAIN ANALYSIS ────────────────────────────────────────────────
 async function startAnalysis() {
@@ -984,18 +1007,28 @@ async function startAnalysis() {
       }
     }
 
-    currentStory = { 
-      ...story, 
+    // Link to canonical grave — deduplicates multiple scans of the same stone.
+    // Only fires for signed-in users with a resolved GPS pin.
+    const primaryName = graveData.primary_name || graveData.names?.[0] || story.name || '';
+    const defaultPublic = userPrefs?.default_visibility === 'public';
+    const graveId = (currentUser && resolvedGps && primaryName)
+      ? await findOrCreateGrave(primaryName, resolvedGps.lat, resolvedGps.lng, defaultPublic)
+      : null;
+
+    currentStory = {
+      ...story,
       image: currentImage,       // Kept for in-session preview only; stripped before save
       _pendingImageBase64: currentImageBase64,  // Used by saveStory to upload to R2
       image_url: null,           // Will be populated after upload
       portrait_left_url: portraits.left,
       portrait_right_url: portraits.right,
-      location: finalLocation, 
+      location: finalLocation,
       timestamp: Date.now(),
       gps: resolvedGps,
       _lowConfidence: gpsLowConfidence || undefined,
-      _snapped: gpsSnapped || undefined
+      _snapped: gpsSnapped || undefined,
+      source: currentPhotoSource,
+      grave_id: graveId,
     };
     renderResult(currentStory);
     showScreen('result');
@@ -1039,6 +1072,7 @@ function resetCamera() {
   currentImageBase64 = null;
   currentPhotoFile = null;
   currentExifLocation = null;
+  currentPhotoSource = 'library';
   const zone = document.querySelector('.upload-zone');
   const inner = document.getElementById('upload-inner');
   const existing = zone.querySelector('img');

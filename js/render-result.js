@@ -167,6 +167,9 @@ function renderResult(story) {
 
   // Public/private toggle — only for signed-in users viewing their own saved story
   renderVisibilityControls(story, alreadySaved);
+
+  // Tribute counts + candle/flower buttons
+  renderTributeSection(story);
 }
 
 function renderVisibilityControls(story, alreadySaved) {
@@ -219,4 +222,76 @@ function renderVisibilityControls(story, alreadySaved) {
     await persistUpdate(savedRow);
     renderVisibilityControls(currentStory || savedRow, true);
   };
+}
+
+function renderTributeSection(story) {
+  const existing = document.getElementById('tribute-section');
+  if (existing) existing.remove();
+
+  if (!story.grave_id) return;
+
+  const body = document.getElementById('result-body');
+  if (!body) return;
+
+  const wrap = document.createElement('div');
+  wrap.id = 'tribute-section';
+  wrap.className = 'result-section';
+  wrap.style.cssText = 'border-top:1px solid rgba(201,168,76,0.2);padding-top:1rem;margin-top:1rem;';
+  wrap.innerHTML = `
+    <div style="font-family:'Crimson Pro',serif;color:var(--stone);font-size:0.8rem;font-style:italic;margin-bottom:0.5rem;letter-spacing:0.05em;text-transform:uppercase;">Tributes at this grave</div>
+    <div id="tribute-counts" style="font-family:'Playfair Display',serif;color:var(--ink);font-size:0.95rem;margin-bottom:0.75rem;">Loading…</div>
+    <div id="tribute-buttons"></div>
+  `;
+  body.appendChild(wrap);
+
+  // Load counts async, then wire buttons
+  getTributes(story.grave_id).then(tributes => {
+    const countsEl = document.getElementById('tribute-counts');
+    if (!countsEl) return;
+    countsEl.textContent = `${tributes.candles} ${tributes.candles === 1 ? 'candle' : 'candles'} · ${tributes.flowers} ${tributes.flowers === 1 ? 'flower' : 'flowers'}`;
+
+    // Tribute buttons only for camera-sourced, non-global stories when signed in
+    const showButtons = currentUser && story.source === 'camera' && !story._isGlobal;
+    if (!showButtons) return;
+
+    const btnsEl = document.getElementById('tribute-buttons');
+    if (!btnsEl) return;
+
+    const btnStyle = (active) => `
+      background:${active ? 'rgba(201,168,76,0.12)' : 'none'};
+      border:1px solid ${active ? 'rgba(201,168,76,0.7)' : 'rgba(201,168,76,0.3)'};
+      color:${active ? 'var(--gold)' : 'var(--stone)'};
+      font-family:'Crimson Pro',serif;font-size:0.85rem;
+      padding:0.45rem 1rem;cursor:pointer;border-radius:3px;margin-right:0.5rem;
+    `.trim();
+
+    const renderButtons = (t) => {
+      btnsEl.innerHTML = `
+        <button id="tribute-candle-btn" style="${btnStyle(t.userTribute === 'candle')}">
+          ${t.userTribute === 'candle' ? '✓ Candle left' : 'Leave a candle'}
+        </button>
+        <button id="tribute-flower-btn" style="${btnStyle(t.userTribute === 'flower')}">
+          ${t.userTribute === 'flower' ? '✓ Flower left' : 'Leave a flower'}
+        </button>
+      `;
+
+      const makeTributeHandler = (type) => async () => {
+        const newType = t.userTribute === type ? null : type;
+        const candleBtn = document.getElementById('tribute-candle-btn');
+        const flowerBtn = document.getElementById('tribute-flower-btn');
+        if (candleBtn) candleBtn.disabled = true;
+        if (flowerBtn) flowerBtn.disabled = true;
+        await setTribute(story.grave_id, newType);
+        const fresh = await getTributes(story.grave_id);
+        const cEl = document.getElementById('tribute-counts');
+        if (cEl) cEl.textContent = `${fresh.candles} ${fresh.candles === 1 ? 'candle' : 'candles'} · ${fresh.flowers} ${fresh.flowers === 1 ? 'flower' : 'flowers'}`;
+        renderButtons(fresh);
+      };
+
+      document.getElementById('tribute-candle-btn').onclick = makeTributeHandler('candle');
+      document.getElementById('tribute-flower-btn').onclick = makeTributeHandler('flower');
+    };
+
+    renderButtons(tributes);
+  });
 }

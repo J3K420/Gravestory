@@ -26,7 +26,9 @@ function storyToRow(story) {
     image_url: story.image_url || null,
     portrait_left_url: story.portrait_left_url || null,
     portrait_right_url: story.portrait_right_url || null,
-    client_timestamp: story.timestamp || null
+    client_timestamp: story.timestamp || null,
+    grave_id: story.grave_id || null,
+    source: story.source || 'library',
   };
 }
 
@@ -53,7 +55,9 @@ function rowToStory(row) {
     portrait_left_url: row.portrait_left_url || null,
     portrait_right_url: row.portrait_right_url || null,
     _deletedAt: row.deleted_at || null,
-    _updatedAt: row.updated_at
+    _updatedAt: row.updated_at,
+    grave_id: row.grave_id || null,
+    source: row.source || 'library',
   };
 }
 

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
 import { rowToStory } from '../lib/sync';
@@ -18,6 +18,7 @@ let _cacheTime = 0;
 let _cacheUserId = null;
 
 export default function GlobalMapScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
   const [user, setUser]         = useState(null);
   const [stories, setStories]   = useState([]);
@@ -227,7 +228,7 @@ export default function GlobalMapScreen({ navigation }) {
       </View>
 
       {/* Bottom panel */}
-      <View style={styles.panel}>
+      <View style={[styles.panel, { paddingBottom: insets.bottom + 8 }]}>
         <Text style={styles.panelTitle}>{panelTitle}</Text>
         <View style={styles.panelDivider} />
         <ScrollView

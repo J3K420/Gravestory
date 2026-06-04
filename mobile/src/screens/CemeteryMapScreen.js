@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
   ActivityIndicator, Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import Svg, { Rect, Path, Line } from 'react-native-svg';
 import { loadStories, saveStories } from '../lib/storage';
@@ -105,6 +105,7 @@ const DEFAULT_REGION = {
 };
 
 export default function CemeteryMapScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const { focusStory = null } = route.params || {};
 
   const mapRef = useRef(null);
@@ -322,7 +323,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
       </View>
 
       {/* Bottom panel — scrollable grave list */}
-      <View style={styles.panel}>
+      <View style={[styles.panel, { paddingBottom: insets.bottom + 8 }]}>
         <Text style={styles.panelTitle}>{panelTitle}</Text>
         <View style={styles.panelDivider} />
         <ScrollView

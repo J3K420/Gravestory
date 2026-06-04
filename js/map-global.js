@@ -185,8 +185,8 @@ async function initGlobalMap() {
   }
 
   // Silver pin icon — visually distinct from the gold personal pins
-  const makeGlobalIcon = () => L.divIcon({
-    html: `<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));line-height:0;"><svg viewBox="0 0 100 100" fill="none" stroke-width="2" xmlns="http://www.w3.org/2000/svg" style="width:32px;height:32px;display:block;"><rect x="22" y="84" width="56" height="6" stroke="#aabedc" fill="rgba(30,40,55,0.85)"/><path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="#aabedc" fill="rgba(30,40,55,0.85)"/><path d="M38 40 L38 56 Q44 54 49 56 L49 42 Q44 40 38 40 Z" stroke="#cfddf2" stroke-width="2" fill="rgba(207,221,242,0.25)"/><path d="M51 42 Q56 40 62 40 L62 56 Q56 54 51 56 Z" stroke="#cfddf2" stroke-width="2" fill="rgba(207,221,242,0.25)"/><line x1="50" y1="41" x2="50" y2="56" stroke="#cfddf2" stroke-width="1.5"/><line x1="50" y1="63" x2="50" y2="76" stroke="#cfddf2" stroke-width="1.5"/><line x1="44" y1="68" x2="56" y2="68" stroke="#cfddf2" stroke-width="1.5"/></svg></div>`,
+  const makeGlobalIcon = (lowConfidence) => L.divIcon({
+    html: `<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));line-height:0;position:relative;${lowConfidence ? 'opacity:0.75;' : ''}"><svg viewBox="0 0 100 100" fill="none" stroke-width="2" xmlns="http://www.w3.org/2000/svg" style="width:32px;height:32px;display:block;"><rect x="22" y="84" width="56" height="6" stroke="#aabedc" fill="rgba(30,40,55,0.85)"/><path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="#aabedc" fill="rgba(30,40,55,0.85)"/><path d="M38 40 L38 56 Q44 54 49 56 L49 42 Q44 40 38 40 Z" stroke="#cfddf2" stroke-width="2" fill="rgba(207,221,242,0.25)"/><path d="M51 42 Q56 40 62 40 L62 56 Q56 54 51 56 Z" stroke="#cfddf2" stroke-width="2" fill="rgba(207,221,242,0.25)"/><line x1="50" y1="41" x2="50" y2="56" stroke="#cfddf2" stroke-width="1.5"/><line x1="50" y1="63" x2="50" y2="76" stroke="#cfddf2" stroke-width="1.5"/><line x1="44" y1="68" x2="56" y2="68" stroke="#cfddf2" stroke-width="1.5"/></svg>${lowConfidence ? '<div style="position:absolute;top:-4px;right:-6px;width:14px;height:14px;border-radius:50%;background:rgba(30,40,55,0.95);border:1px solid #aabedc;color:#cfddf2;font-family:serif;font-size:10px;font-weight:bold;line-height:12px;text-align:center;">?</div>' : ''}</div>`,
     className: '',
     iconSize: [24, 24],
     iconAnchor: [12, 24],
@@ -194,7 +194,7 @@ async function initGlobalMap() {
   });
 
   withGps.forEach(story => {
-    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGlobalIcon(), draggable: false, story: story })
+    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGlobalIcon(story._lowConfidence), draggable: false, story: story })
       .addTo(globalLeafletMap)
       .bindPopup(buildGlobalPopup(story), { maxWidth: 320 });
     globalMapMarkers.push(marker);
@@ -231,6 +231,7 @@ function buildGlobalPopup(story) {
       <em style="font-size:0.85rem;color:#666">${(story.dates || '').replace(/</g, '&lt;')}</em><br>
       <small style="color:#888">${(story.location || '').replace(/</g, '&lt;')}</small><br>
       <small style="color:#7a8a9a;font-size:0.72rem;font-style:italic">Shared by ${safeContrib}</small>
+      ${story._lowConfidence ? '<br><span style="font-size:0.75rem;color:#a87a2a">⚠ approximate location</span>' : ''}
       <div style="margin-top:0.5rem;display:flex;gap:0.4rem;flex-wrap:wrap;">
         <button onclick="guardGuestAction(function(){var c=document.getElementById('${bioId}');if(c.style.display==='none'){c.style.display='block';this.textContent='▲ Hide bio';}else{c.style.display='none';this.textContent='▼ Read bio';}}.bind(this))"
           style="background:none;border:1px solid rgba(120,140,180,0.5);color:#3d5a85;font-family:'Crimson Pro',serif;font-size:0.8rem;padding:0.25rem 0.6rem;cursor:pointer;border-radius:3px;">

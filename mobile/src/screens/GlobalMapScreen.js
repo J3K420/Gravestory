@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, Callout } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
 import { rowToStory } from '../lib/sync';
 import { useRefresh } from '../lib/use-refresh';
@@ -21,8 +21,10 @@ export default function GlobalMapScreen({ navigation }) {
   const mapRef = useRef(null);
   const [user, setUser]         = useState(null);
   const [stories, setStories]   = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [fetchError, setFetchError] = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [fetchError, setFetchError]   = useState(null);
+  const [selectedStory, setSelectedStory] = useState(null);
+  const [bioExpanded, setBioExpanded]     = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -144,23 +146,23 @@ export default function GlobalMapScreen({ navigation }) {
 
       {/* Map */}
       <View style={styles.mapContainer}>
-        <MapView ref={mapRef} style={styles.map} initialRegion={DEFAULT_REGION}>
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          initialRegion={DEFAULT_REGION}
+          onPress={() => { setSelectedStory(null); setBioExpanded(false); }}
+        >
           {stories.filter(s => s.gps).map((story, i) => (
-            <Marker key={story.id ?? i} coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}>
+            <Marker
+              key={story.id ?? i}
+              coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}
+              onPress={() => { setSelectedStory(story); setBioExpanded(false); }}
+            >
               <View style={styles.markerOuter}>
                 <View style={[styles.markerInner, story._lowConfidence && styles.markerLowConf]}>
                   <Text style={styles.markerCross}>✝</Text>
                 </View>
               </View>
-              <Callout onPress={() => navigation.navigate('Result', { story })}>
-                <View style={styles.callout}>
-                  <Text style={styles.calloutName}>{story.name || 'Unknown'}</Text>
-                  {!!story.dates && <Text style={styles.calloutDates}>{story.dates}</Text>}
-                  {!!story.location && <Text style={styles.calloutLocation}>{story.location}</Text>}
-                  <Text style={styles.calloutContrib}>Shared by {story._contributor}</Text>
-                  <Text style={styles.calloutAction}>Tap to view story →</Text>
-                </View>
-              </Callout>
             </Marker>
           ))}
         </MapView>
@@ -169,6 +171,54 @@ export default function GlobalMapScreen({ navigation }) {
           <View style={styles.loadingBadge}>
             <ActivityIndicator size="small" color={colors.flame} style={{ marginRight: 8 }} />
             <Text style={styles.loadingText}>Loading…</Text>
+          </View>
+        )}
+
+        {/* Floating callout — replaces <Callout> which swallows touch events on Android */}
+        {selectedStory && (
+          <View style={styles.floatingCallout}>
+            <TouchableOpacity
+              style={styles.calloutDismiss}
+              onPress={() => { setSelectedStory(null); setBioExpanded(false); }}
+            >
+              <Text style={styles.calloutDismissText}>✕</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.calloutName}>{selectedStory.name || 'Unknown'}</Text>
+            {!!selectedStory.dates && (
+              <Text style={styles.calloutDates}>{selectedStory.dates}</Text>
+            )}
+            {!!selectedStory.location && (
+              <Text style={styles.calloutLocation}>{selectedStory.location}</Text>
+            )}
+            <Text style={styles.calloutContrib}>Shared by {selectedStory._contributor}</Text>
+
+            {bioExpanded && !!selectedStory.biography && (
+              <ScrollView style={styles.calloutBioScroll} showsVerticalScrollIndicator={false}>
+                <Text style={styles.calloutBioText}>
+                  {selectedStory.biography.split('\n\n').filter(p => p.trim()).slice(0, 2).join('\n\n')}
+                </Text>
+              </ScrollView>
+            )}
+
+            <View style={styles.calloutButtons}>
+              {!!selectedStory.biography && (
+                <TouchableOpacity
+                  style={styles.calloutBtn}
+                  onPress={() => setBioExpanded(e => !e)}
+                >
+                  <Text style={styles.calloutBtnText}>
+                    {bioExpanded ? '▲ Hide bio' : '▼ Read bio'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.calloutBtn, styles.calloutBtnPrimary]}
+                onPress={() => { setSelectedStory(null); setBioExpanded(false); navigation.navigate('Result', { story: selectedStory }); }}
+              >
+                <Text style={styles.calloutBtnText}>→ Go to bio</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -252,12 +302,28 @@ const styles = StyleSheet.create({
   markerLowConf: { borderColor: '#7a8a9a', opacity: 0.75 },
   markerCross: { color: colors.silver, fontSize: 15 },
 
-  callout: { minWidth: 160, maxWidth: 260, padding: 10 },
-  calloutName: { fontWeight: '700', fontSize: 15, marginBottom: 2, color: '#1a1410' },
-  calloutDates: { fontSize: 13, color: '#666', fontStyle: 'italic', marginBottom: 2 },
-  calloutLocation: { fontSize: 12, color: '#888', marginBottom: 2 },
-  calloutContrib: { fontSize: 11, color: '#7a8a9a', fontStyle: 'italic', marginBottom: 4 },
-  calloutAction: { fontSize: 12, color: '#3d5a85', fontWeight: '600' },
+  floatingCallout: {
+    position: 'absolute', top: 12, left: 12, right: 12,
+    backgroundColor: 'rgba(20,16,11,0.96)',
+    borderWidth: 1, borderColor: colors.line,
+    borderRadius: radius.md,
+    padding: 14,
+  },
+  calloutDismiss: { position: 'absolute', top: 10, right: 12 },
+  calloutDismissText: { color: colors.ashDim, fontSize: 16 },
+  calloutName: { color: colors.parchment, fontSize: 16, fontFamily: fonts.name, marginBottom: 3, paddingRight: 24 },
+  calloutDates: { color: colors.ash, fontSize: 13, fontFamily: fonts.serifItalic, marginBottom: 2 },
+  calloutLocation: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, marginBottom: 4 },
+  calloutContrib: { color: colors.silver, fontSize: 11, fontFamily: fonts.body, fontStyle: 'italic', marginBottom: 6 },
+  calloutBioScroll: { maxHeight: 140, marginBottom: 8 },
+  calloutBioText: { color: colors.ash, fontSize: 13, fontFamily: fonts.serif, lineHeight: 20 },
+  calloutButtons: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  calloutBtn: {
+    borderWidth: 1, borderColor: colors.flame,
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.sm,
+  },
+  calloutBtnPrimary: { backgroundColor: 'rgba(242,182,92,0.1)' },
+  calloutBtnText: { color: colors.flame, fontSize: 13, fontFamily: fonts.sansBold },
 
   panel: {
     height: 220, backgroundColor: colors.stone,

@@ -34,7 +34,7 @@ GraveStory is a mobile-first PWA for cemetery visitors. The user photographs a g
 | Auth | Supabase Auth (Google OAuth + email/password) |
 | Cloud DB | Supabase (PostgreSQL) — `stories` table |
 | Image storage | Cloudflare R2 via Worker proxy |
-| PWA | Inline service worker (cache v12), beforeinstallprompt banner |
+| PWA | Inline service worker (cache v13), beforeinstallprompt banner |
 | Fonts | Google Fonts: Playfair Display + Crimson Pro |
 
 **No npm. No bundler. No TypeScript. The repo is deployed as static files.**

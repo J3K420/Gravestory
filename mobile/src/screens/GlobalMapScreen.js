@@ -192,6 +192,9 @@ export default function GlobalMapScreen({ navigation }) {
               <Text style={styles.calloutLocation}>{selectedStory.location}</Text>
             )}
             <Text style={styles.calloutContrib}>Shared by {selectedStory._contributor}</Text>
+            {selectedStory._lowConfidence && (
+              <Text style={styles.calloutWarn}>⚠ approximate location</Text>
+            )}
 
             {bioExpanded && !!selectedStory.biography && (
               <ScrollView style={styles.calloutBioScroll} showsVerticalScrollIndicator={false}>
@@ -314,7 +317,8 @@ const styles = StyleSheet.create({
   calloutName: { color: colors.parchment, fontSize: 16, fontFamily: fonts.name, marginBottom: 3, paddingRight: 24 },
   calloutDates: { color: colors.ash, fontSize: 13, fontFamily: fonts.serifItalic, marginBottom: 2 },
   calloutLocation: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, marginBottom: 4 },
-  calloutContrib: { color: colors.silver, fontSize: 11, fontFamily: fonts.body, fontStyle: 'italic', marginBottom: 6 },
+  calloutContrib: { color: colors.silver, fontSize: 11, fontFamily: fonts.body, fontStyle: 'italic', marginBottom: 4 },
+  calloutWarn: { color: colors.ember, fontSize: 11, fontFamily: fonts.body, marginBottom: 6 },
   calloutBioScroll: { maxHeight: 140, marginBottom: 8 },
   calloutBioText: { color: colors.ash, fontSize: 13, fontFamily: fonts.serif, lineHeight: 20 },
   calloutButtons: { flexDirection: 'row', gap: 8, marginTop: 4 },

@@ -70,10 +70,11 @@ js/
   biography.js           — generateBiography(graveData, searchResults, wikiData, location, wikipediaSummary). _buildCorroborationSummary() surfaces name/date agreement and conflicts across sources in the prompt. _validateCitations() strips orphan [N] markers post-generation. Namesake guard requires ±5yr date alignment before invoking historical-figure mode. Optional wikipediaSummary param adds a Wikipedia article as a numbered source.
   auth.js                — Supabase client, sign-in/up/out, user-menu
   user-prefs.js          — Display name + default visibility (Supabase user_metadata)
-  persistence.js         — storyToRow/rowToStory, cloud upsert/delete, localStorage
+  persistence.js         — storyToRow/rowToStory (includes grave_id + source), cloud upsert/delete, localStorage
   sync.js                — Incremental delta sync (updated_at watermark) + pushLocalOnly
+  api-tributes.js        — getTributes(graveId), setTribute(graveId, type) — candle/flower tributes via supabaseClient
   save-actions.js        — saveStory, shareStory, exportCemeteryData
-  render-result.js       — Paints the biography result screen
+  render-result.js       — Paints the biography result screen. renderTributeSection() shows tribute counts when grave_id present; candle/flower buttons for camera-sourced non-global stories.
   error-render.js        — Gravestone rejection + generic error screens
   loading-ui.js          — setLoadingStep: updates loading text during pipeline
   photo-modal.js         — Photo source modal (camera vs library)
@@ -82,7 +83,7 @@ js/
   home-screen.append.js  — updateHomeMapButton
   map-utils.js           — groupGravesByCemetery, getDistanceMeters
   map-cemetery.js        — Per-user cemetery map (Leaflet, drag-to-correct, OSM boundary)
-  map-global.js          — Community global map (public stories, guest gate)
+  map-global.js          — Community global map (public stories, guest gate). Deduplicates pins by grave_id then ~20 m GPS cell before placing markers.
   pwa.js                 — Service worker registration + install banner
   misc-handlers.js       — Miscellaneous event handlers
 ```
@@ -106,7 +107,7 @@ Scripts are ordered leaf-first in `index.html`:
 
 ### `index.html` owns the orchestration core
 
-The main pipeline (`startAnalysis`, `handleImageUpload`, `showScreen`, `uploadImageToR2`, `getDeviceLocation`, `forwardGeocode`) and all shared state (`currentStory`, `savedStories`, `currentImage`, `currentExifLocation`, `locationPermission`, `_bypassVerification`) live in the inline `<script>` block inside `index.html`. Extracted modules read and write these via plain identifier references (shared lexical scope).
+The main pipeline (`startAnalysis`, `handleImageUpload`, `showScreen`, `uploadImageToR2`, `getDeviceLocation`, `forwardGeocode`) and all shared state (`currentStory`, `savedStories`, `currentImage`, `currentExifLocation`, `currentPhotoSource`, `locationPermission`, `_bypassVerification`) live in the inline `<script>` block inside `index.html`. Extracted modules read and write these via plain identifier references (shared lexical scope).
 
 ### Stage-based extraction refactor
 
@@ -136,6 +137,12 @@ Stories table uses:
 - `is_public` flag for community sharing
 - `updated_at` for incremental sync (`syncDelta` pulls only rows newer than the last high-water mark)
 - `pushLocalOnly` heals stranded guest saves on sign-in
+- `grave_id` (UUID FK → `graves` table) links a story to its canonical grave record
+- `source` (`'camera'` | `'library'`) tracks how the photo was captured
+
+`graves` table — one row per physical stone, deduped by ~20 m name-match via `find_or_create_grave` RPC. Populated when a signed-in user saves a story with GPS coordinates.
+
+`tributes` table — one candle or flower per user per grave (`UNIQUE(grave_id, user_id)`). `getTributes`/`setTribute` in `js/api-tributes.js` (web) and `mobile/src/lib/api-tributes.js` (mobile).
 
 ### CSS approach
 
@@ -177,6 +184,14 @@ Built for one-handed use in a cemetery. Service worker caches the app shell (`gr
 - **Soft-delete sync** — deletes propagate to other devices via `deleted_at` in the delta sync, not through missing rows.
 
 - **Remembered Stories screen (web)** — saved stories no longer render inline on the home screen. The home screen has a "Remembered Stories" nav button that calls `showScreen('remembered-stories')`. The `#remembered-stories` div contains the `#saved-list` element; `renderSavedList()` is called by `showScreen()` when that screen becomes active. `'remembered-stories'` is in `VALID_SCREENS` so `#remembered-stories` is a valid hash-routable destination.
+
+- **Web canonical grave linking** — `startAnalysis()` calls `findOrCreateGrave(primaryName, lat, lng, isPublic)` after biography resolves, but only when the user is signed in and `resolvedGps` is non-null. Sets `currentStory.grave_id` with the returned UUID. Non-fatal: if the RPC fails, `grave_id` is null and the story saves normally without a canonical link.
+
+- **Web photo source tracking** — `currentPhotoSource` ('camera' or 'library') is set in `handleImageUpload` based on `isLiveCamera` and reset to 'library' in `resetCamera`. Written onto `currentStory.source` so `render-result.js` and `persistence.js` can use it.
+
+- **Web tribute section** — `renderTributeSection(story)` in `render-result.js` appends a tribute block below the visibility controls whenever `story.grave_id` is present. Tribute counts (candles · flowers) always visible. Candle/flower toggle buttons only shown when `currentUser` is signed in, `story.source === 'camera'`, and `!story._isGlobal`. Tapping a button that matches the user's existing tribute removes it (toggle off); tapping a different type switches. Counts refresh from Supabase after each toggle.
+
+- **Web global map dedup** — `fetchGlobalStories()` in `map-global.js` deduplicates the raw Supabase rows before placing markers: first pass drops duplicate `grave_id`s (keeps the first/most-recent row per canonical grave); second pass drops stories whose GPS rounds to the same ~20 m cell (`Math.round(lat * 5000),Math.round(lng * 5000)`) as an already-kept pin. This matches the mobile `GlobalMapScreen` behaviour exactly.
 
 - **Mobile per-user storage isolation** — `loadStories(userId)` / `saveStories(stories, userId)` in `mobile/src/lib/storage.js` use key `gs_stories_${userId}` for signed-in users and `gs_stories_guest` for guests. Every call site (HomeScreen, CameraScreen, CemeteryMapScreen, ResultScreen, sync.js) must pass the userId from `supabase.auth.getSession()`. Never call these functions without a userId argument — that silently reads the guest bucket.
 

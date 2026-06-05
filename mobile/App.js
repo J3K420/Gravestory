@@ -76,8 +76,12 @@ export default function App() {
   });
 
   useEffect(() => {
-    Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
-    Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    try {
+      Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+      Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    } catch (e) {
+      console.warn('RevenueCat init failed (non-fatal):', e.message);
+    }
   }, []);
 
   useEffect(() => {

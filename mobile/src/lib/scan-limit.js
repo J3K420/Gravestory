@@ -50,8 +50,10 @@ export async function incrementScanCount(userId) {
     const stored = parseInt((await AsyncStorage.getItem(GUEST_COUNT_KEY)) || '0', 10);
     await AsyncStorage.setItem(GUEST_COUNT_KEY, String(stored + 1));
   } else {
-    await supabase.from('scan_events').insert({ user_id: userId }).catch(e =>
-      console.warn('scan_events insert failed (non-fatal):', e.message)
-    );
+    try {
+      await supabase.from('scan_events').insert({ user_id: userId });
+    } catch (e) {
+      console.warn('scan_events insert failed (non-fatal):', e.message);
+    }
   }
 }

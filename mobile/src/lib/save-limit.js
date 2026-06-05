@@ -1,7 +1,7 @@
 import { loadStories } from './storage';
 
 export const FREE_LIMIT_GUEST = 3;
-export const FREE_LIMIT_USER  = 10;
+export const FREE_LIMIT_USER  = 5;
 
 export async function checkSaveLimit(userId) {
   const isGuest = !userId;

@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 
 export const SCAN_LIMIT_GUEST = 3;
-export const SCAN_LIMIT_USER  = 10;
+export const SCAN_LIMIT_USER  = 5;
 
 const GUEST_COUNT_KEY = 'gs_scan_count';
 const GUEST_MONTH_KEY = 'gs_scan_reset_month';

@@ -313,7 +313,7 @@ export default function CameraScreen({ navigation }) {
       const defaultPublic = session?.user?.user_metadata?.default_public ?? false;
 
       // Biography resolved successfully — count this as a used scan
-      await incrementScanCount(session?.user?.id ?? null);
+      try { await incrementScanCount(session?.user?.id ?? null); } catch (e) { console.warn('incrementScanCount failed (non-fatal):', e.message); }
 
       // Link to canonical grave — on a cache hit the grave_id is already known;
       // otherwise call find_or_create to dedup multiple scans of the same stone.

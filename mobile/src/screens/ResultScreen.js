@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory, cloudDeleteStory } from '../lib/sync';
 import { getTributes, setTribute } from '../lib/api-tributes';
-import { normalizePortraits } from '../lib/api-wikipedia';
+import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { MapStack, ShareIcon, Globe } from '../components/Icons';
@@ -24,6 +24,7 @@ export default function ResultScreen({ navigation, route }) {
   const [tributes, setTributes]         = useState({ candles: 0, flowers: 0, userTribute: null });
   const [tributeLoading, setTributeLoading] = useState(false);
   const [gravePhotos, setGravePhotos]   = useState([]);
+  const [livePortraits, setLivePortraits] = useState([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -51,6 +52,15 @@ export default function ResultScreen({ navigation, route }) {
         if (urls.length > 0) setGravePhotos(urls);
       });
   }, [story?.grave_id, story?._isGlobal]);
+
+  // Global bios have no locally-persisted portraits — fetch live from Wikipedia.
+  useEffect(() => {
+    if (!story?._isGlobal || !story?.name) return;
+    if (normalizePortraits(story.portraits).length > 0) return;
+    fetchWikipediaPortraits(story.name, story.dates)
+      .then(uris => { if (uris.length > 0) setLivePortraits(uris); })
+      .catch(() => {});
+  }, [story?.name]);
 
   const { refreshControl } = useRefresh(async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -84,9 +94,13 @@ export default function ResultScreen({ navigation, route }) {
       }))
     : (story.image_url ? [{ uri: story.image_url, label: 'Gravestone' }] : []);
 
+  const portraitUris = normalizePortraits(portraits).length > 0
+    ? normalizePortraits(portraits)
+    : livePortraits;
+
   const carouselImages = [
     ...graveSlots,
-    ...normalizePortraits(portraits).map(uri => ({ uri, label: 'Portrait' })),
+    ...portraitUris.map(uri => ({ uri, label: 'Portrait' })),
   ].filter(Boolean);
 
   async function handleDelete() {

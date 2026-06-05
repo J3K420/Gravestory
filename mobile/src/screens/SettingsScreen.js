@@ -144,7 +144,7 @@ export default function SettingsScreen({ navigation }) {
                   />
                 </View>
                 <Text style={styles.progressHint}>
-                  Unlimited saves coming soon. Delete stories to free up space.
+                  Delete stories to free up space.
                 </Text>
               </View>
             )}
@@ -171,7 +171,7 @@ export default function SettingsScreen({ navigation }) {
                   />
                 </View>
                 <Text style={styles.progressHint}>
-                  Unlimited scans coming soon. Resets on the 1st of each month.
+                  Resets on the 1st of each month.
                 </Text>
               </View>
             )}

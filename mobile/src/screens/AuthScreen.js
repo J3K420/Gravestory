@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../lib/supabase';
+import { getDeviceId } from '../lib/device-id';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
@@ -64,7 +65,12 @@ export default function AuthScreen({ navigation }) {
     if (!email || !password) { setStatus('Email and password required'); return; }
     if (password.length < 6) { setStatus('Password must be at least 6 characters'); return; }
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const deviceId = await getDeviceId();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { device_id: deviceId } },
+    });
     setLoading(false);
     if (error) setStatus(error.message);
     else if (data.user && !data.session) setStatus('Check your email to verify your account');

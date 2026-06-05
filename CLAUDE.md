@@ -383,7 +383,7 @@ mobile/
 - **Phase 8e** ✅ — Canonical graves + candle/flower tributes + EAS Update: `graves` table deduplicates multiple scans of the same physical stone; `tributes` table (one candle or flower per user per grave, UNIQUE constraint); `find_or_create_grave` RPC (atomic ~20 m name-match dedup); `update_grave_location` RPC (first user-correction wins, propagated from CemeteryMapScreen pin drag); `api-tributes.js` (getTributes/setTribute); `source` field on stories tracks camera vs library; GlobalMapScreen client-side dedup by grave_id then ~20 m GPS cell; ResultScreen shows tribute counts always + candle/flower buttons only for own camera-sourced stories; EAS Update configured (expo-updates installed, updates.url + runtimeVersion in app.config.js, channel on preview + production profiles) — testers install one new APK then all future JS changes push OTA via `npx eas update --branch preview`.
 - **Phase 8f** ✅ — Web parity for Phase 8e features: (1) `js/persistence.js` — added `grave_id` + `source` to `storyToRow`/`rowToStory`; (2) `index.html` pipeline — `currentPhotoSource` ('camera'/'library') tracked on upload, `findOrCreateGrave` RPC called after biography when signed-in user has GPS; (3) `js/map-global.js` — client-side dedup by `grave_id` then ~20 m GPS cell (same logic as mobile `GlobalMapScreen`); (4) new `js/api-tributes.js` — vanilla JS port of `getTributes`/`setTribute` using `supabaseClient`; (5) `js/render-result.js` — `renderTributeSection` shows tribute counts always when `grave_id` present, candle/flower buttons for camera-sourced non-global stories only.
 - **Phase 8g** ✅ — Search + biography quality pass: (1) Android nav bar fix — `CemeteryMapScreen` and `GlobalMapScreen` use `useSafeAreaInsets` to add `paddingBottom: insets.bottom + 8` to bottom panel (both screens use `edges={['top']}` so SafeAreaView doesn't handle the bottom); (2) Tavily query priority overhaul — queries now built in priority order so symbol-guided and general obituary queries actually fire (previously always cut off), duplicate FindAGrave merged into one, ChroniclingAmerica only for ≤1922 deaths, session-level `_searchCache` prevents re-querying same person on family plots; (3) Multi-person combined biography — when `multiple_subjects === true`, pipeline fetches Wikipedia for each person in parallel, `generateBiography` accepts `wikipediaSummary` as array, prompt explicitly names all subjects and requires proportional coverage, `name` uses " & " and `dates` uses " · " separators; (4) Biography prompt overhaul (Opus review) — Gemini structured output (`responseMimeType` + `responseSchema`), `citations [{n,description,url}]` schema converted to `sources`/`source_urls` for compat, evidence ladder for length (up to 1000 words), symbol rule describes conventional meaning not individual assertion, conflict resolution surfaces discrepancies in text, historical-figure exception requires Wikipedia in sources (memory not a source), `name_confidence: "low"` triggers identity hedging, TYPE_LABELS simplified to short tags.
-- **Phase 9** 🔲 — Play Store submission prep, payments (RevenueCat + Google Play Billing), iOS TestFlight build.
+- **Phase 9** 🔄 — Freemium limits live on `phase-9` branch. Play Store submission prep, payments (RevenueCat + Google Play Billing), iOS TestFlight build in progress.
 
 ---
 
@@ -395,25 +395,31 @@ mobile/
 - `userInterfaceStyle: "dark"` — required for correct status bar on the dark-themed app; do not change back to "light"
 - Google Maps Android API key stored as an EAS Secret (already created, scope: project, all environments)
 - Preview build (installable APK for testers): `npx eas build --platform android --profile preview`
+- Phase-9 personal test build (isolated channel): `npx eas build --platform android --profile phase9`
 - Production build (AAB for Play Store): `npx eas build --platform android --profile production` — produces an AAB; submit track set to "internal" in eas.json
+- Development build (live Metro reload): `npx eas build --platform android --profile development` — connect phone via `adb reverse tcp:8081 tcp:8081` then `npx expo start`
 - Before first production build run `npx eas credentials` to generate/upload the Android keystore
 - Testers install via direct `.apk` link; subsequent updates install over the top automatically
+- **Do NOT use `.catch()` on Supabase query builder results** — Hermes JS engine does not support it. Use `try { await supabase... } catch (e) {}` instead. Applies to all mobile code.
 
 ### Phase 9 — Scope
 
-**Done this session (pre-Phase 9 work):**
+**Completed:**
 - ~~Grave photo gallery~~ ✅ `grave_photos` table + global map gallery (web + mobile). Run `003_grave_photos.sql`.
-- ~~Biography result cache (Rec 6)~~ ✅ `find_grave` RPC + pipeline cache. Run `002_find_grave.sql`.
+- ~~Biography result cache~~ ✅ `find_grave` RPC + pipeline cache. Run `002_find_grave.sql`.
+- ~~Freemium save limit~~ ✅ Guest cap 3, signed-in cap 10. `mobile/src/lib/save-limit.js`, `PaywallScreen.js`, `SettingsScreen` progress bar. `is_unlimited: true` in Supabase `app_metadata` bypasses all limits for testers (set via SQL editor, read-only by clients).
+- ~~Freemium scan limit~~ ✅ Monthly reset, same caps as save limit. `mobile/src/lib/scan-limit.js`, `scan_events` table (immutable rows — INSERT/SELECT only via RLS, no UPDATE/DELETE so clients cannot reset their own count). Run `004_scan_events.sql`. Counts stored server-side in Supabase, not in `user_metadata`.
+- ~~phase9 EAS build profile~~ ✅ Isolated `phase-9` OTA channel so tester `preview` builds are never affected. Personal test build: `npx eas build --platform android --profile phase9`.
 
-**Can do without $25 Google Play account:**
-- **Portrait persistence** — add `expo-file-system`; copy ImageManipulator temp URIs to `FileSystem.documentDirectory + 'portraits/'` with a URL-hash filename. Portraits currently lost on app restart (OS clears temp dir). Requires a new build — cannot ship OTA.
-- **Freemium save limit** — gate saves at 10 stories in `persistence.js` / `sync.js`; show progress indicator in Settings ("7 of 10 stories saved"). Primary conversion lever per monetization doc.
-- **Freemium scan limit** — track scan count in `user_metadata`; enforce cap (suggested 5/month free); reset on 1st of month.
-- **Device fingerprinting** — `device-id.js` module using `expo-device` properties; attach `device_id` to sign-up metadata for soft anti-abuse enforcement.
+**Remaining (no $25 needed):**
+- **Device fingerprinting** — `device-id.js` module using `expo-device` properties; attach `device_id` to sign-up metadata for soft anti-abuse on new guest accounts.
 - **Privacy policy page** — must be hosted publicly before Play Store submission; link from Settings screen.
+- **Portrait persistence** — `expo-file-system`; copy ImageManipulator temp URIs to `FileSystem.documentDirectory + 'portraits/'`. Portraits currently lost on app restart. Requires a new build.
 - **Store listing assets** — screenshots, feature graphic, short/full description.
-- **RevenueCat SDK integration** — install SDK, configure entitlements, wire paywall screen (Standard + Family tiers); does NOT require Play Store account to set up, only to go live.
-- **GEDCOM export** — client-side serialisation of saved stories to GEDCOM format; gate behind paid tier.
+- **RevenueCat SDK integration** — install SDK, configure entitlements, wire real paywall (Standard + Family tiers); does NOT require Play Store account to set up, only to go live.
+
+**Shelved:**
+- ~~GEDCOM export~~ — not enough family relationship data to produce meaningful family trees. Revisit if app later tracks spouse/parent/child links.
 
 **Requires $25 Google Play account:**
 - EAS credentials: run `npx eas credentials` once to generate/upload Android keystore
@@ -422,6 +428,10 @@ mobile/
 
 **Requires $99/yr Apple Developer account:**
 - iOS TestFlight build
+
+**Tester admin notes:**
+- Set `is_unlimited: true` in a user's `app_metadata` via Supabase SQL editor to bypass all limits: `UPDATE auth.users SET raw_app_meta_data = raw_app_meta_data || '{"is_unlimited": true}'::jsonb WHERE id = '<user-id>';`
+- Current unlimited accounts: Jimmy Crackcorn (j3k420@gmail.com), James Edmonds (james.edmonds26@gmail.com)
 
 ---
 

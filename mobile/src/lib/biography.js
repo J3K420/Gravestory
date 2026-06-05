@@ -229,7 +229,7 @@ export async function generateBiography(graveData, searchResults, wikiData, loca
   const isMultiSubject = graveData.multiple_subjects === true && (graveData.names?.length > 1);
   // When one subject on a shared stone has a Wikipedia article + 3+ sources, let them
   // have the full historical-figure word budget rather than splitting proportionally.
-  const hasFamousSubject = isMultiSubject && wikiSummaries.length > 0 && allSources.length >= 3;
+  const hasFamousSubject = isMultiSubject && wikiSummaries.length > 0;
   const multiSubjectBlock = isMultiSubject
     ? hasFamousSubject
       ? `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${graveData.names.join(' and ')}. The research sources contain substantial documentation for one subject and limited records for the other(s). Write a full biography for the well-documented subject using the historical-figure word budget; devote a respectful, dignified paragraph to the lesser-documented person(s), honouring their memory and their relationship to the famous subject. Weave their connection together — do not ignore either person.\n`

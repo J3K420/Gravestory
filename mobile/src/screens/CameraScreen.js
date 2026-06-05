@@ -72,16 +72,20 @@ export default function CameraScreen({ navigation }) {
     setPipelineError(null);
 
     // Check both save and scan limits before opening the picker — no API credits burned
-    const { data: { session: initSession } } = await supabase.auth.getSession();
-    const uid = initSession?.user?.id ?? null;
-    const [saveCheck, scanCheck] = await Promise.all([checkSaveLimit(uid), checkScanLimit(uid)]);
-    if (saveCheck.atLimit) {
-      navigation.navigate('Paywall', { count: saveCheck.count, limit: saveCheck.limit, type: 'save', isGuest: saveCheck.isGuest });
-      return;
-    }
-    if (scanCheck.atLimit) {
-      navigation.navigate('Paywall', { count: scanCheck.count, limit: scanCheck.limit, type: 'scan', isGuest: scanCheck.isGuest });
-      return;
+    try {
+      const { data: { session: initSession } } = await supabase.auth.getSession();
+      const uid = initSession?.user?.id ?? null;
+      const [saveCheck, scanCheck] = await Promise.all([checkSaveLimit(uid), checkScanLimit(uid)]);
+      if (saveCheck.atLimit) {
+        navigation.navigate('Paywall', { count: saveCheck.count, limit: saveCheck.limit, type: 'save', isGuest: saveCheck.isGuest });
+        return;
+      }
+      if (scanCheck.atLimit) {
+        navigation.navigate('Paywall', { count: scanCheck.count, limit: scanCheck.limit, type: 'scan', isGuest: scanCheck.isGuest });
+        return;
+      }
+    } catch (e) {
+      console.warn('Limit check failed (non-fatal):', e.message);
     }
 
     // exif: true so we can read GPS coords before compression strips them

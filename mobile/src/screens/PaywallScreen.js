@@ -14,23 +14,23 @@ export default function PaywallScreen({ navigation, route }) {
     : (isGuest ? FREE_LIMIT_GUEST : FREE_LIMIT_USER);
 
   const title = isScan
-    ? (isGuest ? 'Scan Limit Reached' : 'Monthly Scans Used Up')
+    ? (isGuest ? 'Scan Limit Reached' : 'Free Scans Used Up')
     : (isGuest ? 'Story Limit Reached' : 'Collection Full');
 
   const guestBody = isScan
-    ? `Guest accounts can scan ${SCAN_LIMIT_GUEST} gravestones per month. Sign in for free to get ${SCAN_LIMIT_USER} scans per month.`
+    ? `Guest accounts get ${SCAN_LIMIT_GUEST} free scans. Sign in for free to get ${SCAN_LIMIT_USER} scans.`
     : `Guest accounts can save ${FREE_LIMIT_GUEST} stories. Sign in for free to save up to ${FREE_LIMIT_USER}.`;
 
   const userBody = isScan
-    ? `You've used all ${SCAN_LIMIT_USER} scans for this month. Unlimited scans are coming soon — your count resets on the 1st.`
-    : `You've filled your free collection of ${FREE_LIMIT_USER} stories. Unlimited saves are coming soon — stay tuned for an upgrade option.`;
+    ? `You've used your ${SCAN_LIMIT_USER} free scans. Buy a scan pack to keep exploring.`
+    : `You've filled your free collection of ${FREE_LIMIT_USER} stories. Delete old stories to make room.`;
 
   const hint = isScan
-    ? 'Your scan count resets on the 1st of each month.'
-    : 'You can delete old stories to make room, or wait for unlimited saves to launch.';
+    ? 'Scan packs never expire — use them at your own pace.'
+    : 'You can delete old stories to free up space.';
 
   const countLabel = isScan
-    ? `${count} of ${limit} scans used this month`
+    ? `${count} of ${limit} free scans used`
     : `${count} of ${limit} stories saved`;
 
   return (

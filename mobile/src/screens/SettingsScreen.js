@@ -152,7 +152,7 @@ export default function SettingsScreen({ navigation }) {
             {/* Scan limit progress */}
             {scanCount !== null && (
               <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Scans This Month</Text>
+                <Text style={styles.sectionLabel}>Free Scans Used</Text>
                 <View style={styles.progressRow}>
                   <Text style={styles.progressLabel}>
                     {scanCount} of {scanLimit} scans
@@ -171,7 +171,7 @@ export default function SettingsScreen({ navigation }) {
                   />
                 </View>
                 <Text style={styles.progressHint}>
-                  Resets on the 1st of each month.
+                  Buy more scans to keep exploring.
                 </Text>
               </View>
             )}

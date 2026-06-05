@@ -12,6 +12,11 @@ function currentMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function monthStart() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+}
+
 export async function checkScanLimit(userId) {
   const isGuest = !userId;
   const limit   = isGuest ? SCAN_LIMIT_GUEST : SCAN_LIMIT_USER;
@@ -25,13 +30,12 @@ export async function checkScanLimit(userId) {
       count = parseInt((await AsyncStorage.getItem(GUEST_COUNT_KEY)) || '0', 10);
     }
   } else {
-    const { data: { user } } = await supabase.auth.getUser();
-    const meta = user?.user_metadata || {};
-    if (meta.scan_reset_month !== currentMonth()) {
-      await supabase.auth.updateUser({ data: { scan_count: 0, scan_reset_month: currentMonth() } });
-    } else {
-      count = meta.scan_count || 0;
-    }
+    const { count: dbCount, error } = await supabase
+      .from('scan_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('scanned_at', monthStart());
+    if (!error) count = dbCount ?? 0;
   }
 
   return { count, limit, atLimit: count >= limit, isGuest };
@@ -42,8 +46,6 @@ export async function incrementScanCount(userId) {
     const stored = parseInt((await AsyncStorage.getItem(GUEST_COUNT_KEY)) || '0', 10);
     await AsyncStorage.setItem(GUEST_COUNT_KEY, String(stored + 1));
   } else {
-    const { data: { user } } = await supabase.auth.getUser();
-    const current = user?.user_metadata?.scan_count || 0;
-    await supabase.auth.updateUser({ data: { scan_count: current + 1 } }).catch(() => {});
+    await supabase.from('scan_events').insert({ user_id: userId });
   }
 }

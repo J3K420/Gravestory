@@ -17,8 +17,8 @@ import {
   HankenGrotesk_600SemiBold,
 } from '@expo-google-fonts/hanken-grotesk';
 import { supabase } from './src/lib/supabase';
-import Purchases, { LOG_LEVEL } from 'react-native-purchases';
-import { REVENUECAT_API_KEY } from './src/lib/config';
+// RevenueCat import intentionally disabled until production API key is configured
+// import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 
 import HomeScreen from './src/screens/HomeScreen';
 import AuthScreen from './src/screens/AuthScreen';
@@ -75,14 +75,6 @@ export default function App() {
     HankenGrotesk_600SemiBold,
   });
 
-  useEffect(() => {
-    try {
-      Purchases.setLogLevel(LOG_LEVEL.DEBUG);
-      Purchases.configure({ apiKey: REVENUECAT_API_KEY });
-    } catch (e) {
-      console.warn('RevenueCat init failed (non-fatal):', e.message);
-    }
-  }, []);
 
   useEffect(() => {
     Linking.getInitialURL().then(url => {

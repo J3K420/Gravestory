@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Purchases from 'react-native-purchases';
+// import Purchases from 'react-native-purchases'; // re-enable when production key is ready
 import { colors, fonts, radius } from '../lib/theme';
 import { FREE_LIMIT_GUEST, FREE_LIMIT_USER } from '../lib/save-limit';
 import { SCAN_LIMIT_GUEST, SCAN_LIMIT_USER } from '../lib/scan-limit';
@@ -28,39 +28,16 @@ export default function PaywallScreen({ navigation, route }) {
   const [purchasing, setPurchasing] = useState(null);
 
   useEffect(() => {
-    if (!isScan || isGuest) { setLoading(false); return; }
-    Purchases.getOfferings()
-      .then(offerings => {
-        const pkgs = offerings.current?.availablePackages ?? [];
-        setPackages(pkgs);
-      })
-      .catch(e => console.warn('RevenueCat offerings failed:', e.message))
-      .finally(() => setLoading(false));
+    // RevenueCat disabled until production key is configured
+    setLoading(false);
   }, []);
 
   async function handlePurchase(pkg) {
-    setPurchasing(pkg.product.identifier);
-    try {
-      await Purchases.purchasePackage(pkg);
-      Alert.alert('Purchase successful!', 'Your scans have been added. Happy exploring!', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
-    } catch (e) {
-      if (!e.userCancelled) {
-        Alert.alert('Purchase failed', e.message || 'Something went wrong. Please try again.');
-      }
-    } finally {
-      setPurchasing(null);
-    }
+    Alert.alert('Coming soon', 'In-app purchases will be available at launch.');
   }
 
   async function handleRestore() {
-    try {
-      await Purchases.restorePurchases();
-      Alert.alert('Restored', 'Your purchases have been restored.');
-    } catch (e) {
-      Alert.alert('Restore failed', e.message || 'Could not restore purchases.');
-    }
+    Alert.alert('Coming soon', 'Purchase restore will be available at launch.');
   }
 
   const title = isScan

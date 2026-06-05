@@ -417,13 +417,24 @@ mobile/
 - ~~Portrait persistence~~ ✅ `expo-file-system` installed. `persistPortrait()` helper in `api-wikipedia.js` copies ImageManipulator temp `file://` URIs into `FileSystem.documentDirectory + 'portraits/'` before they are stored on the story. Portraits now survive app restarts. `expo-file-system` is a native module — requires a build to activate.
 - ~~Global map portraits~~ ✅ `ResultScreen.js` live-fetches `fetchWikipediaPortraits` on mount for global stories that have no locally-persisted portraits (file:// URIs are device-local and cannot be stored in Supabase). Portraits appear in the carousel a moment after the bio renders.
 
-**Remaining (no $25 needed):**
-- **Privacy policy page** — must be hosted publicly before Play Store submission; link from Settings screen.
-- **RevenueCat SDK integration** — install SDK, configure entitlements, wire real paywall (Standard + Family tiers); does NOT require Play Store account to set up, only to go live. Native module — plan a build around it.
+**Also completed (Phase 9 Session 2):**
+- ~~Freemium save limit~~ ✅ Bumped `FREE_LIMIT_USER` from 5 → 10 for launch. Guest cap stays at 3.
+- ~~Freemium scan limit~~ ✅ Bumped `SCAN_LIMIT_FREE_USER` from 5 → 10. Changed from monthly-reset to lifetime one-time trial (no reset) — controls Tavily API costs. `scan_events` table counts lifetime scans; `scan_credits` table holds purchased credits (service-role write only). Migration `005_scan_credits.sql` written; **still needs to be run in Supabase SQL editor**.
+- ~~Monetization model~~ ✅ Credits-only (no subscriptions). Three packs: Starter (5 scans/$0.99 · `gravestory_5_scans`), Explorer (20 scans/$2.99 · `gravestory_20_scans`), Historian (60 scans/$6.99 · `gravestory_60_scans`). Credits never expire.
+- ~~RevenueCat SDK~~ ✅ `react-native-purchases` installed. Products and offerings configured in RevenueCat dashboard (`gravestory_5_scans`, `gravestory_20_scans`, `gravestory_60_scans`). RevenueCat init currently **disabled** in `App.js` (test key caused native crash in release builds). `REVENUECAT_API_KEY` exported from `config.js`. Re-enable once Play Store account obtained and real production key issued.
+- ~~hasFamousSubject shared stone fix~~ ✅ When `multiple_subjects === true` and any Wikipedia summary was found for a subject, `hasFamousSubject = true` — unlocks full 2500-word bio for the notable person while still giving the lesser-documented person a dignified paragraph. Condition requires only `wikiSummaries.length > 0` (not a source-count threshold). Applied to both `js/biography.js` and `mobile/src/lib/biography.js`.
+- ~~Settings screen cleanup~~ ✅ Removed "coming soon" hints; renamed "Scans This Month" → "Free Scans Used"; removed monthly-reset copy.
+
+**Remaining:**
+- **Run `005_scan_credits.sql`** in Supabase SQL editor — creates `scan_credits` table with RLS. Use plain ASCII quotes (no curly/typographic quotes).
+- **RevenueCat webhook** — Cloudflare Worker endpoint to receive RevenueCat purchase events and INSERT/UPDATE `scan_credits`. Requires secret key from RevenueCat dashboard.
+- **Re-enable RevenueCat SDK** — after Play Store account ($25) → real production API key from RevenueCat → uncomment imports in `App.js` and `PaywallScreen.js` → trigger new build.
+- **Privacy policy page** — draft written this session. Host on GitHub Pages (`https://j3k420.github.io/gravestory-privacy`). Link from Settings screen.
 - **Store listing assets** — screenshots, feature graphic, short/full description.
 
 **Shelved:**
 - ~~GEDCOM export~~ — not enough family relationship data to produce meaningful family trees. Revisit if app later tracks spouse/parent/child links.
+- ~~Family/subscription tier~~ — excluded due to unbounded Tavily API cost risk with unlimited scanning. Credits-only model chosen instead.
 
 **Requires $25 Google Play account:**
 - EAS credentials: run `npx eas credentials` once to generate/upload Android keystore

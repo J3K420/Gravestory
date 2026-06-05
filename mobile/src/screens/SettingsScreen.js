@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { checkSaveLimit } from '../lib/save-limit';
+import { checkScanLimit } from '../lib/scan-limit';
 
 export default function SettingsScreen({ navigation }) {
   const [user, setUser]                 = useState(null);
@@ -16,6 +17,8 @@ export default function SettingsScreen({ navigation }) {
   const [saving, setSaving]             = useState(false);
   const [saveCount, setSaveCount]       = useState(null);
   const [saveLimit, setSaveLimit]       = useState(10);
+  const [scanCount, setScanCount]       = useState(null);
+  const [scanLimit, setScanLimit]       = useState(10);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -23,9 +26,14 @@ export default function SettingsScreen({ navigation }) {
       setUser(session.user);
       setDisplayName(session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '');
       setDefaultPublic(session.user.user_metadata?.default_public ?? false);
-      checkSaveLimit(session.user.id).then(({ count, limit }) => {
-        setSaveCount(count);
-        setSaveLimit(limit);
+      Promise.all([
+        checkSaveLimit(session.user.id),
+        checkScanLimit(session.user.id),
+      ]).then(([saves, scans]) => {
+        setSaveCount(saves.count);
+        setSaveLimit(saves.limit);
+        setScanCount(scans.count);
+        setScanLimit(scans.limit);
       });
     });
   }, []);
@@ -36,9 +44,14 @@ export default function SettingsScreen({ navigation }) {
       setUser(session.user);
       setDisplayName(session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '');
       setDefaultPublic(session.user.user_metadata?.default_public ?? false);
-      const { count, limit } = await checkSaveLimit(session.user.id);
-      setSaveCount(count);
-      setSaveLimit(limit);
+      const [saves, scans] = await Promise.all([
+        checkSaveLimit(session.user.id),
+        checkScanLimit(session.user.id),
+      ]);
+      setSaveCount(saves.count);
+      setSaveLimit(saves.limit);
+      setScanCount(scans.count);
+      setScanLimit(scans.limit);
     }
   });
 
@@ -132,6 +145,33 @@ export default function SettingsScreen({ navigation }) {
                 </View>
                 <Text style={styles.progressHint}>
                   Unlimited saves coming soon. Delete stories to free up space.
+                </Text>
+              </View>
+            )}
+
+            {/* Scan limit progress */}
+            {scanCount !== null && (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Scans This Month</Text>
+                <View style={styles.progressRow}>
+                  <Text style={styles.progressLabel}>
+                    {scanCount} of {scanLimit} scans
+                  </Text>
+                  {scanCount >= scanLimit && (
+                    <Text style={styles.progressFull}>Limit reached</Text>
+                  )}
+                </View>
+                <View style={styles.barTrack}>
+                  <View
+                    style={[
+                      styles.barFill,
+                      { width: `${Math.min((scanCount / scanLimit) * 100, 100)}%` },
+                      scanCount >= scanLimit && styles.barFull,
+                    ]}
+                  />
+                </View>
+                <Text style={styles.progressHint}>
+                  Unlimited scans coming soon. Resets on the 1st of each month.
                 </Text>
               </View>
             )}

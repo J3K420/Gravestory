@@ -3,10 +3,35 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fonts, radius } from '../lib/theme';
 import { FREE_LIMIT_GUEST, FREE_LIMIT_USER } from '../lib/save-limit';
+import { SCAN_LIMIT_GUEST, SCAN_LIMIT_USER } from '../lib/scan-limit';
 
 export default function PaywallScreen({ navigation, route }) {
-  const { count = 0, isGuest = false } = route.params ?? {};
-  const limit = isGuest ? FREE_LIMIT_GUEST : FREE_LIMIT_USER;
+  const { count = 0, isGuest = false, type = 'save' } = route.params ?? {};
+
+  const isScan = type === 'scan';
+  const limit  = isScan
+    ? (isGuest ? SCAN_LIMIT_GUEST : SCAN_LIMIT_USER)
+    : (isGuest ? FREE_LIMIT_GUEST : FREE_LIMIT_USER);
+
+  const title = isScan
+    ? (isGuest ? 'Scan Limit Reached' : 'Monthly Scans Used Up')
+    : (isGuest ? 'Story Limit Reached' : 'Collection Full');
+
+  const guestBody = isScan
+    ? `Guest accounts can scan ${SCAN_LIMIT_GUEST} gravestones per month. Sign in for free to get ${SCAN_LIMIT_USER} scans per month.`
+    : `Guest accounts can save ${FREE_LIMIT_GUEST} stories. Sign in for free to save up to ${FREE_LIMIT_USER}.`;
+
+  const userBody = isScan
+    ? `You've used all ${SCAN_LIMIT_USER} scans for this month. Unlimited scans are coming soon — your count resets on the 1st.`
+    : `You've filled your free collection of ${FREE_LIMIT_USER} stories. Unlimited saves are coming soon — stay tuned for an upgrade option.`;
+
+  const hint = isScan
+    ? 'Your scan count resets on the 1st of each month.'
+    : 'You can delete old stories to make room, or wait for unlimited saves to launch.';
+
+  const countLabel = isScan
+    ? `${count} of ${limit} scans used this month`
+    : `${count} of ${limit} stories saved`;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -17,13 +42,9 @@ export default function PaywallScreen({ navigation, route }) {
       <View style={styles.content}>
         <Text style={styles.icon}>🪦</Text>
 
-        <Text style={styles.title}>
-          {isGuest ? 'Story Limit Reached' : 'Collection Full'}
-        </Text>
+        <Text style={styles.title}>{title}</Text>
 
-        <Text style={styles.count}>
-          {count} of {limit} stories saved
-        </Text>
+        <Text style={styles.count}>{countLabel}</Text>
 
         <View style={styles.barTrack}>
           <View style={[styles.barFill, { width: `${Math.min((count / limit) * 100, 100)}%` }]} />
@@ -31,10 +52,7 @@ export default function PaywallScreen({ navigation, route }) {
 
         {isGuest ? (
           <>
-            <Text style={styles.body}>
-              Guest accounts can save up to {FREE_LIMIT_GUEST} stories.
-              Sign in for free to save up to {FREE_LIMIT_USER}.
-            </Text>
+            <Text style={styles.body}>{guestBody}</Text>
 
             <TouchableOpacity
               style={styles.primaryBtn}
@@ -45,15 +63,10 @@ export default function PaywallScreen({ navigation, route }) {
             </TouchableOpacity>
           </>
         ) : (
-          <Text style={styles.body}>
-            You've filled your free collection of {FREE_LIMIT_USER} stories.
-            Unlimited saves are coming soon — stay tuned for an upgrade option.
-          </Text>
+          <Text style={styles.body}>{userBody}</Text>
         )}
 
-        <Text style={styles.hint}>
-          You can delete old stories to make room, or wait for unlimited saves to launch.
-        </Text>
+        <Text style={styles.hint}>{hint}</Text>
 
         <TouchableOpacity
           style={styles.secondaryBtn}

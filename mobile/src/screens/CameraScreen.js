@@ -23,6 +23,7 @@ import { cloudSaveStory, cloudUpdateStory, findOrCreateGrave } from '../lib/sync
 import { uploadGravestoneImage } from '../lib/api-r2';
 import { forwardGeocode, reverseGeocode } from '../lib/api-nominatim';
 import { checkSaveLimit } from '../lib/save-limit';
+import { checkScanLimit, incrementScanCount } from '../lib/scan-limit';
 
 const STEPS = [
   'Verifying gravestone…',
@@ -70,12 +71,16 @@ export default function CameraScreen({ navigation }) {
     setRejected(null);
     setPipelineError(null);
 
-    // Check save limit before opening the picker so we don't burn API credits
-    const { data: { session } } = await supabase.auth.getSession();
-    const uid = session?.user?.id ?? null;
-    const limitCheck = await checkSaveLimit(uid);
-    if (limitCheck.atLimit) {
-      navigation.navigate('Paywall', { count: limitCheck.count, isGuest: limitCheck.isGuest });
+    // Check both save and scan limits before opening the picker — no API credits burned
+    const { data: { session: initSession } } = await supabase.auth.getSession();
+    const uid = initSession?.user?.id ?? null;
+    const [saveCheck, scanCheck] = await Promise.all([checkSaveLimit(uid), checkScanLimit(uid)]);
+    if (saveCheck.atLimit) {
+      navigation.navigate('Paywall', { count: saveCheck.count, limit: saveCheck.limit, type: 'save', isGuest: saveCheck.isGuest });
+      return;
+    }
+    if (scanCheck.atLimit) {
+      navigation.navigate('Paywall', { count: scanCheck.count, limit: scanCheck.limit, type: 'scan', isGuest: scanCheck.isGuest });
       return;
     }
 
@@ -298,6 +303,9 @@ export default function CameraScreen({ navigation }) {
       // Read default visibility from user metadata
       const { data: { session } } = await supabase.auth.getSession();
       const defaultPublic = session?.user?.user_metadata?.default_public ?? false;
+
+      // Biography resolved successfully — count this as a used scan
+      await incrementScanCount(session?.user?.id ?? null);
 
       // Link to canonical grave — on a cache hit the grave_id is already known;
       // otherwise call find_or_create to dedup multiple scans of the same stone.

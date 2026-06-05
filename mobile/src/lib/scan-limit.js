@@ -1,31 +1,51 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 
-export const SCAN_LIMIT_GUEST = 3;
-export const SCAN_LIMIT_USER  = 5;
+export const SCAN_LIMIT_FREE_GUEST = 3;
+export const SCAN_LIMIT_FREE_USER  = 5;
+
+// Keep old export names so existing call sites don't break
+export const SCAN_LIMIT_GUEST = SCAN_LIMIT_FREE_GUEST;
+export const SCAN_LIMIT_USER  = SCAN_LIMIT_FREE_USER;
 
 const GUEST_COUNT_KEY = 'gs_scan_count';
 
 export async function checkScanLimit(userId) {
   const isGuest = !userId;
-  const limit   = isGuest ? SCAN_LIMIT_GUEST : SCAN_LIMIT_USER;
-  let count = 0;
 
   if (isGuest) {
-    count = parseInt((await AsyncStorage.getItem(GUEST_COUNT_KEY)) || '0', 10);
-  } else {
-    try {
-      const { count: dbCount, error } = await supabase
-        .from('scan_events')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId);
-      if (!error) count = dbCount ?? 0;
-    } catch (e) {
-      console.warn('scan_events count failed (non-fatal):', e.message);
-    }
+    const count = parseInt((await AsyncStorage.getItem(GUEST_COUNT_KEY)) || '0', 10);
+    const limit = SCAN_LIMIT_FREE_GUEST;
+    return { count, limit, atLimit: count >= limit, isGuest: true, purchased: 0 };
   }
 
-  return { count, limit, atLimit: count >= limit, isGuest };
+  let usedCount   = 0;
+  let purchased   = 0;
+
+  try {
+    // Lifetime scans used
+    const { count: dbCount, error: countError } = await supabase
+      .from('scan_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+    if (!countError) usedCount = dbCount ?? 0;
+
+    // Purchased credits
+    const { data: credits, error: creditsError } = await supabase
+      .from('scan_credits')
+      .select('purchased')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (!creditsError && credits) purchased = credits.purchased ?? 0;
+  } catch (e) {
+    console.warn('scan limit check failed (non-fatal):', e.message);
+  }
+
+  // Total allowance = free trial + purchased credits
+  const totalAllowance = SCAN_LIMIT_FREE_USER + purchased;
+  const atLimit = usedCount >= totalAllowance;
+
+  return { count: usedCount, limit: totalAllowance, atLimit, isGuest: false, purchased };
 }
 
 export async function incrementScanCount(userId) {

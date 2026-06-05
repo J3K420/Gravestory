@@ -1,9 +1,19 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Purchases from 'react-native-purchases';
 import { colors, fonts, radius } from '../lib/theme';
 import { FREE_LIMIT_GUEST, FREE_LIMIT_USER } from '../lib/save-limit';
 import { SCAN_LIMIT_GUEST, SCAN_LIMIT_USER } from '../lib/scan-limit';
+
+// Product IDs must match exactly what's created in Google Play Console + RevenueCat
+const PRODUCT_IDS = ['gravestory_5_scans', 'gravestory_20_scans', 'gravestory_60_scans'];
+
+const PACK_INFO = {
+  gravestory_5_scans:  { label: 'Starter',   scans: 5,  price: '$0.99' },
+  gravestory_20_scans: { label: 'Explorer',  scans: 20, price: '$2.99' },
+  gravestory_60_scans: { label: 'Historian', scans: 60, price: '$6.99' },
+};
 
 export default function PaywallScreen({ navigation, route }) {
   const { count = 0, isGuest = false, type = 'save' } = route.params ?? {};
@@ -13,21 +23,49 @@ export default function PaywallScreen({ navigation, route }) {
     ? (isGuest ? SCAN_LIMIT_GUEST : SCAN_LIMIT_USER)
     : (isGuest ? FREE_LIMIT_GUEST : FREE_LIMIT_USER);
 
+  const [packages, setPackages]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [purchasing, setPurchasing] = useState(null);
+
+  useEffect(() => {
+    if (!isScan || isGuest) { setLoading(false); return; }
+    Purchases.getOfferings()
+      .then(offerings => {
+        const pkgs = offerings.current?.availablePackages ?? [];
+        setPackages(pkgs);
+      })
+      .catch(e => console.warn('RevenueCat offerings failed:', e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handlePurchase(pkg) {
+    setPurchasing(pkg.product.identifier);
+    try {
+      await Purchases.purchasePackage(pkg);
+      Alert.alert('Purchase successful!', 'Your scans have been added. Happy exploring!', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    } catch (e) {
+      if (!e.userCancelled) {
+        Alert.alert('Purchase failed', e.message || 'Something went wrong. Please try again.');
+      }
+    } finally {
+      setPurchasing(null);
+    }
+  }
+
+  async function handleRestore() {
+    try {
+      await Purchases.restorePurchases();
+      Alert.alert('Restored', 'Your purchases have been restored.');
+    } catch (e) {
+      Alert.alert('Restore failed', e.message || 'Could not restore purchases.');
+    }
+  }
+
   const title = isScan
     ? (isGuest ? 'Scan Limit Reached' : 'Free Scans Used Up')
     : (isGuest ? 'Story Limit Reached' : 'Collection Full');
-
-  const guestBody = isScan
-    ? `Guest accounts get ${SCAN_LIMIT_GUEST} free scans. Sign in for free to get ${SCAN_LIMIT_USER} scans.`
-    : `Guest accounts can save ${FREE_LIMIT_GUEST} stories. Sign in for free to save up to ${FREE_LIMIT_USER}.`;
-
-  const userBody = isScan
-    ? `You've used your ${SCAN_LIMIT_USER} free scans. Buy a scan pack to keep exploring.`
-    : `You've filled your free collection of ${FREE_LIMIT_USER} stories. Delete old stories to make room.`;
-
-  const hint = isScan
-    ? 'Scan packs never expire — use them at your own pace.'
-    : 'You can delete old stories to free up space.';
 
   const countLabel = isScan
     ? `${count} of ${limit} free scans used`
@@ -41,9 +79,7 @@ export default function PaywallScreen({ navigation, route }) {
 
       <View style={styles.content}>
         <Text style={styles.icon}>🪦</Text>
-
         <Text style={styles.title}>{title}</Text>
-
         <Text style={styles.count}>{countLabel}</Text>
 
         <View style={styles.barTrack}>
@@ -52,8 +88,11 @@ export default function PaywallScreen({ navigation, route }) {
 
         {isGuest ? (
           <>
-            <Text style={styles.body}>{guestBody}</Text>
-
+            <Text style={styles.body}>
+              {isScan
+                ? `Guest accounts get ${SCAN_LIMIT_GUEST} free scans. Sign in for free to get ${SCAN_LIMIT_USER} scans.`
+                : `Guest accounts can save ${FREE_LIMIT_GUEST} stories. Sign in for free to save up to ${FREE_LIMIT_USER}.`}
+            </Text>
             <TouchableOpacity
               style={styles.primaryBtn}
               onPress={() => navigation.navigate('Auth')}
@@ -62,11 +101,73 @@ export default function PaywallScreen({ navigation, route }) {
               <Text style={styles.primaryBtnText}>Sign In — It's Free</Text>
             </TouchableOpacity>
           </>
+        ) : isScan ? (
+          <>
+            <Text style={styles.body}>
+              Get more scans to keep discovering stories. Credits never expire.
+            </Text>
+
+            {loading ? (
+              <ActivityIndicator color={colors.flame} style={{ marginVertical: 24 }} />
+            ) : packages.length > 0 ? (
+              packages.map(pkg => {
+                const info = PACK_INFO[pkg.product.identifier] ?? {};
+                const isBuying = purchasing === pkg.product.identifier;
+                return (
+                  <TouchableOpacity
+                    key={pkg.product.identifier}
+                    style={[styles.packBtn, isBuying && styles.packBtnDisabled]}
+                    onPress={() => handlePurchase(pkg)}
+                    activeOpacity={0.85}
+                    disabled={!!purchasing}
+                  >
+                    {isBuying ? (
+                      <ActivityIndicator color={colors.onFlame} />
+                    ) : (
+                      <>
+                        <View>
+                          <Text style={styles.packLabel}>{info.label ?? pkg.product.title}</Text>
+                          <Text style={styles.packScans}>{info.scans ?? '?'} scans</Text>
+                        </View>
+                        <Text style={styles.packPrice}>
+                          {pkg.product.priceString ?? info.price}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                );
+              })
+            ) : (
+              // Fallback when RevenueCat offerings aren't configured yet
+              PRODUCT_IDS.map(id => {
+                const info = PACK_INFO[id];
+                return (
+                  <View key={id} style={[styles.packBtn, styles.packBtnDisabled]}>
+                    <View>
+                      <Text style={styles.packLabel}>{info.label}</Text>
+                      <Text style={styles.packScans}>{info.scans} scans</Text>
+                    </View>
+                    <Text style={styles.packPrice}>{info.price}</Text>
+                  </View>
+                );
+              })
+            )}
+
+            <TouchableOpacity onPress={handleRestore} style={styles.restoreBtn}>
+              <Text style={styles.restoreText}>Restore purchases</Text>
+            </TouchableOpacity>
+          </>
         ) : (
-          <Text style={styles.body}>{userBody}</Text>
+          <Text style={styles.body}>
+            Delete old stories to free up space.
+          </Text>
         )}
 
-        <Text style={styles.hint}>{hint}</Text>
+        <Text style={styles.hint}>
+          {isScan
+            ? 'Scan packs never expire — use them at your own pace.'
+            : 'You can delete old stories to make room.'}
+        </Text>
 
         <TouchableOpacity
           style={styles.secondaryBtn}
@@ -131,7 +232,47 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     textAlign: 'center',
     lineHeight: 23,
-    marginBottom: 28,
+    marginBottom: 20,
+  },
+
+  packBtn: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: radius.md,
+    backgroundColor: colors.flame,
+    marginBottom: 10,
+    minHeight: 56,
+  },
+  packBtnDisabled: {
+    opacity: 0.5,
+  },
+  packLabel: {
+    color: colors.onFlame,
+    fontSize: 15,
+    fontFamily: fonts.sansBold,
+  },
+  packScans: {
+    color: colors.onFlame,
+    fontSize: 12,
+    fontFamily: fonts.body,
+    opacity: 0.8,
+  },
+  packPrice: {
+    color: colors.onFlame,
+    fontSize: 16,
+    fontFamily: fonts.sansBold,
+  },
+
+  restoreBtn: { marginTop: 4, marginBottom: 16 },
+  restoreText: {
+    color: colors.ashDim,
+    fontSize: 13,
+    fontFamily: fonts.body,
+    textDecorationLine: 'underline',
   },
 
   hint: {

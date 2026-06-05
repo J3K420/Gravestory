@@ -30,12 +30,16 @@ export async function checkScanLimit(userId) {
       count = parseInt((await AsyncStorage.getItem(GUEST_COUNT_KEY)) || '0', 10);
     }
   } else {
-    const { count: dbCount, error } = await supabase
-      .from('scan_events')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .gte('scanned_at', monthStart());
-    if (!error) count = dbCount ?? 0;
+    try {
+      const { count: dbCount, error } = await supabase
+        .from('scan_events')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('scanned_at', monthStart());
+      if (!error) count = dbCount ?? 0;
+    } catch (e) {
+      console.warn('scan_events count failed (non-fatal):', e.message);
+    }
   }
 
   return { count, limit, atLimit: count >= limit, isGuest };
@@ -46,6 +50,8 @@ export async function incrementScanCount(userId) {
     const stored = parseInt((await AsyncStorage.getItem(GUEST_COUNT_KEY)) || '0', 10);
     await AsyncStorage.setItem(GUEST_COUNT_KEY, String(stored + 1));
   } else {
-    await supabase.from('scan_events').insert({ user_id: userId });
+    await supabase.from('scan_events').insert({ user_id: userId }).catch(e =>
+      console.warn('scan_events insert failed (non-fatal):', e.message)
+    );
   }
 }

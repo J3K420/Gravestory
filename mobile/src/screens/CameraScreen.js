@@ -223,19 +223,6 @@ export default function CameraScreen({ navigation }) {
           ? cachedBio.portraits
           : [cachedBio.portrait_left_url, cachedBio.portrait_right_url].filter(Boolean);
       } else {
-        // DEBUG: identify any undefined imports before they crash Promise.all
-        const _fns = {
-          searchForPerson, searchWikiTree, queryWikidata,
-          searchChroniclingAmerica, fetchWikipediaPortraits,
-          fetchWikipediaArticleSummary, generateBiography,
-          forwardGeocode, reverseGeocode, incrementScanCount,
-          findOrCreateGrave, verifyIsGravestone, readGravestone,
-          uploadGravestoneImage, cloudSaveStory, cloudUpdateStory,
-        };
-        for (const [k, v] of Object.entries(_fns)) {
-          if (typeof v !== 'function') console.error(`🔴 IMPORT IS ${typeof v}: ${k}`, v);
-        }
-
         setStepIndex(2);
         const datesStr = [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ');
         const effectiveDeath = graveData.death_date?.match(/\d{4}/)?.[0] || '';
@@ -380,7 +367,6 @@ export default function CameraScreen({ navigation }) {
       setLoading(false);
       navigation.navigate('Result', { story });
     } catch (err) {
-      console.error('🔴 Pipeline crash stack:', err.stack || err);
       setLoading(false);
       setPipelineError(err.message || 'Something went wrong. Please try again.');
     }

@@ -399,15 +399,29 @@ mobile/
 - Before first production build run `npx eas credentials` to generate/upload the Android keystore
 - Testers install via direct `.apk` link; subsequent updates install over the top automatically
 
-### Phase 9 — Planned scope
+### Phase 9 — Scope
 
-- Play Store submission: $25 Google Play Developer account, store listing, privacy policy URL (must be hosted publicly and linked from Settings screen), content rating questionnaire, AAB production build via `eas build --profile production`
-- EAS credentials: run `npx eas credentials` once before production build to generate/upload Android keystore
-- ~~EAS Update (OTA): add `expo-updates` so JS-only fixes ship in seconds without a full rebuild~~ ✅ Done in Phase 8e — push updates via `npx eas update --branch preview --message "description"`
-- Payments: RevenueCat + Google Play Billing for subscriptions / consumable credit packs (mandatory for Play Store; 15–30% Google cut)
-- iOS TestFlight build (requires $99/yr Apple Developer account)
-- ~~Grave photo gallery~~ ✅ Done — see below
-- **Portrait persistence**: add `expo-file-system` to package.json; in `api-wikipedia.js` `resizeForDisplay()`, after `ImageManipulator.manipulateAsync()` produces a temp `file://` URI, copy it to `FileSystem.documentDirectory + 'portraits/'` with a URL-hash filename and return the permanent path. Check for existing file before re-downloading. Currently portraits are lost on app restart because ImageManipulator writes to a temp directory that the OS clears; `expo-file-system` is required for the copy step and cannot be added via OTA — needs a new build.
+**Done this session (pre-Phase 9 work):**
+- ~~Grave photo gallery~~ ✅ `grave_photos` table + global map gallery (web + mobile). Run `003_grave_photos.sql`.
+- ~~Biography result cache (Rec 6)~~ ✅ `find_grave` RPC + pipeline cache. Run `002_find_grave.sql`.
+
+**Can do without $25 Google Play account:**
+- **Portrait persistence** — add `expo-file-system`; copy ImageManipulator temp URIs to `FileSystem.documentDirectory + 'portraits/'` with a URL-hash filename. Portraits currently lost on app restart (OS clears temp dir). Requires a new build — cannot ship OTA.
+- **Freemium save limit** — gate saves at 10 stories in `persistence.js` / `sync.js`; show progress indicator in Settings ("7 of 10 stories saved"). Primary conversion lever per monetization doc.
+- **Freemium scan limit** — track scan count in `user_metadata`; enforce cap (suggested 5/month free); reset on 1st of month.
+- **Device fingerprinting** — `device-id.js` module using `expo-device` properties; attach `device_id` to sign-up metadata for soft anti-abuse enforcement.
+- **Privacy policy page** — must be hosted publicly before Play Store submission; link from Settings screen.
+- **Store listing assets** — screenshots, feature graphic, short/full description.
+- **RevenueCat SDK integration** — install SDK, configure entitlements, wire paywall screen (Standard + Family tiers); does NOT require Play Store account to set up, only to go live.
+- **GEDCOM export** — client-side serialisation of saved stories to GEDCOM format; gate behind paid tier.
+
+**Requires $25 Google Play account:**
+- EAS credentials: run `npx eas credentials` once to generate/upload Android keystore
+- Production build: `npx eas build --platform android --profile production`
+- Play Store submission: store listing, content rating questionnaire, AAB upload, internal track → production rollout
+
+**Requires $99/yr Apple Developer account:**
+- iOS TestFlight build
 
 ---
 

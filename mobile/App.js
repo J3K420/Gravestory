@@ -26,6 +26,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import CemeteryMapScreen from './src/screens/CemeteryMapScreen';
 import GlobalMapScreen from './src/screens/GlobalMapScreen';
 import RememberedStoriesScreen from './src/screens/RememberedStoriesScreen';
+import PaywallScreen from './src/screens/PaywallScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -97,6 +98,7 @@ export default function App() {
             <Stack.Screen name="CemeteryMap" component={CemeteryMapScreen} />
             <Stack.Screen name="GlobalMap" component={GlobalMapScreen} />
             <Stack.Screen name="RememberedStories" component={RememberedStoriesScreen} />
+            <Stack.Screen name="Paywall" component={PaywallScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </SafeAreaProvider>

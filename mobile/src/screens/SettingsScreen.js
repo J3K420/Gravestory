@@ -7,12 +7,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
+import { checkSaveLimit } from '../lib/save-limit';
 
 export default function SettingsScreen({ navigation }) {
   const [user, setUser]                 = useState(null);
   const [displayName, setDisplayName]   = useState('');
   const [defaultPublic, setDefaultPublic] = useState(false);
   const [saving, setSaving]             = useState(false);
+  const [saveCount, setSaveCount]       = useState(null);
+  const [saveLimit, setSaveLimit]       = useState(10);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -20,6 +23,10 @@ export default function SettingsScreen({ navigation }) {
       setUser(session.user);
       setDisplayName(session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '');
       setDefaultPublic(session.user.user_metadata?.default_public ?? false);
+      checkSaveLimit(session.user.id).then(({ count, limit }) => {
+        setSaveCount(count);
+        setSaveLimit(limit);
+      });
     });
   }, []);
 
@@ -29,6 +36,9 @@ export default function SettingsScreen({ navigation }) {
       setUser(session.user);
       setDisplayName(session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '');
       setDefaultPublic(session.user.user_metadata?.default_public ?? false);
+      const { count, limit } = await checkSaveLimit(session.user.id);
+      setSaveCount(count);
+      setSaveLimit(limit);
     }
   });
 
@@ -98,6 +108,33 @@ export default function SettingsScreen({ navigation }) {
                 <Text style={styles.infoVal}>{providerLabel}</Text>
               </View>
             </View>
+
+            {/* Save limit progress */}
+            {saveCount !== null && (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>Stories Saved</Text>
+                <View style={styles.progressRow}>
+                  <Text style={styles.progressLabel}>
+                    {saveCount} of {saveLimit} stories
+                  </Text>
+                  {saveCount >= saveLimit && (
+                    <Text style={styles.progressFull}>Limit reached</Text>
+                  )}
+                </View>
+                <View style={styles.barTrack}>
+                  <View
+                    style={[
+                      styles.barFill,
+                      { width: `${Math.min((saveCount / saveLimit) * 100, 100)}%` },
+                      saveCount >= saveLimit && styles.barFull,
+                    ]}
+                  />
+                </View>
+                <Text style={styles.progressHint}>
+                  Unlimited saves coming soon. Delete stories to free up space.
+                </Text>
+              </View>
+            )}
 
             {/* Display name */}
             <View style={styles.section}>
@@ -215,4 +252,22 @@ const styles = StyleSheet.create({
   signOutText: { color: colors.ash, fontSize: 14, fontFamily: fonts.body, letterSpacing: 0.5 },
 
   notSignedIn: { color: colors.ash, fontFamily: fonts.bodyItalic, textAlign: 'center', marginTop: 32 },
+
+  progressRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6,
+    borderTopWidth: 1, borderTopColor: colors.line,
+  },
+  progressLabel: { color: colors.parchment, fontSize: 14, fontFamily: fonts.bodyMedium },
+  progressFull:  { color: colors.ember, fontSize: 12, fontFamily: fonts.body },
+  barTrack: {
+    marginHorizontal: 14, height: 5, borderRadius: 3,
+    backgroundColor: colors.line, overflow: 'hidden', marginBottom: 10,
+  },
+  barFill: { height: '100%', borderRadius: 3, backgroundColor: colors.flame },
+  barFull: { backgroundColor: colors.ember },
+  progressHint: {
+    color: colors.ashDim, fontSize: 12, fontFamily: fonts.bodyItalic,
+    paddingHorizontal: 14, paddingBottom: 12, lineHeight: 17,
+  },
 });

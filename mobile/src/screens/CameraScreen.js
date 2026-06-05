@@ -22,6 +22,7 @@ import { saveStories, loadStories } from '../lib/storage';
 import { cloudSaveStory, cloudUpdateStory, findOrCreateGrave } from '../lib/sync';
 import { uploadGravestoneImage } from '../lib/api-r2';
 import { forwardGeocode, reverseGeocode } from '../lib/api-nominatim';
+import { checkSaveLimit } from '../lib/save-limit';
 
 const STEPS = [
   'Verifying gravestone…',
@@ -68,6 +69,15 @@ export default function CameraScreen({ navigation }) {
   async function pickAndAnalyze(fromCamera) {
     setRejected(null);
     setPipelineError(null);
+
+    // Check save limit before opening the picker so we don't burn API credits
+    const { data: { session } } = await supabase.auth.getSession();
+    const uid = session?.user?.id ?? null;
+    const limitCheck = await checkSaveLimit(uid);
+    if (limitCheck.atLimit) {
+      navigation.navigate('Paywall', { count: limitCheck.count, isGuest: limitCheck.isGuest });
+      return;
+    }
 
     // exif: true so we can read GPS coords before compression strips them
     const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true };

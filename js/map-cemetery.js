@@ -324,8 +324,8 @@ async function initCemeteryMap() {
     return `
       <div class="map-grave-item" style="display:flex;align-items:center;gap:0.5rem;">
         <div style="flex:1;min-width:0;cursor:pointer;" onclick="flyToGrave(${s.gps.lat}, ${s.gps.lng})">
-          <div class="map-grave-item-name">${s.name || 'Unknown'}</div>
-          <div class="map-grave-item-dates">${s.dates || ''}</div>
+          <div class="map-grave-item-name">${escapeHtml(s.name || 'Unknown')}</div>
+          <div class="map-grave-item-dates">${escapeHtml(s.dates || '')}</div>
         </div>
         ${viewBtn}
       </div>
@@ -581,6 +581,9 @@ async function fetchOSMCemeteryBoundary(lat, lng, skipEstateFallback = false, ce
 
 // ── RENDER MAP WITH BOUNDARY ─────────────────────────────────────
 async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
+  // Clear stale cache so deleted/updated stories don't persist across map opens
+  Object.keys(_cemeteryStoryCache).forEach(k => delete _cemeteryStoryCache[k]);
+
   // Destroy existing map if present
   if (leafletMap) {
     leafletMap.remove();
@@ -835,8 +838,8 @@ async function fetchNearbyCemeteries(lat, lng) {
         .bindPopup(`
           <div style="font-family:'Playfair Display',serif;min-width:160px;">
             <div style="font-size:0.75rem;color:#888;margin-bottom:0.25rem;">${badge}</div>
-            <strong>${name}</strong><br>
-            ${religion ? `<small style="color:#666">${denomination || religion}</small><br>` : ''}
+            <strong>${escapeHtml(name)}</strong><br>
+            ${religion ? `<small style="color:#666">${escapeHtml(denomination || religion)}</small><br>` : ''}
             <small style="color:#888">${dist}km away</small><br>
             <small style="color:var(--moss,#4a5c3e);cursor:pointer;text-decoration:underline"
               onclick="window.open('https://www.openstreetmap.org/?mlat=${elLat}&mlon=${elLng}&zoom=17','_blank')">
@@ -886,7 +889,7 @@ function renderNearbyCemeteryList(elements, userLat, userLng) {
     <div class="map-grave-item" onclick="flyToGrave(${c.lat}, ${c.lng})" 
          style="border-left-color: ${c.historic ? '#8b3a2a' : '#4a5c3e'}">
       <div class="map-grave-item-name">
-        ${c.historic ? '🏛️ ' : '⛪ '}${c.name}
+        ${c.historic ? '🏛️ ' : '⛪ '}${escapeHtml(c.name)}
       </div>
       <div class="map-grave-item-dates">${(c.dist/1000).toFixed(1)}km away${c.historic ? ' · Historic' : ''}</div>
     </div>

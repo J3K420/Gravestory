@@ -4,7 +4,7 @@ baseline_commit: e649e46
 
 # Story 1.5: Publish Privacy Policy Page
 
-Status: in-progress
+Status: done
 
 ## Story
 
@@ -21,20 +21,20 @@ So that I understand how my photos and GPS data are handled.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Create and deploy `gravestory-privacy` GitHub Pages repo**
-  - [ ] Create public `J3K420/gravestory-privacy` repo via gh CLI
-  - [ ] Push `privacy-policy/index.html` as `index.html` in the new repo
-  - [ ] Enable GitHub Pages on main branch
-  - [ ] Verify URL resolves: `https://j3k420.github.io/gravestory-privacy`
+- [x] **Task 1 — Create and deploy `gravestory-privacy` GitHub Pages repo**
+  - [x] Created public `J3K420/gravestory-privacy` repo via gh CLI
+  - [x] Pushed `privacy-policy/index.html` as `index.html` in the new repo
+  - [x] Enabled GitHub Pages on main branch
+  - [x] URL: `https://j3k420.github.io/gravestory-privacy/`
 
-- [ ] **Task 2 — Add Privacy Policy link to mobile SettingsScreen.js**
-  - [ ] Import `Linking` from react-native
-  - [ ] Add touchable row below Sign Out button that calls `Linking.openURL('https://j3k420.github.io/gravestory-privacy')`
+- [x] **Task 2 — Add Privacy Policy link to mobile SettingsScreen.js**
+  - [x] Imported `Linking` from react-native
+  - [x] Added touchable link below Sign Out button
 
-- [ ] **Task 3 — Add Privacy Policy link to web Settings screen**
-  - [ ] Add an `<a>` link in the `#settings` div in `index.html`
+- [x] **Task 3 — Add Privacy Policy link to web Settings screen**
+  - [x] Added anchor link at bottom of `#settings` div in `index.html`
 
-- [ ] **Task 4 — Commit and push**
+- [x] **Task 4 — Commit and push**
 
 ## Dev Notes
 

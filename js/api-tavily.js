@@ -274,7 +274,7 @@ async function searchForPerson(graveData, location) {
     try {
       const res = await fetch(`${PROXY_BASE}/tavily`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
         body: JSON.stringify({
           query,
           search_depth: 'basic',

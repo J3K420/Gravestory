@@ -134,7 +134,9 @@ Follow this pattern when extracting more code.
 
 No API keys in client JS. Every sensitive call routes through `PROXY_BASE` (Cloudflare Worker). The only client-side config is `PROXY_BASE` in `config.js`.
 
-**Cloudflare Worker security note:** The Worker URL is committed to source and therefore public. The Worker must validate the `Origin` header to prevent third-party sites from using GraveStory's API quota. This fix must be applied directly to the deployed Worker (not in this repo).
+**Cloudflare Worker security note:** Worker source lives at `worker/worker.js` in this repo. To deploy: `cd worker && wrangler deploy`. The Worker enforces two layers:
+1. **Origin check** (browser requests): `ALLOWED_ORIGIN` env var — must be set to `"https://j3k420.github.io"` (or your actual domain) in production, never `"*"`.
+2. **CLIENT_KEY** (mobile/direct requests without Origin): `wrangler secret put CLIENT_KEY` — set to the value in `js/config.js` and `mobile/src/lib/config.js`. All proxy calls send this as `X-Client-Key` header. Rotate by changing the value in both config files and re-running `wrangler secret put CLIENT_KEY`.
 
 ### Gemini call pattern
 

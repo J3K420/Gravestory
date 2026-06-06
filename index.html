@@ -458,13 +458,11 @@
 // ── STATE ────────────────────────────────────────────────────────
 let currentImage = null;
 let currentImageBase64 = null;
-const R2_UPLOAD_URL = 'https://gravestory-proxy.james-gravestory.workers.dev/upload-image';
-
 async function uploadImageToR2(base64Data, contentType = 'image/jpeg') {
   try {
-    const response = await fetch(R2_UPLOAD_URL, {
+    const response = await fetch(`${PROXY_BASE}/upload-image`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
       body: JSON.stringify({ contentType, data: base64Data })
     });
     if (!response.ok) {

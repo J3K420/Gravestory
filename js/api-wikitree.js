@@ -107,7 +107,7 @@ async function searchWikiTree(graveData, location) {
   async function wikiSearch(body) {
     const res = await fetch(`${PROXY_BASE}/wikitree`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
       body: JSON.stringify(body)
     });
     if (!res.ok) {

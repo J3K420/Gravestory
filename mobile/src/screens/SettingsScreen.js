@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Switch,
-  StyleSheet, Alert, ScrollView, ActivityIndicator,
+  StyleSheet, Alert, ScrollView, ActivityIndicator, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
@@ -224,6 +224,13 @@ export default function SettingsScreen({ navigation }) {
             <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
               <Text style={styles.signOutText}>Sign Out</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.privacyLink}
+              onPress={() => Linking.openURL('https://j3k420.github.io/gravestory-privacy/')}
+            >
+              <Text style={styles.privacyLinkText}>Privacy Policy</Text>
+            </TouchableOpacity>
           </>
         ) : (
           <Text style={styles.notSignedIn}>Not signed in.</Text>
@@ -292,6 +299,9 @@ const styles = StyleSheet.create({
   signOutText: { color: colors.ash, fontSize: 14, fontFamily: fonts.body, letterSpacing: 0.5 },
 
   notSignedIn: { color: colors.ash, fontFamily: fonts.bodyItalic, textAlign: 'center', marginTop: 32 },
+
+  privacyLink: { alignItems: 'center', paddingVertical: 20 },
+  privacyLinkText: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, textDecorationLine: 'underline' },
 
   progressRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

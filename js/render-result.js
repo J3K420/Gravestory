@@ -103,9 +103,6 @@ function renderResult(story) {
   // or the marker index is out of range — never breaks the read.
   const srcUrls = Array.isArray(story.source_urls) ? story.source_urls : [];
   const srcDescs = Array.isArray(story.sources) ? story.sources : [];
-  const escapeHtml = s => String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const renderCitations = paragraph => {
     return escapeHtml(paragraph).replace(/\[(\d+)\]/g, (_, n) => {
       const idx = parseInt(n, 10) - 1;

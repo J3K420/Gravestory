@@ -103,16 +103,13 @@ function renderResult(story) {
   // or the marker index is out of range — never breaks the read.
   const srcUrls = Array.isArray(story.source_urls) ? story.source_urls : [];
   const srcDescs = Array.isArray(story.sources) ? story.sources : [];
-  const escapeHtml = s => String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const renderCitations = paragraph => {
     return escapeHtml(paragraph).replace(/\[(\d+)\]/g, (_, n) => {
       const idx = parseInt(n, 10) - 1;
       const url = srcUrls[idx];
       const desc = srcDescs[idx] || `Source ${n}`;
       if (url && url.startsWith('http')) {
-        return ` <sup class="cite"><a href="${url}" target="_blank" rel="noopener" title="${escapeHtml(desc)}">[${n}]</a></sup>`;
+        return ` <sup class="cite"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(desc)}">[${n}]</a></sup>`;
       }
       // No URL — render as a non-clickable superscript so the reader still
       // sees the citation marker but isn't promised a destination.
@@ -139,7 +136,7 @@ function renderResult(story) {
       item.className = 'source-item';
       const url = story.source_urls?.[i];
       if (url && url.startsWith('http')) {
-        item.innerHTML = `<a href="${url}" target="_blank">${src}</a>`;
+        item.innerHTML = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(src)}</a>`;
       } else {
         item.textContent = src;
       }

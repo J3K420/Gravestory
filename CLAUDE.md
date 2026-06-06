@@ -84,8 +84,9 @@ js/
   home-screen.js         — renderSavedList, loadSaved, deleteSaved. Saved list now lives on the #remembered-stories screen; renderSavedList() is called by showScreen() when navigating there.
   home-screen.append.js  — updateHomeMapButton
   map-utils.js           — groupGravesByCemetery, getDistanceMeters
-  map-cemetery.js        — Per-user cemetery map (Leaflet, drag-to-correct, OSM boundary)
-  map-global.js          — Community global map (public stories, guest gate). Deduplicates pins by grave_id then ~20 m GPS cell before placing markers.
+  scan-limit.js          — Web freemium limits: checkWebScanLimit (guest 3 / free-user 10 lifetime, fail-closed on Supabase error), incrementWebScanCount, checkWebSaveLimit. Mirrors mobile scan-limit.js/save-limit.js. Loaded after auth.js; depends on supabaseClient + currentUser + savedStories.
+  map-cemetery.js        — Per-user cemetery map (Leaflet, drag-to-correct, OSM boundary). `_cemeteryStoryCache` (module-level object) stores stories keyed by timestamp so popup "Go to bio" buttons call `viewCemeteryStory(key)` instead of embedding JSON in onclick attributes.
+  map-global.js          — Community global map (public stories, guest gate). Deduplicates pins by grave_id then ~20 m GPS cell before placing markers. `_globalStoryLookup` is reset to `{}` at the start of every `initGlobalMap` call to prevent unbounded memory growth.
   pwa.js                 — Service worker registration + install banner
   misc-handlers.js       — Miscellaneous event handlers
 ```
@@ -121,9 +122,21 @@ The codebase has been systematically extracted from a monolithic `index.html` in
 
 Follow this pattern when extracting more code.
 
+### HTML escaping rule
+
+**Any AI-generated or user-sourced data injected into `innerHTML` must pass through `escapeHtml()` first.** This includes: story name, dates, location, biography text, inscription, source descriptions, source URLs, contributor names, and image URLs. The `escapeHtml()` helper is in `js/util-html.js` (web) and is globally available to all classic scripts.
+
+- Map popup HTML (both cemetery and global) must escape all story fields before template-literal injection.
+- Never embed story objects as JSON in `onclick` attributes — use a module-level lookup table keyed by a safe primitive (timestamp, UUID) and resolve at click time via a named function.
+- The `render-result.js` biography renderer uses `escapeHtml()` on each paragraph before `innerHTML` assignment and on all citation URLs/descriptions.
+
 ### All API secrets stay server-side
 
 No API keys in client JS. Every sensitive call routes through `PROXY_BASE` (Cloudflare Worker). The only client-side config is `PROXY_BASE` in `config.js`.
+
+**Cloudflare Worker security note:** Worker source lives at `worker/worker.js` in this repo. To deploy: `cd worker && wrangler deploy`. The Worker enforces two layers:
+1. **Origin check** (browser requests): `ALLOWED_ORIGIN` env var — must be set to `"https://j3k420.github.io"` (or your actual domain) in production, never `"*"`.
+2. **CLIENT_KEY** (mobile/direct requests without Origin): `wrangler secret put CLIENT_KEY` — set to the value in `js/config.js` and `mobile/src/lib/config.js`. All proxy calls send this as `X-Client-Key` header. Rotate by changing the value in both config files and re-running `wrangler secret put CLIENT_KEY`.
 
 ### Gemini call pattern
 
@@ -234,6 +247,8 @@ Built for one-handed use in a cemetery. Service worker caches the app shell (`gr
 
 - **Mobile gravestone map marker** — `CemeteryMapScreen` uses a custom SVG gravestone icon (`GravestoneMarker` component, rendered by `GraveMarker` wrapper) that matches the web Leaflet `divIcon` design: arched stone body, open book, cross. The `GraveMarker` wrapper manages `tracksViewChanges` state — starts `true` so react-native-maps captures the SVG on first layout, then flips to `false` via `onLayout` to stop re-snapshotting. Do not use `tracksViewChanges={false}` unconditionally — the native map takes its bitmap snapshot before SVG finishes painting and the marker disappears.
 
+- **Portrait persistence (mobile)** — `fetchWikipediaPortraits` in `mobile/src/lib/api-wikipedia.js` copies each ImageManipulator temp `file://` URI into `FileSystem.documentDirectory + 'portraits/'` via `persistPortrait()` before returning. The persistent URI is stored in `story.portraits` in AsyncStorage and survives app restarts and OS temp-dir clears. For global map bios (stories from other users), `ResultScreen` live-fetches portraits on mount via `fetchWikipediaPortraits` because file:// URIs are device-local and cannot be shared via Supabase — portraits appear in the carousel a moment after the bio renders.
+
 - **Portrait retry after bio resolves full name** — Two cases handled on both web and mobile:
   1. *Surname-only OCR*: stone shows only "HOUDINI" → single-token guard skips initial fetch → after bio resolves full name, retry splits `bioResult.name` / `story.name` on `" and "` / `" & "` and calls `fetchWikipediaPortraits` for each part.
   2. *Alias/pen-name combined name*: if bio name contains `" & "` (e.g. a stone listing both birth name and pen name when `multiple_subjects` is false) the portrait fetch fails because the combined string doesn't match any Wikipedia title. Web pipeline (`index.html` step 5.5) retries by splitting on `" & "` and trying each part individually. Mobile `CameraScreen` handles this via the same retry loop. The biography prompt also now instructs the model to use `primary_name` (or most-recognised alias) instead of joining with `" & "` when `multiple_subjects` is false, which prevents the issue at the source.
@@ -304,6 +319,7 @@ mobile/
       storage.js                — User-scoped AsyncStorage: loadStories(userId), saveStories(stories, userId). Keys: gs_stories_{userId} or gs_stories_guest. getLastSync/setLastSync per userId.
       util-json.js              — safeParseJSON (ES module port of web version)
       abbreviations.js          — Shared EXPAND nickname/abbreviation table (~60 entries, title-case values). Single source of truth imported by api-tavily.js (directly) and api-wikitree.js (derives lowercase variant via Object.fromEntries). Do not duplicate this table in individual modules.
+      device-id.js              — getDeviceId(): SHA-256 hash of expo-device properties (brand, modelName, osName, osVersion, totalMemory) via expo-crypto. Cached in AsyncStorage (gs_device_id). Called by AuthScreen.signUp() to attach device_id to user_metadata for soft anti-abuse.
       use-refresh.js            — useRefresh(callback) hook. Manages refreshing state, wraps callback in try/finally, returns { refreshing, onRefresh, refreshControl }. The refreshControl prop is a pre-styled RefreshControl (tintColor=colors.flame) ready to pass to any ScrollView/FlatList. All 8 screens use this hook — do not add inline pull-to-refresh boilerplate.
       api-gemini.js             — verifyIsGravestone, readGravestone (ES module). Both calls go through geminiCallWithFallback which wraps each fetch in a 30s fetchWithTimeout — hangs surface as an error instead of infinite loading. readGravestone returns name_confidence (high/medium/low), alternate_names (1-2 alternate spellings when stone is weathered/ambiguous), and multiple_subjects (true when photo shows multiple separate distinct stones) in addition to standard fields.
       api-tavily.js             — searchForPerson (ES module). Slot 5 pre-1924 now fires a general historical obituary (no site: restriction) — Chronicling America moved to its own module. All other slots unchanged. Contains: EXPAND nickname table (~60 entries), expandName(), parseAgeAtDeath(), SYMBOL_QUERIES map. Capped at 6 queries, max_results: 2, session-level _searchCache.
@@ -383,7 +399,7 @@ mobile/
 - **Phase 8e** ✅ — Canonical graves + candle/flower tributes + EAS Update: `graves` table deduplicates multiple scans of the same physical stone; `tributes` table (one candle or flower per user per grave, UNIQUE constraint); `find_or_create_grave` RPC (atomic ~20 m name-match dedup); `update_grave_location` RPC (first user-correction wins, propagated from CemeteryMapScreen pin drag); `api-tributes.js` (getTributes/setTribute); `source` field on stories tracks camera vs library; GlobalMapScreen client-side dedup by grave_id then ~20 m GPS cell; ResultScreen shows tribute counts always + candle/flower buttons only for own camera-sourced stories; EAS Update configured (expo-updates installed, updates.url + runtimeVersion in app.config.js, channel on preview + production profiles) — testers install one new APK then all future JS changes push OTA via `npx eas update --branch preview`.
 - **Phase 8f** ✅ — Web parity for Phase 8e features: (1) `js/persistence.js` — added `grave_id` + `source` to `storyToRow`/`rowToStory`; (2) `index.html` pipeline — `currentPhotoSource` ('camera'/'library') tracked on upload, `findOrCreateGrave` RPC called after biography when signed-in user has GPS; (3) `js/map-global.js` — client-side dedup by `grave_id` then ~20 m GPS cell (same logic as mobile `GlobalMapScreen`); (4) new `js/api-tributes.js` — vanilla JS port of `getTributes`/`setTribute` using `supabaseClient`; (5) `js/render-result.js` — `renderTributeSection` shows tribute counts always when `grave_id` present, candle/flower buttons for camera-sourced non-global stories only.
 - **Phase 8g** ✅ — Search + biography quality pass: (1) Android nav bar fix — `CemeteryMapScreen` and `GlobalMapScreen` use `useSafeAreaInsets` to add `paddingBottom: insets.bottom + 8` to bottom panel (both screens use `edges={['top']}` so SafeAreaView doesn't handle the bottom); (2) Tavily query priority overhaul — queries now built in priority order so symbol-guided and general obituary queries actually fire (previously always cut off), duplicate FindAGrave merged into one, ChroniclingAmerica only for ≤1922 deaths, session-level `_searchCache` prevents re-querying same person on family plots; (3) Multi-person combined biography — when `multiple_subjects === true`, pipeline fetches Wikipedia for each person in parallel, `generateBiography` accepts `wikipediaSummary` as array, prompt explicitly names all subjects and requires proportional coverage, `name` uses " & " and `dates` uses " · " separators; (4) Biography prompt overhaul (Opus review) — Gemini structured output (`responseMimeType` + `responseSchema`), `citations [{n,description,url}]` schema converted to `sources`/`source_urls` for compat, evidence ladder for length (up to 1000 words), symbol rule describes conventional meaning not individual assertion, conflict resolution surfaces discrepancies in text, historical-figure exception requires Wikipedia in sources (memory not a source), `name_confidence: "low"` triggers identity hedging, TYPE_LABELS simplified to short tags.
-- **Phase 9** 🔲 — Play Store submission prep, payments (RevenueCat + Google Play Billing), iOS TestFlight build.
+- **Phase 9** 🔄 — Freemium limits, device fingerprinting, portrait persistence, global-map portraits, security hardening complete. Remaining: privacy policy, RevenueCat, Cloudflare Worker origin check. On `phase-9` branch.
 
 ---
 
@@ -395,25 +411,55 @@ mobile/
 - `userInterfaceStyle: "dark"` — required for correct status bar on the dark-themed app; do not change back to "light"
 - Google Maps Android API key stored as an EAS Secret (already created, scope: project, all environments)
 - Preview build (installable APK for testers): `npx eas build --platform android --profile preview`
+- Phase-9 personal test build (isolated channel): `npx eas build --platform android --profile phase9`
 - Production build (AAB for Play Store): `npx eas build --platform android --profile production` — produces an AAB; submit track set to "internal" in eas.json
+- Development build (live Metro reload): `npx eas build --platform android --profile development` — connect phone via `adb reverse tcp:8081 tcp:8081` then `npx expo start`
 - Before first production build run `npx eas credentials` to generate/upload the Android keystore
 - Testers install via direct `.apk` link; subsequent updates install over the top automatically
+- **Do NOT use `.catch()` on Supabase query builder results** — Hermes JS engine does not support it. Use `try { await supabase... } catch (e) {}` instead. Applies to all mobile code.
 
 ### Phase 9 — Scope
 
-**Done this session (pre-Phase 9 work):**
+**Completed:**
 - ~~Grave photo gallery~~ ✅ `grave_photos` table + global map gallery (web + mobile). Run `003_grave_photos.sql`.
-- ~~Biography result cache (Rec 6)~~ ✅ `find_grave` RPC + pipeline cache. Run `002_find_grave.sql`.
+- ~~Biography result cache~~ ✅ `find_grave` RPC + pipeline cache. Run `002_find_grave.sql`.
+- ~~Freemium save limit~~ ✅ Guest cap 3, free signed-in cap 5. `mobile/src/lib/save-limit.js`, `PaywallScreen.js`, `SettingsScreen` progress bar. `is_unlimited: true` in Supabase `app_metadata` bypasses all limits for testers (set via SQL editor, read-only by clients).
+- ~~Freemium scan limit~~ ✅ Monthly reset, same caps as save limit (guest 3, free 5). `mobile/src/lib/scan-limit.js`, `scan_events` table (immutable rows — INSERT/SELECT only via RLS, no UPDATE/DELETE so clients cannot reset their own count). Run `004_scan_events.sql`. Counts stored server-side in Supabase, not in `user_metadata`.
+- ~~phase9 EAS build profile~~ ✅ Isolated `phase-9` OTA channel so tester `preview` builds are never affected. Personal test build: `npx eas build --platform android --profile phase9`.
+- ~~Device fingerprinting~~ ✅ `mobile/src/lib/device-id.js` — SHA-256 hash of `expo-device` properties (brand, model, OS name, OS version, total RAM) via `expo-crypto`, cached in AsyncStorage. Survives reinstall (same hardware → same hash). Attached to `user_metadata.device_id` on email sign-up in `AuthScreen.js`. `expo-device` is a native module — requires a build to activate.
+- ~~Portrait persistence~~ ✅ `expo-file-system` installed. `persistPortrait()` helper in `api-wikipedia.js` copies ImageManipulator temp `file://` URIs into `FileSystem.documentDirectory + 'portraits/'` before they are stored on the story. Portraits now survive app restarts. `expo-file-system` is a native module — requires a build to activate.
+- ~~Global map portraits~~ ✅ `ResultScreen.js` live-fetches `fetchWikipediaPortraits` on mount for global stories that have no locally-persisted portraits (file:// URIs are device-local and cannot be stored in Supabase). Portraits appear in the carousel a moment after the bio renders.
 
-**Can do without $25 Google Play account:**
-- **Portrait persistence** — add `expo-file-system`; copy ImageManipulator temp URIs to `FileSystem.documentDirectory + 'portraits/'` with a URL-hash filename. Portraits currently lost on app restart (OS clears temp dir). Requires a new build — cannot ship OTA.
-- **Freemium save limit** — gate saves at 10 stories in `persistence.js` / `sync.js`; show progress indicator in Settings ("7 of 10 stories saved"). Primary conversion lever per monetization doc.
-- **Freemium scan limit** — track scan count in `user_metadata`; enforce cap (suggested 5/month free); reset on 1st of month.
-- **Device fingerprinting** — `device-id.js` module using `expo-device` properties; attach `device_id` to sign-up metadata for soft anti-abuse enforcement.
-- **Privacy policy page** — must be hosted publicly before Play Store submission; link from Settings screen.
+**Also completed (Phase 9 Session 2):**
+- ~~Freemium save limit~~ ✅ Bumped `FREE_LIMIT_USER` from 5 → 10 for launch. Guest cap stays at 3.
+- ~~Freemium scan limit~~ ✅ Bumped `SCAN_LIMIT_FREE_USER` from 5 → 10. Changed from monthly-reset to lifetime one-time trial (no reset) — controls Tavily API costs. `scan_events` table counts lifetime scans; `scan_credits` table holds purchased credits (service-role write only). Migration `005_scan_credits.sql` written; **still needs to be run in Supabase SQL editor**.
+- ~~Monetization model~~ ✅ Credits-only (no subscriptions). Three packs: Starter (5 scans/$0.99 · `gravestory_5_scans`), Explorer (20 scans/$2.99 · `gravestory_20_scans`), Historian (60 scans/$6.99 · `gravestory_60_scans`). Credits never expire.
+- ~~RevenueCat SDK~~ ✅ `react-native-purchases` installed. Products and offerings configured in RevenueCat dashboard (`gravestory_5_scans`, `gravestory_20_scans`, `gravestory_60_scans`). RevenueCat init currently **disabled** in `App.js` (test key caused native crash in release builds). `REVENUECAT_API_KEY` exported from `config.js`. Re-enable once Play Store account obtained and real production key issued.
+- ~~hasFamousSubject shared stone fix~~ ✅ When `multiple_subjects === true` and any Wikipedia summary was found for a subject, `hasFamousSubject = true` — unlocks full 2500-word bio for the notable person while still giving the lesser-documented person a dignified paragraph. Condition requires only `wikiSummaries.length > 0` (not a source-count threshold). Applied to both `js/biography.js` and `mobile/src/lib/biography.js`.
+- ~~Settings screen cleanup~~ ✅ Removed "coming soon" hints; renamed "Scans This Month" → "Free Scans Used"; removed monthly-reset copy.
+
+**Also completed (Phase 9 Session 3 — security hardening):**
+- ~~Stored XSS in map popups~~ ✅ All AI-generated content (biography, name, dates, location, contributor, image URLs) now escaped via `escapeHtml()` before `innerHTML` injection in `map-global.js` and `map-cemetery.js`.
+- ~~JSON-in-onclick in cemetery map~~ ✅ Replaced with `_cemeteryStoryCache` lookup + `viewCemeteryStory(key)` function. Story objects are never serialized into HTML attributes.
+- ~~XSS in home-screen cards~~ ✅ `renderSavedList()` escapes name and dates.
+- ~~Unescaped source links in render-result.js~~ ✅ Source URL and description escaped; `rel="noopener noreferrer"` added to all external links.
+- ~~Web had zero scan/save limits~~ ✅ New `js/scan-limit.js`: guest (3 lifetime), free signed-in (10 + purchased), fail-closed on Supabase error. `checkWebScanLimit` gates `startAnalysis`; `checkWebSaveLimit` gates `saveStory`.
+- ~~Mobile scan limit fail-open on Supabase error~~ ✅ `checkScanLimit` now returns `{ atLimit: true, _checkFailed: true }` on error instead of `{ atLimit: false }`. `CameraScreen` shows a connection-error Alert on `_checkFailed`.
+- ~~`_globalStoryLookup` memory leak~~ ✅ Cleared in `initGlobalMap` on every map open.
+- ~~RevenueCat test key committed bare~~ ✅ Warning comment added; production key must be an EAS Secret.
+- ~~BMAD-METHOD install~~ ✅ `_bmad/` folder committed. 44 skills available in `.claude/skills/` for Claude Code sessions.
+
+**Remaining:**
+- **Run `005_scan_credits.sql`** in Supabase SQL editor — creates `scan_credits` table with RLS. Use plain ASCII quotes (no curly/typographic quotes).
+- **Cloudflare Worker origin check** — add `Origin` header validation to the deployed Worker so third parties can't use GraveStory's API quota. Worker code is not in this repo; edit and redeploy separately.
+- **RevenueCat webhook** — Cloudflare Worker endpoint to receive RevenueCat purchase events and INSERT/UPDATE `scan_credits`. Requires secret key from RevenueCat dashboard.
+- **Re-enable RevenueCat SDK** — after Play Store account ($25) → real production API key from RevenueCat → uncomment imports in `App.js` and `PaywallScreen.js` → trigger new build.
+- **Privacy policy page** — draft written last session. Host on GitHub Pages (`https://j3k420.github.io/gravestory-privacy`). Link from Settings screen.
 - **Store listing assets** — screenshots, feature graphic, short/full description.
-- **RevenueCat SDK integration** — install SDK, configure entitlements, wire paywall screen (Standard + Family tiers); does NOT require Play Store account to set up, only to go live.
-- **GEDCOM export** — client-side serialisation of saved stories to GEDCOM format; gate behind paid tier.
+
+**Shelved:**
+- ~~GEDCOM export~~ — not enough family relationship data to produce meaningful family trees. Revisit if app later tracks spouse/parent/child links.
+- ~~Family/subscription tier~~ — excluded due to unbounded Tavily API cost risk with unlimited scanning. Credits-only model chosen instead.
 
 **Requires $25 Google Play account:**
 - EAS credentials: run `npx eas credentials` once to generate/upload Android keystore
@@ -422,6 +468,10 @@ mobile/
 
 **Requires $99/yr Apple Developer account:**
 - iOS TestFlight build
+
+**Tester admin notes:**
+- Set `is_unlimited: true` in a user's `app_metadata` via Supabase SQL editor to bypass all limits: `UPDATE auth.users SET raw_app_meta_data = raw_app_meta_data || '{"is_unlimited": true}'::jsonb WHERE id = '<user-id>';`
+- Current unlimited accounts: Jimmy Crackcorn (j3k420@gmail.com), James Edmonds (james.edmonds26@gmail.com)
 
 ---
 

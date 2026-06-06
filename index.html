@@ -74,6 +74,7 @@
 <script src="js/photo-modal.js"></script>
 <script src="js/pwa.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/scan-limit.js"></script>
 <script src="js/home-screen.js"></script>
 <script src="js/save-actions.js"></script>
 <script src="js/location-permission.js"></script>
@@ -104,6 +105,10 @@
 
   <p class="home-desc">
     Photograph a gravestone. We'll uncover the story of the life it marks.
+  </p>
+
+  <p style="text-align:center;font-family:'Crimson Pro',serif;font-style:italic;font-size:0.9rem;color:rgba(201,168,76,0.45);margin-top:0.75rem;padding:0 1.5rem;">
+    Other apps show you the grave. GraveStory discovers the life that was.
   </p>
 
   <button class="home-map-btn" onclick="openCemeteryMap()" id="home-map-btn" style="display:none;">
@@ -221,6 +226,7 @@
 
     <button onclick="submitSettings()" style="width:100%;background:rgba(201,168,76,0.2);border:1px solid rgba(201,168,76,0.5);color:#c9a84c;padding:0.85rem;border-radius:4px;font-family:'Crimson Pro',serif;font-size:0.95rem;cursor:pointer;">Save settings</button>
     <p id="settings-status" style="text-align:center;font-family:'Crimson Pro',serif;font-size:0.85rem;color:rgba(201,168,76,0.7);min-height:1.2rem;margin-top:0.75rem;"></p>
+    <p style="text-align:center;margin-top:1.5rem;"><a href="https://j3k420.github.io/gravestory-privacy/" target="_blank" rel="noopener noreferrer" style="font-family:'Crimson Pro',serif;font-size:0.8rem;color:rgba(201,168,76,0.45);text-decoration:underline;">Privacy Policy</a></p>
   </div>
 </div>
 
@@ -457,13 +463,11 @@
 // ── STATE ────────────────────────────────────────────────────────
 let currentImage = null;
 let currentImageBase64 = null;
-const R2_UPLOAD_URL = 'https://gravestory-proxy.james-gravestory.workers.dev/upload-image';
-
 async function uploadImageToR2(base64Data, contentType = 'image/jpeg') {
   try {
-    const response = await fetch(R2_UPLOAD_URL, {
+    const response = await fetch(`${PROXY_BASE}/upload-image`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
       body: JSON.stringify({ contentType, data: base64Data })
     });
     if (!response.ok) {
@@ -903,6 +907,18 @@ async function findOrCreateGrave(name, lat, lng, isPublic) {
 async function startAnalysis() {
   if (!currentImageBase64) return;
 
+  // Freemium scan limit check (guest: 3 lifetime; signed-in free: 10 lifetime)
+  const scanCheck = await checkWebScanLimit();
+  if (scanCheck.atLimit) {
+    const msg = scanCheck._checkFailed
+      ? 'Could not verify your scan limit right now. Please check your connection and try again.'
+      : scanCheck.isGuest
+        ? `You've used your ${scanCheck.limit} free scans. Sign in to get ${WEB_SCAN_LIMIT_USER} scans.`
+        : `You've used all ${scanCheck.limit} scans. Purchase more credits in the app.`;
+    alert(msg);
+    return;
+  }
+
   // Consume the one-shot bypass flag set by "Use it anyway".
   const skipVerification = _bypassVerification;
   _bypassVerification = false;
@@ -933,6 +949,8 @@ async function startAnalysis() {
     // 2. Read gravestone with Gemini Vision
     setStep(2);
     const graveData = await readGravestone(currentImageBase64, locationStr);
+    // Count this scan now that OCR succeeded (verification already passed)
+    await incrementWebScanCount();
 
     // Inform the user if multiple distinct gravestones are in frame — the bio
     // focuses on the primary inscription; best results come from one stone per scan.

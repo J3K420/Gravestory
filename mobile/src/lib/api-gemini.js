@@ -1,4 +1,4 @@
-import { PROXY_BASE } from './config';
+import { PROXY_BASE, CLIENT_KEY } from './config';
 import { safeParseJSON } from './util-json';
 
 const PRIMARY  = 'gemini-3.1-flash-lite';
@@ -17,7 +17,7 @@ function fetchWithTimeout(url, init) {
 async function geminiCallWithFallback(payload) {
   const init = {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
     body: JSON.stringify(payload),
   };
 

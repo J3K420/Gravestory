@@ -1,0 +1,67 @@
+# GraveStory — Play Store Listing Copy
+
+---
+
+## Short Description (≤80 chars)
+
+```
+Photograph a gravestone. Discover the life story of the person buried there.
+```
+Character count: 77 ✓
+
+---
+
+## Full Description (≤4000 chars)
+
+```
+GraveStory turns a photograph of a gravestone into a compassionate biographical story about the person buried there.
+
+HOW IT WORKS
+
+Point your camera at any gravestone. GraveStory reads the name, dates, and inscription using AI, then searches genealogy databases, historical newspapers, and public records to build a biography grounded in real sources — not invented details.
+
+A name and two dates become a story.
+
+WHAT YOU GET
+
+• AI-powered biography drawn from WikiTree, Wikipedia, Wikidata, and historical obituaries
+• Cited sources so you know where every fact came from
+• GPS-linked cemetery map showing all your discovered stories
+• Community map to explore stories shared by other visitors
+• Candle and flower tributes to honour the people you find
+
+FOR GENEALOGISTS AND FAMILY HISTORIANS
+
+GraveStory searches genealogy records in parallel with every scan. Famous figures get extended biographies up to 2,500 words. Weathered stones with uncertain names still get a story built from whatever the inscription reveals.
+
+YOUR PRIVACY
+
+Photos are only shared if you choose to make a story public. GPS coordinates are used to place your stories on your personal map and are never sold or shared with advertisers. See our full privacy policy at https://j3k420.github.io/gravestory-privacy/
+
+FREE TO START
+
+Scan up to 10 gravestones free. Purchase additional scan credits in the app if you want more — credits never expire.
+
+---
+
+GraveStory is designed for one-handed use in a cemetery. The dark, unobtrusive interface keeps your focus on the stones, not the screen.
+```
+
+Character count: ~1,450 ✓ (well within 4,000 limit)
+
+---
+
+## Screenshot Captions (optional, shown below each screenshot on Play Store)
+
+1. "Scan any gravestone with your camera"
+2. "Receive a sourced biography in seconds"
+3. "Map every story to its cemetery"
+
+---
+
+## Content Rating Notes
+
+- No violence, no mature content
+- No user-generated chat
+- Contains GPS location collection (disclosed in privacy policy)
+- Target age: Everyone (cemetery visitors, genealogists, families)

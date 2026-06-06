@@ -1,4 +1,4 @@
-import { PROXY_BASE } from './config';
+import { PROXY_BASE, CLIENT_KEY } from './config';
 import { EXPAND as _EXPAND } from './abbreviations';
 
 // WikiTree matching needs lowercase — derive from the shared title-case table.
@@ -85,7 +85,7 @@ export async function searchWikiTree(graveData, location = null) {
   async function wikiSearch(body) {
     const res = await fetch(`${PROXY_BASE}/wikitree`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
       body: JSON.stringify(body),
     });
     if (!res.ok) return [];

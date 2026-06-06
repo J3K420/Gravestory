@@ -17,6 +17,8 @@ import {
   HankenGrotesk_600SemiBold,
 } from '@expo-google-fonts/hanken-grotesk';
 import { supabase } from './src/lib/supabase';
+// RevenueCat import intentionally disabled until production API key is configured
+// import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 
 import HomeScreen from './src/screens/HomeScreen';
 import AuthScreen from './src/screens/AuthScreen';
@@ -26,6 +28,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import CemeteryMapScreen from './src/screens/CemeteryMapScreen';
 import GlobalMapScreen from './src/screens/GlobalMapScreen';
 import RememberedStoriesScreen from './src/screens/RememberedStoriesScreen';
+import PaywallScreen from './src/screens/PaywallScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -72,6 +75,7 @@ export default function App() {
     HankenGrotesk_600SemiBold,
   });
 
+
   useEffect(() => {
     Linking.getInitialURL().then(url => {
       if (url?.includes('login-callback') && url.includes('code=')) {
@@ -97,6 +101,7 @@ export default function App() {
             <Stack.Screen name="CemeteryMap" component={CemeteryMapScreen} />
             <Stack.Screen name="GlobalMap" component={GlobalMapScreen} />
             <Stack.Screen name="RememberedStories" component={RememberedStoriesScreen} />
+            <Stack.Screen name="Paywall" component={PaywallScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </SafeAreaProvider>

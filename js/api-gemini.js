@@ -20,7 +20,7 @@ async function geminiCallWithFallback(payload) {
   const FALLBACK = 'gemini-2.5-flash';
   const init = {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
     body: JSON.stringify(payload)
   };
 

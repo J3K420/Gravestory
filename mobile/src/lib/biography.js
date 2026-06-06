@@ -227,8 +227,13 @@ export async function generateBiography(graveData, searchResults, wikiData, loca
     : 'Cemetery location: unknown — infer from research results if possible.';
 
   const isMultiSubject = graveData.multiple_subjects === true && (graveData.names?.length > 1);
+  // When one subject on a shared stone has a Wikipedia article + 3+ sources, let them
+  // have the full historical-figure word budget rather than splitting proportionally.
+  const hasFamousSubject = isMultiSubject && wikiSummaries.length > 0;
   const multiSubjectBlock = isMultiSubject
-    ? `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${graveData.names.join(' and ')}. You MUST write a combined biography that gives each person meaningful, proportional coverage — do not focus exclusively on the most notable or primary subject. Weave their stories together and, where the stone or research reveals their relationship (e.g. grandmother and granddaughter, husband and wife), honour that connection explicitly.\n`
+    ? hasFamousSubject
+      ? `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${graveData.names.join(' and ')}. The research sources contain substantial documentation for one subject and limited records for the other(s). Write a full biography for the well-documented subject using the historical-figure word budget; devote a respectful, dignified paragraph to the lesser-documented person(s), honouring their memory and their relationship to the famous subject. Weave their connection together — do not ignore either person.\n`
+      : `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${graveData.names.join(' and ')}. You MUST write a combined biography that gives each person meaningful, proportional coverage — do not focus exclusively on the most notable or primary subject. Weave their stories together and, where the stone or research reveals their relationship (e.g. grandmother and granddaughter, husband and wife), honour that connection explicitly.\n`
     : '';
 
   const prompt = `You are GraveStory AI, a careful historian writing a respectful life history.
@@ -250,6 +255,7 @@ LENGTH — scale to the evidence available:
 - Two corroborating sources: 2–4 paragraphs.
 - Three or more independent sources: a full biography, up to ~1500 words.
 - Well-documented historical figure (Wikipedia article confirmed in sources AND 3+ independent sources): write a comprehensive life history up to ~2500 words. Cover their early life and origins, career arc and major achievements, personal life and relationships, cultural impact, and legacy. Use the full allowance — do not stop at a surface summary when the sources support depth.
+- Shared stone where one person is a well-documented historical figure and the other has limited records: give the historical figure the full ~2500-word treatment, then add a respectful paragraph for the lesser-documented person honouring their memory and their relationship to the famous subject.
 
 WRITE A BIOGRAPHY THAT:
 - Opens with the full name(s), birth/death dates, and the era they lived in
@@ -257,7 +263,7 @@ WRITE A BIOGRAPHY THAT:
 - Weaves in verified details of family, marriage, faith, community, and relationships
 - Explains any symbols on the stone by their conventional meaning in that era and region — e.g. an anchor often signified hope or a maritime life; a Masonic square-and-compass indicated Freemasonry membership; clasped hands often marked marriage or farewell. Describe what the symbol conventionally meant; do not assert it as fact about this individual's beliefs or inner life
 - Reflects on the inscription with restraint and humanity — let the feeling come from the facts, not from added sentiment
-${isMultiSubject ? '- Devotes proportional space to each person on the stone, weaves their stories together, and closes with a brief reflection on their shared legacy and relationship' : ''}
+${isMultiSubject ? (hasFamousSubject ? '- Gives the well-documented subject a full historical-figure biography with citations, then honours the lesser-documented person with a respectful paragraph acknowledging their relationship and shared memorial' : '- Devotes proportional space to each person on the stone, weaves their stories together, and closes with a brief reflection on their shared legacy and relationship') : ''}
 
 SURNAME / IDENTITY:
 - You may note that a surname is commonly associated with a cultural heritage, but do not infer anything about this person's ancestry or experience from their name alone

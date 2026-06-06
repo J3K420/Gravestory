@@ -1,4 +1,4 @@
-import { PROXY_BASE } from './config';
+import { PROXY_BASE, CLIENT_KEY } from './config';
 import { EXPAND } from './abbreviations';
 
 // Returns [original, expandedVariant?] — if the first token of the name is a known
@@ -220,7 +220,7 @@ export async function searchForPerson(graveData, location) {
     try {
       const res = await fetch(`${PROXY_BASE}/tavily`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
         body: JSON.stringify({ query, search_depth: 'basic', max_results: 2, include_answer: false }),
       });
       const data = await res.json();

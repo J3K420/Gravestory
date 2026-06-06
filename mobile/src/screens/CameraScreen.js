@@ -22,6 +22,8 @@ import { saveStories, loadStories } from '../lib/storage';
 import { cloudSaveStory, cloudUpdateStory, findOrCreateGrave } from '../lib/sync';
 import { uploadGravestoneImage } from '../lib/api-r2';
 import { forwardGeocode, reverseGeocode } from '../lib/api-nominatim';
+import { checkSaveLimit } from '../lib/save-limit';
+import { checkScanLimit, incrementScanCount } from '../lib/scan-limit';
 
 const STEPS = [
   'Verifying gravestone…',
@@ -68,6 +70,33 @@ export default function CameraScreen({ navigation }) {
   async function pickAndAnalyze(fromCamera) {
     setRejected(null);
     setPipelineError(null);
+
+    // Check both save and scan limits before opening the picker — no API credits burned.
+    // app_metadata.is_unlimited bypasses all limits (set via Supabase dashboard, read-only by clients).
+    try {
+      const { data: { session: initSession } } = await supabase.auth.getSession();
+      const uid = initSession?.user?.id ?? null;
+      const isUnlimited = initSession?.user?.app_metadata?.is_unlimited === true;
+      if (!isUnlimited) {
+        const [saveCheck, scanCheck] = await Promise.all([checkSaveLimit(uid), checkScanLimit(uid, initSession?.user)]);
+        if (saveCheck.atLimit) {
+          navigation.navigate('Paywall', { count: saveCheck.count, limit: saveCheck.limit, type: 'save', isGuest: saveCheck.isGuest });
+          return;
+        }
+        if (scanCheck.atLimit) {
+          if (scanCheck._checkFailed) {
+            Alert.alert('Connection Error', 'Could not verify your scan limit. Please check your connection and try again.');
+            return;
+          }
+          navigation.navigate('Paywall', { count: scanCheck.count, limit: scanCheck.limit, type: 'scan', isGuest: scanCheck.isGuest });
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Limit check error:', e.message);
+      Alert.alert('Connection Error', 'Could not verify your scan limit. Please check your connection and try again.');
+      return;
+    }
 
     // exif: true so we can read GPS coords before compression strips them
     const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true };
@@ -289,6 +318,9 @@ export default function CameraScreen({ navigation }) {
       const { data: { session } } = await supabase.auth.getSession();
       const defaultPublic = session?.user?.user_metadata?.default_public ?? false;
 
+      // Biography resolved successfully — count this as a used scan
+      await incrementScanCount(session?.user?.id ?? null);
+
       // Link to canonical grave — on a cache hit the grave_id is already known;
       // otherwise call find_or_create to dedup multiple scans of the same stone.
       let graveId = cachedBio?.grave_id || null;
@@ -323,11 +355,17 @@ export default function CameraScreen({ navigation }) {
           story = await cloudUpdateStory({ ...story, image_url: imageUrl }, session.user);
           // Contribute to the grave's community photo pool (non-blocking)
           if (story.grave_id) {
-            supabase.from('grave_photos').insert({
-              grave_id: story.grave_id,
-              user_id: session.user.id,
-              image_url: imageUrl,
-            }).catch(e => console.warn('grave_photos insert failed (non-fatal):', e.message));
+            (async () => {
+              try {
+                await supabase.from('grave_photos').insert({
+                  grave_id: story.grave_id,
+                  user_id: session.user.id,
+                  image_url: imageUrl,
+                });
+              } catch (e) {
+                console.warn('grave_photos insert failed (non-fatal):', e.message);
+              }
+            })();
           }
         }
       }

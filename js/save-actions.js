@@ -39,6 +39,16 @@ async function saveStory() {
     return;
   }
 
+  // Freemium save limit check
+  const saveCheck = checkWebSaveLimit();
+  if (saveCheck.atLimit) {
+    const msg = saveCheck.isGuest
+      ? `You've reached the ${saveCheck.limit}-story limit for guests. Sign in to save up to ${WEB_SAVE_LIMIT_USER} stories.`
+      : `You've reached your ${saveCheck.limit}-story save limit.`;
+    alert(msg);
+    return;
+  }
+
   // Apply default visibility from user prefs (signed-in users only)
   if (currentUser) {
     const vis = userPrefs.default_visibility || 'prompt';

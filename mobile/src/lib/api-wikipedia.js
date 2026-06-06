@@ -1,5 +1,8 @@
 // Direct Wikipedia fetch — no proxy needed.
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
+
+const PORTRAITS_DIR = FileSystem.documentDirectory + 'portraits/';
 
 const WIKI_HEADERS = {
   'User-Agent': 'GraveStory/1.0 (https://github.com/J3K420/Gravestory; gravestory mobile app)',
@@ -7,12 +10,9 @@ const WIKI_HEADERS = {
 };
 
 // Downloads a remote image and saves it as a local JPEG via ImageManipulator.
-// This is required for display — React Native's Image component (Fresco on Android)
-// cannot reliably load Wikipedia CDN URLs directly. ImageManipulator's native
-// bitmap decoder handles them fine and produces a local file:// URI that Fresco
-// can always read. Falls back to the original URL if download/resize fails.
-// NOTE: the output file:// URI lives in a temp directory and will not survive
-// app restarts. Persistence across restarts requires expo-file-system (future work).
+// Fresco (React Native Image on Android) cannot reliably load Wikipedia CDN
+// URLs directly; ImageManipulator's native bitmap decoder handles them fine.
+// Falls back to the original URL if download/resize fails.
 async function resizeForDisplay(url) {
   if (!url) return null;
   try {
@@ -24,6 +24,25 @@ async function resizeForDisplay(url) {
     return result.uri;
   } catch {
     return url;
+  }
+}
+
+// Copies a temp file:// URI produced by ImageManipulator into the app's
+// persistent documentDirectory so portraits survive app restarts.
+// Returns the permanent URI, or the original if the copy fails.
+async function persistPortrait(tempUri) {
+  if (!tempUri || !tempUri.startsWith('file://')) return tempUri;
+  try {
+    const info = await FileSystem.getInfoAsync(PORTRAITS_DIR);
+    if (!info.exists) {
+      await FileSystem.makeDirectoryAsync(PORTRAITS_DIR, { intermediates: true });
+    }
+    const filename = tempUri.split('/').pop();
+    const dest = PORTRAITS_DIR + filename;
+    await FileSystem.copyAsync({ from: tempUri, to: dest });
+    return dest;
+  } catch {
+    return tempUri;
   }
 }
 
@@ -218,11 +237,14 @@ export async function fetchWikipediaPortraits(name, dates) {
       }
     } catch {}
 
-    // Download and resize each URL to a local JPEG via native bitmap decoder.
-    // Required because Fresco (React Native Image on Android) cannot reliably
-    // load Wikipedia CDN URLs directly — ImageManipulator's native path can.
+    // Download and resize each URL to a local JPEG, then copy to persistent storage.
     const resized = await Promise.allSettled(rawUrls.map(u => resizeForDisplay(u)));
-    return resized
+    const tempUris = resized
+      .filter(r => r.status === 'fulfilled' && r.value)
+      .map(r => r.value);
+
+    const persisted = await Promise.allSettled(tempUris.map(u => persistPortrait(u)));
+    return persisted
       .filter(r => r.status === 'fulfilled' && r.value)
       .map(r => r.value);
   } catch (err) {

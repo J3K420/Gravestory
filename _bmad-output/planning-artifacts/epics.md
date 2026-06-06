@@ -123,4 +123,279 @@ _To be populated in Step 2 as epics are designed._
 
 ## Epic List
 
-_To be populated in Step 2._
+- **Epic 1:** Phase 9 Completion — Enable Monetization & Reach Launch Readiness
+- **Epic 2:** Play Store Launch
+- **Epic 3:** Post-Launch Enhancements
+
+---
+
+## Epic 1: Phase 9 Completion — Enable Monetization & Reach Launch Readiness
+
+Complete all remaining Phase 9 tasks to activate RevenueCat monetization, protect API costs via Worker origin enforcement, and satisfy the Play Store submission prerequisites (privacy policy, listing assets).
+
+### Story 1.1: Run Scan Credits Database Migration
+
+As a product owner,
+I want the `scan_credits` table created in Supabase with correct RLS policies,
+So that the RevenueCat webhook has a destination to write purchased credits and the system can accurately track available scans per user.
+
+**Acceptance Criteria:**
+
+**Given** access to the Supabase SQL editor and the file `supabase-migrations/005_scan_credits.sql`
+**When** the migration script is executed using plain ASCII quotes (no curly/typographic quotes)
+**Then** the `scan_credits` table exists with columns `user_id`, `credits`, `product_id`, `purchased_at`
+**And** RLS policies allow authenticated users to SELECT their own rows only
+**And** INSERT/UPDATE/DELETE are restricted to the service role (no client writes)
+**And** `checkWebScanLimit` and mobile `checkScanLimit` correctly sum `scan_events` count against free limit + total `scan_credits` for the user
+
+**Given** a user with `is_unlimited: true` in `app_metadata`
+**When** any scan limit check runs
+**Then** the check returns `atLimit: false` regardless of `scan_events` count or `scan_credits` balance
+
+### Story 1.2: Add Cloudflare Worker Origin Validation
+
+As a product owner,
+I want the Cloudflare Worker to reject requests from unauthorised origins,
+So that third parties cannot consume GraveStory's Gemini and Tavily API quotas.
+
+**Acceptance Criteria:**
+
+**Given** a browser request with `Origin: https://j3k420.github.io`
+**When** the Worker receives the request
+**Then** the request is processed normally
+
+**Given** a browser request with any other `Origin` header value
+**When** the Worker receives the request
+**Then** the Worker returns HTTP 403 and no upstream API call is made
+
+**Given** a mobile/direct request with no `Origin` header but a valid `X-Client-Key` header
+**When** the Worker receives the request
+**Then** the request is processed normally (CLIENT_KEY path is unaffected)
+
+**Given** the Worker is deployed via `cd worker && wrangler deploy`
+**When** `ALLOWED_ORIGIN` env var is set to `"https://j3k420.github.io"`
+**Then** the env var value is used for the origin check (not hardcoded)
+
+### Story 1.3: Build RevenueCat Purchase Webhook Endpoint
+
+As a product owner,
+I want the Cloudflare Worker to receive RevenueCat purchase events and credit the buyer's account,
+So that purchased scan credit packs are immediately available for use.
+
+**Acceptance Criteria:**
+
+**Given** RevenueCat sends a `POST /revenuecat-webhook` with a valid `INITIAL_PURCHASE` or `RENEWAL` event payload
+**When** the Worker receives the request
+**Then** the Worker validates the RevenueCat webhook signature using the shared secret
+**And** INSERTs a row into `scan_credits` via the Supabase service-role key with `user_id`, `credits` (mapped from product_id), `product_id`, and `purchased_at`
+**And** returns HTTP 200
+
+**Given** the product ID `gravestory_5_scans`
+**When** credits are mapped
+**Then** 5 credits are inserted
+
+**Given** the product ID `gravestory_20_scans`
+**When** credits are mapped
+**Then** 20 credits are inserted
+
+**Given** the product ID `gravestory_60_scans`
+**When** credits are mapped
+**Then** 60 credits are inserted
+
+**Given** an invalid or missing webhook signature
+**When** the Worker receives the request
+**Then** the Worker returns HTTP 401 and does not write to the database
+
+### Story 1.4: Re-enable RevenueCat SDK in Mobile App
+
+As a user,
+I want to purchase scan credit packs from within the app,
+So that I can continue scanning gravestones after my free trial runs out without leaving the app.
+
+**Acceptance Criteria:**
+
+**Given** a user has reached their scan limit and the Paywall screen is shown
+**When** the user taps a credit pack (Starter, Explorer, or Historian)
+**Then** the RevenueCat purchase sheet opens
+**And** on successful purchase, the app confirms the transaction and increments the user's available scans
+
+**Given** the RevenueCat SDK is initialised in `App.js` with the production API key from EAS Secrets
+**When** the app starts
+**Then** no native crash occurs on release builds
+
+**Given** `is_unlimited: true` in the user's `app_metadata`
+**When** the Paywall screen would normally be shown
+**Then** the Paywall screen is never shown and scanning proceeds
+
+**Out of Scope:** Web in-browser purchase flow (v1 web users directed to mobile app).
+
+### Story 1.5: Publish Privacy Policy Page
+
+As a prospective user,
+I want to read GraveStory's privacy policy before installing the app,
+So that I understand how my photos and GPS data are handled.
+
+**Acceptance Criteria:**
+
+**Given** the privacy policy draft exists in the repository
+**When** it is deployed to GitHub Pages at `https://j3k420.github.io/gravestory-privacy`
+**Then** the page is publicly accessible without authentication
+
+**Given** the user is on the Settings screen (web or mobile)
+**When** they tap "Privacy Policy"
+**Then** the browser/in-app browser opens `https://j3k420.github.io/gravestory-privacy`
+
+**Given** the Play Store listing submission form
+**When** a Privacy Policy URL is required
+**Then** `https://j3k420.github.io/gravestory-privacy` is used and the URL resolves correctly
+
+### Story 1.6: Create Play Store Listing Assets
+
+As a product owner,
+I want complete Play Store listing assets ready for submission,
+So that the internal track submission can be completed without delay.
+
+**Acceptance Criteria:**
+
+**Given** the Play Store listing submission form
+**When** assets are uploaded
+**Then** the following are provided: short description (≤80 chars), full description (≤4000 chars), at least 2 phone screenshots (16:9 or 9:16, min 320px), 1 feature graphic (1024×500px), and an app icon (512×512px, already in `app.config.js`)
+
+**Given** the short description
+**When** reviewed
+**Then** it accurately describes the core value proposition: photographing a gravestone to receive an AI-generated biography
+
+---
+
+## Epic 2: Play Store Launch
+
+Generate production Android credentials, build the release AAB, and submit GraveStory to the Play Store internal track. All Epic 1 stories must be complete before Epic 2 begins.
+
+### Story 2.1: Generate Android Production Credentials
+
+As a developer,
+I want a signed Android keystore registered with EAS,
+So that production release builds can be signed for Play Store submission.
+
+**Acceptance Criteria:**
+
+**Given** a Google Play developer account is active ($25 registration fee paid)
+**When** `npx eas credentials` is run
+**Then** an Android keystore is generated and uploaded to EAS Credentials
+**And** the keystore fingerprint matches what EAS Build uses for the production profile
+
+**Given** the keystore is generated
+**When** it is stored
+**Then** a secure backup copy of the keystore file and credentials is kept outside the repository
+
+### Story 2.2: Build and Submit Production AAB to Play Store
+
+As a product owner,
+I want a signed AAB uploaded to the Play Store internal track,
+So that GraveStory can be tested by internal reviewers before public release.
+
+**Acceptance Criteria:**
+
+**Given** Story 2.1 is complete and all Epic 1 stories are done
+**When** `npx eas build --platform android --profile production` is run
+**Then** the build completes successfully and produces a signed `.aab` file
+
+**Given** the AAB is ready
+**When** it is submitted to the Play Store via the console or `npx eas submit`
+**Then** the app appears in the internal track with status "Published to internal testers"
+
+**Given** the store listing
+**When** reviewed
+**Then** all Epic 1 Story 1.6 assets are present, the privacy policy URL resolves, the content rating questionnaire is complete, and no policy violations are flagged
+
+---
+
+## Epic 3: Post-Launch Enhancements
+
+Deepen research quality, expand platform reach, and improve user trust and accessibility. All stories in this epic are independent of each other and can be sequenced based on priority after public launch.
+
+### Story 3.1: FamilySearch Genealogy Integration
+
+As a cemetery visitor,
+I want GraveStory to search FamilySearch records in addition to WikiTree,
+So that I get richer genealogy data, particularly for LDS community members whose records are primarily in FamilySearch.
+
+**Acceptance Criteria:**
+
+**Given** a gravestone with a legible name and dates
+**When** the pipeline runs and a FamilySearch developer key is configured in the Worker
+**Then** `api-familysearch.js` (web) and `mobile/src/lib/api-familysearch.js` (mobile) fire in parallel with WikiTree
+**And** results are merged into `searchResults` before biography generation with source label `[FamilySearch]`
+
+**Given** the FamilySearch API returns no results
+**When** results are merged
+**Then** the pipeline proceeds normally with the results from other sources
+
+**Out of Scope:** FamilySearch OAuth (use unauthenticated session token caching only for v1).
+
+### Story 3.2: Web Payment Flow
+
+As a web user who has reached their scan limit,
+I want to purchase additional scan credits directly in the browser,
+So that I don't have to download the mobile app to continue using GraveStory.
+
+**Acceptance Criteria:**
+
+**Given** a web user hits the scan limit
+**When** the paywall prompt appears
+**Then** a "Buy Credits" button opens a payment flow (Stripe or RevenueCat web SDK)
+**And** on successful purchase, `scan_credits` is updated via the existing RevenueCat webhook and the user can scan immediately
+
+### Story 3.3: iOS App Store Launch
+
+As an iPhone user,
+I want to install GraveStory from the App Store,
+So that I can use it with a native experience on iOS.
+
+**Acceptance Criteria:**
+
+**Given** an Apple Developer account is active ($99/yr)
+**When** `npx eas build --platform ios --profile production` is run
+**Then** the build succeeds and produces a signed IPA
+
+**Given** the IPA is submitted
+**When** App Store review completes
+**Then** GraveStory appears on the App Store with the same feature set as the Android version
+
+### Story 3.4: Biography Accuracy Feedback Mechanism
+
+As a user who has received a biography that contains an error,
+I want to flag it as inaccurate,
+So that the community is warned and the owner can investigate or correct it.
+
+**Acceptance Criteria:**
+
+**Given** a user is viewing any biography
+**When** they tap "Flag inaccuracy"
+**Then** a brief form collects the specific claim they believe is wrong and an optional note
+**And** the flag is stored in Supabase linked to the story/grave_id
+**And** the story owner (if public) is notified
+
+**Given** a story has been flagged
+**When** viewed on the result screen
+**Then** a small "⚑ Flagged as potentially inaccurate" notice appears below the biography
+
+### Story 3.5: Accessibility Audit and Remediation
+
+As a user with visual or motor impairments,
+I want GraveStory's core scan and biography flow to be usable with assistive technology,
+So that I can benefit from the app regardless of my physical abilities.
+
+**Acceptance Criteria:**
+
+**Given** the web app is tested with a screen reader (NVDA or VoiceOver)
+**When** the user navigates the scan → biography flow
+**Then** all interactive elements have descriptive ARIA labels and the biography text is readable in reading order
+
+**Given** the mobile app is tested with TalkBack (Android) and VoiceOver (iOS)
+**When** the user navigates the camera → result flow
+**Then** the gravestone tap zone, all buttons, and biography paragraphs are announced correctly
+
+**Given** the colour contrast of the dark gothic theme
+**When** measured against WCAG 2.1 AA standards
+**Then** all text/background combinations meet a minimum 4.5:1 contrast ratio (or 3:1 for large text)

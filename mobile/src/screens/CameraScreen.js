@@ -78,7 +78,7 @@ export default function CameraScreen({ navigation }) {
       const uid = initSession?.user?.id ?? null;
       const isUnlimited = initSession?.user?.app_metadata?.is_unlimited === true;
       if (!isUnlimited) {
-        const [saveCheck, scanCheck] = await Promise.all([checkSaveLimit(uid), checkScanLimit(uid)]);
+        const [saveCheck, scanCheck] = await Promise.all([checkSaveLimit(uid), checkScanLimit(uid, initSession?.user)]);
         if (saveCheck.atLimit) {
           navigation.navigate('Paywall', { count: saveCheck.count, limit: saveCheck.limit, type: 'save', isGuest: saveCheck.isGuest });
           return;

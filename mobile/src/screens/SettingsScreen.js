@@ -28,7 +28,7 @@ export default function SettingsScreen({ navigation }) {
       setDefaultPublic(session.user.user_metadata?.default_public ?? false);
       Promise.all([
         checkSaveLimit(session.user.id),
-        checkScanLimit(session.user.id),
+        checkScanLimit(session.user.id, session.user),
       ]).then(([saves, scans]) => {
         setSaveCount(saves.count);
         setSaveLimit(saves.limit);
@@ -46,7 +46,7 @@ export default function SettingsScreen({ navigation }) {
       setDefaultPublic(session.user.user_metadata?.default_public ?? false);
       const [saves, scans] = await Promise.all([
         checkSaveLimit(session.user.id),
-        checkScanLimit(session.user.id),
+        checkScanLimit(session.user.id, session.user),
       ]);
       setSaveCount(saves.count);
       setSaveLimit(saves.limit);

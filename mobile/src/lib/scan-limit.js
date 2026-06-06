@@ -10,13 +10,17 @@ export const SCAN_LIMIT_USER  = SCAN_LIMIT_FREE_USER;
 
 const GUEST_COUNT_KEY = 'gs_scan_count';
 
-export async function checkScanLimit(userId) {
+export async function checkScanLimit(userId, user = null) {
   const isGuest = !userId;
 
   if (isGuest) {
     const count = parseInt((await AsyncStorage.getItem(GUEST_COUNT_KEY)) || '0', 10);
     const limit = SCAN_LIMIT_FREE_GUEST;
     return { count, limit, atLimit: count >= limit, isGuest: true, purchased: 0 };
+  }
+
+  if (user?.app_metadata?.is_unlimited === true) {
+    return { count: 0, limit: Infinity, atLimit: false, isGuest: false, purchased: 0 };
   }
 
   let usedCount = 0;

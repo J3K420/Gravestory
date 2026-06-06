@@ -84,8 +84,9 @@ js/
   home-screen.js         — renderSavedList, loadSaved, deleteSaved. Saved list now lives on the #remembered-stories screen; renderSavedList() is called by showScreen() when navigating there.
   home-screen.append.js  — updateHomeMapButton
   map-utils.js           — groupGravesByCemetery, getDistanceMeters
-  map-cemetery.js        — Per-user cemetery map (Leaflet, drag-to-correct, OSM boundary)
-  map-global.js          — Community global map (public stories, guest gate). Deduplicates pins by grave_id then ~20 m GPS cell before placing markers.
+  scan-limit.js          — Web freemium limits: checkWebScanLimit (guest 3 / free-user 10 lifetime, fail-closed on Supabase error), incrementWebScanCount, checkWebSaveLimit. Mirrors mobile scan-limit.js/save-limit.js. Loaded after auth.js; depends on supabaseClient + currentUser + savedStories.
+  map-cemetery.js        — Per-user cemetery map (Leaflet, drag-to-correct, OSM boundary). `_cemeteryStoryCache` (module-level object) stores stories keyed by timestamp so popup "Go to bio" buttons call `viewCemeteryStory(key)` instead of embedding JSON in onclick attributes.
+  map-global.js          — Community global map (public stories, guest gate). Deduplicates pins by grave_id then ~20 m GPS cell before placing markers. `_globalStoryLookup` is reset to `{}` at the start of every `initGlobalMap` call to prevent unbounded memory growth.
   pwa.js                 — Service worker registration + install banner
   misc-handlers.js       — Miscellaneous event handlers
 ```
@@ -121,9 +122,19 @@ The codebase has been systematically extracted from a monolithic `index.html` in
 
 Follow this pattern when extracting more code.
 
+### HTML escaping rule
+
+**Any AI-generated or user-sourced data injected into `innerHTML` must pass through `escapeHtml()` first.** This includes: story name, dates, location, biography text, inscription, source descriptions, source URLs, contributor names, and image URLs. The `escapeHtml()` helper is in `js/util-html.js` (web) and is globally available to all classic scripts.
+
+- Map popup HTML (both cemetery and global) must escape all story fields before template-literal injection.
+- Never embed story objects as JSON in `onclick` attributes — use a module-level lookup table keyed by a safe primitive (timestamp, UUID) and resolve at click time via a named function.
+- The `render-result.js` biography renderer uses `escapeHtml()` on each paragraph before `innerHTML` assignment and on all citation URLs/descriptions.
+
 ### All API secrets stay server-side
 
 No API keys in client JS. Every sensitive call routes through `PROXY_BASE` (Cloudflare Worker). The only client-side config is `PROXY_BASE` in `config.js`.
+
+**Cloudflare Worker security note:** The Worker URL is committed to source and therefore public. The Worker must validate the `Origin` header to prevent third-party sites from using GraveStory's API quota. This fix must be applied directly to the deployed Worker (not in this repo).
 
 ### Gemini call pattern
 
@@ -386,7 +397,7 @@ mobile/
 - **Phase 8e** ✅ — Canonical graves + candle/flower tributes + EAS Update: `graves` table deduplicates multiple scans of the same physical stone; `tributes` table (one candle or flower per user per grave, UNIQUE constraint); `find_or_create_grave` RPC (atomic ~20 m name-match dedup); `update_grave_location` RPC (first user-correction wins, propagated from CemeteryMapScreen pin drag); `api-tributes.js` (getTributes/setTribute); `source` field on stories tracks camera vs library; GlobalMapScreen client-side dedup by grave_id then ~20 m GPS cell; ResultScreen shows tribute counts always + candle/flower buttons only for own camera-sourced stories; EAS Update configured (expo-updates installed, updates.url + runtimeVersion in app.config.js, channel on preview + production profiles) — testers install one new APK then all future JS changes push OTA via `npx eas update --branch preview`.
 - **Phase 8f** ✅ — Web parity for Phase 8e features: (1) `js/persistence.js` — added `grave_id` + `source` to `storyToRow`/`rowToStory`; (2) `index.html` pipeline — `currentPhotoSource` ('camera'/'library') tracked on upload, `findOrCreateGrave` RPC called after biography when signed-in user has GPS; (3) `js/map-global.js` — client-side dedup by `grave_id` then ~20 m GPS cell (same logic as mobile `GlobalMapScreen`); (4) new `js/api-tributes.js` — vanilla JS port of `getTributes`/`setTribute` using `supabaseClient`; (5) `js/render-result.js` — `renderTributeSection` shows tribute counts always when `grave_id` present, candle/flower buttons for camera-sourced non-global stories only.
 - **Phase 8g** ✅ — Search + biography quality pass: (1) Android nav bar fix — `CemeteryMapScreen` and `GlobalMapScreen` use `useSafeAreaInsets` to add `paddingBottom: insets.bottom + 8` to bottom panel (both screens use `edges={['top']}` so SafeAreaView doesn't handle the bottom); (2) Tavily query priority overhaul — queries now built in priority order so symbol-guided and general obituary queries actually fire (previously always cut off), duplicate FindAGrave merged into one, ChroniclingAmerica only for ≤1922 deaths, session-level `_searchCache` prevents re-querying same person on family plots; (3) Multi-person combined biography — when `multiple_subjects === true`, pipeline fetches Wikipedia for each person in parallel, `generateBiography` accepts `wikipediaSummary` as array, prompt explicitly names all subjects and requires proportional coverage, `name` uses " & " and `dates` uses " · " separators; (4) Biography prompt overhaul (Opus review) — Gemini structured output (`responseMimeType` + `responseSchema`), `citations [{n,description,url}]` schema converted to `sources`/`source_urls` for compat, evidence ladder for length (up to 1000 words), symbol rule describes conventional meaning not individual assertion, conflict resolution surfaces discrepancies in text, historical-figure exception requires Wikipedia in sources (memory not a source), `name_confidence: "low"` triggers identity hedging, TYPE_LABELS simplified to short tags.
-- **Phase 9** 🔄 — Freemium limits, device fingerprinting, portrait persistence, and global-map portraits complete. Remaining: privacy policy, RevenueCat. On `phase-9` branch.
+- **Phase 9** 🔄 — Freemium limits, device fingerprinting, portrait persistence, global-map portraits, security hardening complete. Remaining: privacy policy, RevenueCat, Cloudflare Worker origin check. On `phase-9` branch.
 
 ---
 
@@ -425,11 +436,23 @@ mobile/
 - ~~hasFamousSubject shared stone fix~~ ✅ When `multiple_subjects === true` and any Wikipedia summary was found for a subject, `hasFamousSubject = true` — unlocks full 2500-word bio for the notable person while still giving the lesser-documented person a dignified paragraph. Condition requires only `wikiSummaries.length > 0` (not a source-count threshold). Applied to both `js/biography.js` and `mobile/src/lib/biography.js`.
 - ~~Settings screen cleanup~~ ✅ Removed "coming soon" hints; renamed "Scans This Month" → "Free Scans Used"; removed monthly-reset copy.
 
+**Also completed (Phase 9 Session 3 — security hardening):**
+- ~~Stored XSS in map popups~~ ✅ All AI-generated content (biography, name, dates, location, contributor, image URLs) now escaped via `escapeHtml()` before `innerHTML` injection in `map-global.js` and `map-cemetery.js`.
+- ~~JSON-in-onclick in cemetery map~~ ✅ Replaced with `_cemeteryStoryCache` lookup + `viewCemeteryStory(key)` function. Story objects are never serialized into HTML attributes.
+- ~~XSS in home-screen cards~~ ✅ `renderSavedList()` escapes name and dates.
+- ~~Unescaped source links in render-result.js~~ ✅ Source URL and description escaped; `rel="noopener noreferrer"` added to all external links.
+- ~~Web had zero scan/save limits~~ ✅ New `js/scan-limit.js`: guest (3 lifetime), free signed-in (10 + purchased), fail-closed on Supabase error. `checkWebScanLimit` gates `startAnalysis`; `checkWebSaveLimit` gates `saveStory`.
+- ~~Mobile scan limit fail-open on Supabase error~~ ✅ `checkScanLimit` now returns `{ atLimit: true, _checkFailed: true }` on error instead of `{ atLimit: false }`. `CameraScreen` shows a connection-error Alert on `_checkFailed`.
+- ~~`_globalStoryLookup` memory leak~~ ✅ Cleared in `initGlobalMap` on every map open.
+- ~~RevenueCat test key committed bare~~ ✅ Warning comment added; production key must be an EAS Secret.
+- ~~BMAD-METHOD install~~ ✅ `_bmad/` folder committed. 44 skills available in `.claude/skills/` for Claude Code sessions.
+
 **Remaining:**
 - **Run `005_scan_credits.sql`** in Supabase SQL editor — creates `scan_credits` table with RLS. Use plain ASCII quotes (no curly/typographic quotes).
+- **Cloudflare Worker origin check** — add `Origin` header validation to the deployed Worker so third parties can't use GraveStory's API quota. Worker code is not in this repo; edit and redeploy separately.
 - **RevenueCat webhook** — Cloudflare Worker endpoint to receive RevenueCat purchase events and INSERT/UPDATE `scan_credits`. Requires secret key from RevenueCat dashboard.
 - **Re-enable RevenueCat SDK** — after Play Store account ($25) → real production API key from RevenueCat → uncomment imports in `App.js` and `PaywallScreen.js` → trigger new build.
-- **Privacy policy page** — draft written this session. Host on GitHub Pages (`https://j3k420.github.io/gravestory-privacy`). Link from Settings screen.
+- **Privacy policy page** — draft written last session. Host on GitHub Pages (`https://j3k420.github.io/gravestory-privacy`). Link from Settings screen.
 - **Store listing assets** — screenshots, feature graphic, short/full description.
 
 **Shelved:**

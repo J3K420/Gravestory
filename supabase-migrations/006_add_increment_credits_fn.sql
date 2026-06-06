@@ -16,6 +16,11 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Non-negative constraint deferred from Story 1.1 review
-ALTER TABLE public.scan_credits
-  ADD CONSTRAINT IF NOT EXISTS scan_credits_purchased_non_negative
-  CHECK (purchased >= 0);
+-- Wrapped in a DO block because ALTER TABLE ADD CONSTRAINT has no IF NOT EXISTS.
+DO $$
+BEGIN
+  ALTER TABLE public.scan_credits
+    ADD CONSTRAINT scan_credits_purchased_non_negative CHECK (purchased >= 0);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;

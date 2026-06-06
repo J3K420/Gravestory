@@ -1,5 +1,5 @@
 # generated: 2026-06-05
-# last_updated: 2026-06-06
+# last_updated: 2026-06-08
 # project: GraveStory
 # project_key: NOKEY
 # tracking_system: file-system
@@ -38,7 +38,7 @@
 # - Developer typically creates next story file after previous one is 'done'
 
 generated: 2026-06-05
-last_updated: 2026-06-06
+last_updated: 2026-06-08
 project: GraveStory
 project_key: NOKEY
 tracking_system: file-system
@@ -51,7 +51,7 @@ development_status:
   # RevenueCat dependency chain: 1.1 must precede 1.3, 1.3 must precede 1.4
   1-1-run-scan-credits-database-migration: done
   1-2-add-cloudflare-worker-origin-validation: done
-  1-3-build-revenuecat-purchase-webhook-endpoint: backlog
+  1-3-build-revenuecat-purchase-webhook-endpoint: in-progress
   1-4-re-enable-revenuecat-sdk-in-mobile-app: backlog
   1-5-publish-privacy-policy-page: backlog
   1-6-create-play-store-listing-assets: backlog

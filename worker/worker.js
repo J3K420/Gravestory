@@ -1,24 +1,28 @@
 // GraveStory proxy — Cloudflare Worker
 //
 // Front-end calls:
-//   POST /gemini/{model-id}   body: Gemini generateContent payload
-//   POST /tavily              body: { query, search_depth, max_results, include_answer }
-//   POST /wikitree            body: WikiTree searchPerson params as JSON
-//   POST /overpass            body: { query: <QL string> }
-//   POST /upload-image        body: { data: <base64>, contentType: <mime> }
+//   POST /gemini/{model-id}       body: Gemini generateContent payload
+//   POST /tavily                  body: { query, search_depth, max_results, include_answer }
+//   POST /wikitree                body: WikiTree searchPerson params as JSON
+//   POST /overpass                body: { query: <QL string> }
+//   POST /upload-image            body: { data: <base64>, contentType: <mime> }
+//   POST /revenuecat-webhook      body: RevenueCat event payload (server-to-server)
 //
 // Secrets (set via `wrangler secret put`):
 //   GEMINI_KEY
 //   TAVILY_KEY
-//   CLIENT_KEY   — shared secret sent by web + mobile as X-Client-Key header.
-//                  Blocks direct API calls (curl, scrapers) that have no Origin header.
-//                  Not a true secret (it's in client source) but forces meaningful work
-//                  to abuse the endpoint and can be rotated independently.
+//   CLIENT_KEY              — shared secret for web + mobile (X-Client-Key header).
+//                             Blocks direct API calls (curl, scrapers) that have no Origin header.
+//                             Not a true secret (it's in client source) but forces meaningful work
+//                             to abuse the endpoint and can be rotated independently.
+//   REVENUECAT_WEBHOOK_SECRET — must match the Authorization Bearer value in RevenueCat dashboard
+//   SUPABASE_SERVICE_KEY    — Supabase service-role key (bypasses RLS; never expose to clients)
 //
 // Vars (set in wrangler.toml [vars]):
 //   ALLOWED_ORIGIN   comma-separated origins, e.g. "https://j3k420.github.io,http://localhost:5500"
 //                    Use "*" only for local testing — never in production.
 //   R2_PUBLIC_URL    public base URL for R2 bucket (no trailing slash)
+//   SUPABASE_URL     Supabase project URL (not sensitive)
 //
 // R2 binding: IMAGES
 
@@ -60,6 +64,11 @@ export default {
         status: 204,
         headers: corsHeaders(origin, allowed),
       });
+    }
+
+    // ── RevenueCat webhook: bypass Origin/CLIENT_KEY auth — has its own auth ──
+    if (url.pathname === '/revenuecat-webhook') {
+      return await handleRevenueCatWebhook(request, env, origin, allowed);
     }
 
     // ── Auth: Origin check (browser) + CLIENT_KEY (mobile / direct) ──
@@ -348,6 +357,80 @@ async function handleUpload(request, env, origin, allowed) {
 
   const publicUrl = `${env.R2_PUBLIC_URL}/${key}`;
   return json({ url: publicUrl }, 200, origin, allowed);
+}
+
+// ── RevenueCat webhook: POST /revenuecat-webhook ──────────────────
+// Server-to-server — no Origin or CLIENT_KEY. Auth is REVENUECAT_WEBHOOK_SECRET.
+// RevenueCat sets this value in the Authorization header of every webhook request.
+async function handleRevenueCatWebhook(request, env, origin, allowed) {
+  if (request.method !== 'POST') {
+    return json({ error: 'Method not allowed' }, 405, origin, allowed);
+  }
+
+  // Validate RevenueCat webhook secret
+  const authHeader = request.headers.get('Authorization') || '';
+  if (!env.REVENUECAT_WEBHOOK_SECRET || authHeader !== `Bearer ${env.REVENUECAT_WEBHOOK_SECRET}`) {
+    return json({ error: 'Unauthorized' }, 401, origin, allowed);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'Invalid JSON body' }, 400, origin, allowed);
+  }
+
+  const event = body?.event;
+  if (!event) {
+    return json({ error: 'Missing event field' }, 400, origin, allowed);
+  }
+
+  // Only process purchase events; acknowledge all others without action.
+  // RevenueCat retries on non-2xx — always return 2xx for events we ignore.
+  const PURCHASE_TYPES = new Set(['NON_SUBSCRIPTION_PURCHASE', 'INITIAL_PURCHASE']);
+  if (!PURCHASE_TYPES.has(event.type)) {
+    return json({ ok: true, action: 'ignored', type: event.type }, 200, origin, allowed);
+  }
+
+  const userId   = event.app_user_id;
+  const productId = event.product_id;
+
+  if (!userId || !productId) {
+    return json({ error: 'Missing app_user_id or product_id' }, 400, origin, allowed);
+  }
+
+  const CREDIT_MAP = {
+    gravestory_5_scans:  5,
+    gravestory_20_scans: 20,
+    gravestory_60_scans: 60,
+  };
+
+  const credits = CREDIT_MAP[productId];
+  if (credits == null) {
+    // Unknown product — may be a test SKU or from another app in the same RC project
+    return json({ ok: true, action: 'ignored', reason: 'unknown product', product_id: productId }, 200, origin, allowed);
+  }
+
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+    return json({ error: 'Supabase not configured' }, 500, origin, allowed);
+  }
+
+  const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/add_scan_credits`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+    body: JSON.stringify({ p_user_id: userId, p_amount: credits }),
+  });
+
+  if (!rpcRes.ok) {
+    const detail = await rpcRes.text().catch(() => '');
+    return json({ error: 'Supabase RPC failed', status: rpcRes.status, detail }, 500, origin, allowed);
+  }
+
+  return json({ ok: true, user_id: userId, credits_added: credits }, 200, origin, allowed);
 }
 
 // ── helpers ───────────────────────────────────────────────────────

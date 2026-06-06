@@ -19,8 +19,8 @@ export async function checkScanLimit(userId) {
     return { count, limit, atLimit: count >= limit, isGuest: true, purchased: 0 };
   }
 
-  let usedCount   = 0;
-  let purchased   = 0;
+  let usedCount = 0;
+  let purchased = 0;
 
   try {
     // Lifetime scans used
@@ -28,7 +28,8 @@ export async function checkScanLimit(userId) {
       .from('scan_events')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId);
-    if (!countError) usedCount = dbCount ?? 0;
+    if (countError) throw countError;
+    usedCount = dbCount ?? 0;
 
     // Purchased credits
     const { data: credits, error: creditsError } = await supabase
@@ -38,7 +39,9 @@ export async function checkScanLimit(userId) {
       .maybeSingle();
     if (!creditsError && credits) purchased = credits.purchased ?? 0;
   } catch (e) {
-    console.warn('scan limit check failed (non-fatal):', e.message);
+    console.warn('scan limit check failed — blocking scan to prevent unlimited free usage:', e.message);
+    // Fail-closed: if we can't verify the count, block rather than silently allow
+    return { count: 0, limit: SCAN_LIMIT_FREE_USER, atLimit: true, isGuest: false, purchased: 0, _checkFailed: true };
   }
 
   // Total allowance = free trial + purchased credits
@@ -48,15 +51,20 @@ export async function checkScanLimit(userId) {
   return { count: usedCount, limit: totalAllowance, atLimit, isGuest: false, purchased };
 }
 
+// Returns true on success, false on failure. Caller should warn the user on false
+// so they know the scan was not counted against their allowance (not silently ignore).
 export async function incrementScanCount(userId) {
   if (!userId) {
     const stored = parseInt((await AsyncStorage.getItem(GUEST_COUNT_KEY)) || '0', 10);
     await AsyncStorage.setItem(GUEST_COUNT_KEY, String(stored + 1));
-  } else {
-    try {
-      await supabase.from('scan_events').insert({ user_id: userId });
-    } catch (e) {
-      console.warn('scan_events insert failed (non-fatal):', e.message);
-    }
+    return true;
+  }
+  try {
+    const { error } = await supabase.from('scan_events').insert({ user_id: userId });
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn('scan_events insert failed — scan was not counted:', e.message);
+    return false;
   }
 }

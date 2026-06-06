@@ -101,9 +101,9 @@ async function handleMarkerDragEnd(marker, story) {
   // 3. Update the marker's popup to show the corrected badge
   marker.setPopupContent(`
     <div style="font-family:'Playfair Display',serif;min-width:150px;max-width:300px;">
-      <strong>${story.name || 'Unknown'}</strong><br>
-      <em style="font-size:0.85rem;color:#666">${story.dates || ''}</em><br>
-      <small style="color:#888">${story.location || ''}</small>
+      <strong>${escapeHtml(story.name || 'Unknown')}</strong><br>
+      <em style="font-size:0.85rem;color:#666">${escapeHtml(story.dates || '')}</em><br>
+      <small style="color:#888">${escapeHtml(story.location || '')}</small>
       <br><span style="font-size:0.75rem;color:#2a7a2a">✓ location corrected</span>
       ${buildPopupBio(story)}
     </div>
@@ -125,30 +125,47 @@ let mapMarkers = [];
 let mapPreviousScreen = 'home';
 let mapFocusStory = null;
 
+// Lookup table so we never embed story JSON in onclick attributes.
+// Keyed by timestamp (always present on saved stories); rebuilt on each map open.
+const _cemeteryStoryCache = {};
+
 // Build the expandable bio section for map popups
 function buildPopupBio(story) {
   if (!story.biography) return '';
   const paragraphs = story.biography.split('\n\n').filter(p => p.trim()).slice(0, 2);
   if (paragraphs.length === 0) return '';
-  const bioHtml = paragraphs.map(p => `<p style="margin:0.4rem 0;font-size:0.85rem;line-height:1.4;color:#333;">${p}</p>`).join('');
+  // Biography is AI-generated free text — escape before injecting into HTML
+  const bioHtml = paragraphs.map(p => `<p style="margin:0.4rem 0;font-size:0.85rem;line-height:1.4;color:#333;">${escapeHtml(p)}</p>`).join('');
   const bioId = 'bio-' + (story.timestamp || Math.random().toString(36).slice(2));
-  const savedIndex = story.timestamp ? savedStories.findIndex(s => s.timestamp === story.timestamp) : -1;
-  const goToBioOnclick = savedIndex >= 0
-    ? `viewStoryFromMap(${savedIndex})`
-    : `currentStory = ${JSON.stringify(story).replace(/"/g, '&quot;')}; renderResult(currentStory); showScreen('result');`;
+  // Store in lookup so the onclick can retrieve by key, never embed JSON in attributes
+  const cacheKey = story.timestamp || bioId;
+  _cemeteryStoryCache[cacheKey] = story;
   return `
     <div style="margin-top:0.5rem;display:flex;gap:0.4rem;flex-wrap:wrap;">
       <button onclick="(function(b){var c=document.getElementById('${bioId}');if(c.style.display==='none'){c.style.display='block';b.textContent='▲ Hide bio';}else{c.style.display='none';b.textContent='▼ Read bio';}})(this)"
         style="background:none;border:1px solid rgba(201,168,76,0.5);color:#8a6f3a;font-family:'Crimson Pro',serif;font-size:0.8rem;padding:0.25rem 0.6rem;cursor:pointer;border-radius:3px;">
         ▼ Read bio
       </button>
-      <button onclick="${goToBioOnclick}"
+      <button onclick="viewCemeteryStory(${JSON.stringify(cacheKey)})"
         style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.5);color:#8a6f3a;font-family:'Crimson Pro',serif;font-size:0.8rem;padding:0.25rem 0.6rem;cursor:pointer;border-radius:3px;">
         → Go to bio
       </button>
     </div>
     <div id="${bioId}" style="display:none;margin-top:0.4rem;width:260px;height:160px;overflow-y:auto;overflow-x:hidden;padding:0.3rem 0.5rem;border:1px solid rgba(201,168,76,0.3);background:rgba(250,245,235,0.6);border-radius:3px;">${bioHtml}</div>
   `;
+}
+
+function viewCemeteryStory(cacheKey) {
+  const story = _cemeteryStoryCache[cacheKey];
+  if (!story) return;
+  const savedIndex = savedStories.findIndex(s => s.timestamp === story.timestamp);
+  if (savedIndex >= 0) {
+    viewStoryFromMap(savedIndex);
+  } else {
+    currentStory = story;
+    renderResult(currentStory);
+    showScreen('result');
+  }
 }
 
 function leaveCemeteryMap() {
@@ -609,9 +626,9 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
       .addTo(leafletMap)
       .bindPopup(`
         <div style="font-family:'Playfair Display',serif;min-width:150px;max-width:300px;">
-          <strong>${story.name || 'Unknown'}</strong><br>
-          <em style="font-size:0.85rem;color:#666">${story.dates || ''}</em><br>
-          <small style="color:#888">${story.location || ''}</small>
+          <strong>${escapeHtml(story.name || 'Unknown')}</strong><br>
+          <em style="font-size:0.85rem;color:#666">${escapeHtml(story.dates || '')}</em><br>
+          <small style="color:#888">${escapeHtml(story.location || '')}</small>
           ${story.userCorrected ? '<br><span style="font-size:0.75rem;color:#2a7a2a">✓ location corrected</span>' : ''}
           ${story._lowConfidence && !story.userCorrected ? '<br><span style="font-size:0.75rem;color:#a87a2a">⚠ approximate — state may not match</span>' : ''}
           ${canDrag ? '<br><small style="color:#aaa;font-size:0.7rem;font-style:italic">Drag pin to correct location</small>' : ''}

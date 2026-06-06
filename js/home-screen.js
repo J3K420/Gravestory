@@ -53,8 +53,8 @@ function renderSavedList() {
   list.innerHTML = savedStories.map((s, i) => `
     <div class="saved-card" style="display:flex;align-items:center;gap:0.5rem;">
       <div style="flex:1;min-width:0;cursor:pointer;" onclick="loadSaved(${i})">
-        <div class="saved-card-name">${s.name || 'Unknown'}</div>
-        <div class="saved-card-date">${s.dates || ''}</div>
+        <div class="saved-card-name">${escapeHtml(s.name || 'Unknown')}</div>
+        <div class="saved-card-date">${escapeHtml(s.dates || '')}</div>
       </div>
       <span style="color:var(--gold);opacity:0.5;cursor:pointer;" onclick="loadSaved(${i})">→</span>
       <button onclick="deleteSaved(event, ${i})" title="Delete story"

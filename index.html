@@ -74,6 +74,7 @@
 <script src="js/photo-modal.js"></script>
 <script src="js/pwa.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/scan-limit.js"></script>
 <script src="js/home-screen.js"></script>
 <script src="js/save-actions.js"></script>
 <script src="js/location-permission.js"></script>
@@ -903,6 +904,18 @@ async function findOrCreateGrave(name, lat, lng, isPublic) {
 async function startAnalysis() {
   if (!currentImageBase64) return;
 
+  // Freemium scan limit check (guest: 3 lifetime; signed-in free: 10 lifetime)
+  const scanCheck = await checkWebScanLimit();
+  if (scanCheck.atLimit) {
+    const msg = scanCheck._checkFailed
+      ? 'Could not verify your scan limit right now. Please check your connection and try again.'
+      : scanCheck.isGuest
+        ? `You've used your ${scanCheck.limit} free scans. Sign in to get ${WEB_SCAN_LIMIT_USER} scans.`
+        : `You've used all ${scanCheck.limit} scans. Purchase more credits in the app.`;
+    alert(msg);
+    return;
+  }
+
   // Consume the one-shot bypass flag set by "Use it anyway".
   const skipVerification = _bypassVerification;
   _bypassVerification = false;
@@ -933,6 +946,8 @@ async function startAnalysis() {
     // 2. Read gravestone with Gemini Vision
     setStep(2);
     const graveData = await readGravestone(currentImageBase64, locationStr);
+    // Count this scan now that OCR succeeded (verification already passed)
+    await incrementWebScanCount();
 
     // Inform the user if multiple distinct gravestones are in frame — the bio
     // focuses on the primary inscription; best results come from one stone per scan.

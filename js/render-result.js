@@ -112,7 +112,7 @@ function renderResult(story) {
       const url = srcUrls[idx];
       const desc = srcDescs[idx] || `Source ${n}`;
       if (url && url.startsWith('http')) {
-        return ` <sup class="cite"><a href="${url}" target="_blank" rel="noopener" title="${escapeHtml(desc)}">[${n}]</a></sup>`;
+        return ` <sup class="cite"><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(desc)}">[${n}]</a></sup>`;
       }
       // No URL — render as a non-clickable superscript so the reader still
       // sees the citation marker but isn't promised a destination.
@@ -139,7 +139,7 @@ function renderResult(story) {
       item.className = 'source-item';
       const url = story.source_urls?.[i];
       if (url && url.startsWith('http')) {
-        item.innerHTML = `<a href="${url}" target="_blank">${src}</a>`;
+        item.innerHTML = `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(src)}</a>`;
       } else {
         item.textContent = src;
       }

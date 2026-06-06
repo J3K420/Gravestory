@@ -84,12 +84,18 @@ export default function CameraScreen({ navigation }) {
           return;
         }
         if (scanCheck.atLimit) {
+          if (scanCheck._checkFailed) {
+            Alert.alert('Connection Error', 'Could not verify your scan limit. Please check your connection and try again.');
+            return;
+          }
           navigation.navigate('Paywall', { count: scanCheck.count, limit: scanCheck.limit, type: 'scan', isGuest: scanCheck.isGuest });
           return;
         }
       }
     } catch (e) {
-      console.warn('Limit check failed (non-fatal):', e.message);
+      console.warn('Limit check error:', e.message);
+      Alert.alert('Connection Error', 'Could not verify your scan limit. Please check your connection and try again.');
+      return;
     }
 
     // exif: true so we can read GPS coords before compression strips them
@@ -313,7 +319,7 @@ export default function CameraScreen({ navigation }) {
       const defaultPublic = session?.user?.user_metadata?.default_public ?? false;
 
       // Biography resolved successfully — count this as a used scan
-      try { await incrementScanCount(session?.user?.id ?? null); } catch (e) { console.warn('incrementScanCount failed (non-fatal):', e.message); }
+      await incrementScanCount(session?.user?.id ?? null);
 
       // Link to canonical grave — on a cache hit the grave_id is already known;
       // otherwise call find_or_create to dedup multiple scans of the same stone.

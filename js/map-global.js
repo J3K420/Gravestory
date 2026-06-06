@@ -153,6 +153,8 @@ async function initGlobalMap() {
     globalLeafletMap = null;
     globalMapMarkers = [];
   }
+  // Clear the story lookup so old entries don't accumulate across map opens
+  window._globalStoryLookup = {};
 
   const stories = await fetchGlobalStories();
   const withGps = stories.filter(s => s.gps);
@@ -211,25 +213,24 @@ async function initGlobalMap() {
 
 function buildGlobalPopup(story) {
   // Strictly read-only popup. Read/Go-to-bio buttons gate guests.
-  const safeContrib = (story._contributor || 'Anonymous').replace(/</g, '&lt;');
+  const safeContrib = escapeHtml(story._contributor || 'Anonymous');
   const bioId = 'gbio-' + (story.timestamp || Math.random().toString(36).slice(2));
   const paragraphs = (story.biography || '').split('\n\n').filter(p => p.trim()).slice(0, 2);
-  const bioHtml = paragraphs.map(p => `<p style="margin:0.4rem 0;font-size:0.85rem;line-height:1.4;color:#333;">${p}</p>`).join('');
+  // Biography text comes from other users' Supabase rows — must be escaped before injection
+  const bioHtml = paragraphs.map(p => `<p style="margin:0.4rem 0;font-size:0.85rem;line-height:1.4;color:#333;">${escapeHtml(p)}</p>`).join('');
 
-  // For signed-in users we put the (potentially big) story object into a global lookup
-  // keyed by id so the Go-to-bio button doesn't bloat the popup HTML.
-  if (!window._globalStoryLookup) window._globalStoryLookup = {};
+  // Store the story object in the lookup (initialised in initGlobalMap before any markers are placed)
   window._globalStoryLookup[story.id] = story;
 
   const thumb = story.image_url
-    ? `<img src="${story.image_url}" alt="" loading="lazy" style="width:100%;max-height:140px;object-fit:cover;border-radius:3px;margin-bottom:0.5rem;">`
+    ? `<img src="${escapeHtml(story.image_url)}" alt="" loading="lazy" style="width:100%;max-height:140px;object-fit:cover;border-radius:3px;margin-bottom:0.5rem;">`
     : '';
   return `
     <div style="font-family:'Playfair Display',serif;min-width:150px;max-width:300px;">
       ${thumb}
-      <strong>${(story.name || 'Unknown').replace(/</g, '&lt;')}</strong><br>
-      <em style="font-size:0.85rem;color:#666">${(story.dates || '').replace(/</g, '&lt;')}</em><br>
-      <small style="color:#888">${(story.location || '').replace(/</g, '&lt;')}</small><br>
+      <strong>${escapeHtml(story.name || 'Unknown')}</strong><br>
+      <em style="font-size:0.85rem;color:#666">${escapeHtml(story.dates || '')}</em><br>
+      <small style="color:#888">${escapeHtml(story.location || '')}</small><br>
       <small style="color:#7a8a9a;font-size:0.72rem;font-style:italic">Shared by ${safeContrib}</small>
       ${story._lowConfidence ? '<br><span style="font-size:0.75rem;color:#a87a2a">⚠ approximate location</span>' : ''}
       <div style="margin-top:0.5rem;display:flex;gap:0.4rem;flex-wrap:wrap;">

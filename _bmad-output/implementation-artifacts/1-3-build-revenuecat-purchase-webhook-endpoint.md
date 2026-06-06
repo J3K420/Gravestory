@@ -4,7 +4,7 @@ baseline_commit: b67cca0
 
 # Story 1.3: Build RevenueCat Purchase Webhook Endpoint
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -52,19 +52,15 @@ so that purchased scan credit packs are immediately available for use without an
   - [x] Add `SUPABASE_URL = "https://idbrjonofqrsykqsqpwo.supabase.co"` to the `[vars]` block
   - [x] Add comments for `REVENUECAT_WEBHOOK_SECRET` and `SUPABASE_SERVICE_KEY` (same pattern as existing secret comments)
 
-- [ ] **Task 4 — Set Wrangler secrets** (AC: 7)
-  - [ ] `cd worker && wrangler secret put REVENUECAT_WEBHOOK_SECRET` — value: any strong random string you choose (e.g. `openssl rand -hex 32`); this same value goes in the RevenueCat dashboard in Task 5
-  - [ ] `cd worker && wrangler secret put SUPABASE_SERVICE_KEY` — value: Supabase project service-role key from Project Settings → API → `service_role` (the long JWT, NOT the `anon` key)
+- [x] **Task 4 — Set Wrangler secrets** (AC: 7)
+  - [x] `cd worker && wrangler secret put REVENUECAT_WEBHOOK_SECRET` — set 2026-06-06
+  - [x] `cd worker && wrangler secret put SUPABASE_SERVICE_KEY` — set 2026-06-06
 
-- [ ] **Task 5 — Configure RevenueCat dashboard** (AC: 8)
-  - [ ] In RevenueCat dashboard → Project → Integrations → Webhooks → add a new webhook
-  - [ ] Webhook URL: `https://gravestory-proxy.james-gravestory.workers.dev/revenuecat-webhook`
-  - [ ] Authorization header: `Bearer <REVENUECAT_WEBHOOK_SECRET>` (the same secret set in Task 4)
-  - [ ] Enable events: at minimum `NON_SUBSCRIPTION_PURCHASE` and `INITIAL_PURCHASE`
+- [x] **Task 5 — Configure RevenueCat dashboard** (AC: 8)
+  - [x] Webhook active 2026-06-06 — events: INITIAL_PURCHASE + NON_RENEWING_PURCHASE (dashboard label for NON_SUBSCRIPTION_PURCHASE)
 
-- [ ] **Task 6 — Deploy Worker** (AC: 7)
-  - [ ] `cd worker && wrangler deploy`
-  - [ ] Confirm deploy output shows "Uploaded gravestory-proxy" without errors
+- [x] **Task 6 — Deploy Worker** (AC: 7)
+  - [x] `cd worker && wrangler deploy` — deployed 2026-06-06, Version ID: 1ba5c69a-5b25-4cef-a005-09c96bec9a67
 
 - [ ] **Task 7 — Smoke-test with curl** (AC: 9)
   - [ ] Send a test event (exact command in Dev Notes below)

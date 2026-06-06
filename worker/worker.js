@@ -387,7 +387,7 @@ async function handleRevenueCatWebhook(request, env, origin, allowed) {
 
   // Only process purchase events; acknowledge all others without action.
   // RevenueCat retries on non-2xx — always return 2xx for events we ignore.
-  const PURCHASE_TYPES = new Set(['NON_SUBSCRIPTION_PURCHASE', 'INITIAL_PURCHASE']);
+  const PURCHASE_TYPES = new Set(['NON_SUBSCRIPTION_PURCHASE', 'NON_RENEWING_PURCHASE', 'INITIAL_PURCHASE']);
   if (!PURCHASE_TYPES.has(event.type)) {
     return json({ ok: true, action: 'ignored', type: event.type }, 200, origin, allowed);
   }

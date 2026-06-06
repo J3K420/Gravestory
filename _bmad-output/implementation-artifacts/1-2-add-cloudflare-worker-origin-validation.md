@@ -4,7 +4,7 @@ baseline_commit: 4d25eab
 
 # Story 1.2: Add Cloudflare Worker Origin Validation
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -42,9 +42,9 @@ so that third parties cannot consume GraveStory's Gemini and Tavily API quotas.
   - [x] **Test no-origin + valid CLIENT_KEY (AC 3):** `curl` with `X-Client-Key: gs-client-2025`, no Origin → HTTP 200, real Tavily response ✓
   - [x] **Test no-origin + no key:** `curl` with no Origin, no key → HTTP 403 ✓
 
-- [ ] **Task 4 — Smoke-test web app end-to-end** (AC: 1, 5)
-  - [ ] Open `https://j3k420.github.io` in browser → perform a full scan (or use the verification bypass)
-  - [ ] Confirm the scan pipeline completes without 403 errors from the Worker
+- [x] **Task 4 — Smoke-test web app end-to-end** (AC: 1, 5)
+  - [x] Open `https://j3k420.github.io/Gravestory/` in browser → performed a full scan
+  - [x] Network tab confirmed all Tavily Worker requests returned 200; preflight returned 204; no 403s
 
 ## Dev Notes
 
@@ -168,7 +168,7 @@ _None_
   - `Origin: https://evil.com` → 403 `{"error":"Forbidden origin"}`
   - No Origin + `X-Client-Key: gs-client-2025` → 200 (real Tavily response)
   - No Origin + no key → 403 `{"error":"Forbidden"}`
-- ℹ️ Task 4 — Browser smoke-test requires manual verification at `https://j3k420.github.io`; Task 3 covered the allowed-origin path end-to-end against the live Worker
+- ✅ Task 4 — Browser smoke-test at `https://j3k420.github.io/Gravestory/`: full scan pipeline ran, all Tavily Worker requests returned 200, preflight 204, no 403s in Network tab
 
 ### File List
 

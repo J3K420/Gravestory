@@ -84,6 +84,10 @@ export default function HomeScreen({ navigation }) {
           Photograph a gravestone. We'll uncover the story of the life it marks.
         </Text>
 
+        <Text style={styles.tagline}>
+          Other apps show you the grave. GraveStory discovers the life that was.
+        </Text>
+
         {/* Map buttons */}
         <View style={styles.mapRow}>
           <TouchableOpacity style={styles.mapBtn} onPress={() => navigation.navigate('CemeteryMap')}>
@@ -142,6 +146,10 @@ const styles = StyleSheet.create({
   desc: {
     color: colors.ash, fontFamily: fonts.bodyItalic, marginTop: 20,
     textAlign: 'center', lineHeight: 22, maxWidth: 280,
+  },
+  tagline: {
+    color: colors.flame, fontFamily: fonts.serifItalic, fontSize: 13,
+    textAlign: 'center', marginTop: 12, opacity: 0.45, maxWidth: 280, lineHeight: 20,
   },
 
   mapRow: { flexDirection: 'row', gap: 10, marginTop: 16, width: '100%' },

@@ -172,7 +172,7 @@ One CSS file per screen/component. CSS custom properties in `base.css`. No prepr
 
 ### Mobile-first PWA
 
-Built for one-handed use in a cemetery. Service worker caches the app shell (`gravestory-v12`) and Leaflet map tiles separately. iOS users get a manual "Add to Home Screen" hint (Safari doesn't support `beforeinstallprompt`).
+Built for one-handed use in a cemetery. Service worker caches the app shell (`gravestory-v14`) and Leaflet map tiles separately. iOS users get a manual "Add to Home Screen" hint (Safari doesn't support `beforeinstallprompt`).
 
 ---
 
@@ -399,7 +399,7 @@ mobile/
 - **Phase 8e** ✅ — Canonical graves + candle/flower tributes + EAS Update: `graves` table deduplicates multiple scans of the same physical stone; `tributes` table (one candle or flower per user per grave, UNIQUE constraint); `find_or_create_grave` RPC (atomic ~20 m name-match dedup); `update_grave_location` RPC (first user-correction wins, propagated from CemeteryMapScreen pin drag); `api-tributes.js` (getTributes/setTribute); `source` field on stories tracks camera vs library; GlobalMapScreen client-side dedup by grave_id then ~20 m GPS cell; ResultScreen shows tribute counts always + candle/flower buttons only for own camera-sourced stories; EAS Update configured (expo-updates installed, updates.url + runtimeVersion in app.config.js, channel on preview + production profiles) — testers install one new APK then all future JS changes push OTA via `npx eas update --branch preview`.
 - **Phase 8f** ✅ — Web parity for Phase 8e features: (1) `js/persistence.js` — added `grave_id` + `source` to `storyToRow`/`rowToStory`; (2) `index.html` pipeline — `currentPhotoSource` ('camera'/'library') tracked on upload, `findOrCreateGrave` RPC called after biography when signed-in user has GPS; (3) `js/map-global.js` — client-side dedup by `grave_id` then ~20 m GPS cell (same logic as mobile `GlobalMapScreen`); (4) new `js/api-tributes.js` — vanilla JS port of `getTributes`/`setTribute` using `supabaseClient`; (5) `js/render-result.js` — `renderTributeSection` shows tribute counts always when `grave_id` present, candle/flower buttons for camera-sourced non-global stories only.
 - **Phase 8g** ✅ — Search + biography quality pass: (1) Android nav bar fix — `CemeteryMapScreen` and `GlobalMapScreen` use `useSafeAreaInsets` to add `paddingBottom: insets.bottom + 8` to bottom panel (both screens use `edges={['top']}` so SafeAreaView doesn't handle the bottom); (2) Tavily query priority overhaul — queries now built in priority order so symbol-guided and general obituary queries actually fire (previously always cut off), duplicate FindAGrave merged into one, ChroniclingAmerica only for ≤1922 deaths, session-level `_searchCache` prevents re-querying same person on family plots; (3) Multi-person combined biography — when `multiple_subjects === true`, pipeline fetches Wikipedia for each person in parallel, `generateBiography` accepts `wikipediaSummary` as array, prompt explicitly names all subjects and requires proportional coverage, `name` uses " & " and `dates` uses " · " separators; (4) Biography prompt overhaul (Opus review) — Gemini structured output (`responseMimeType` + `responseSchema`), `citations [{n,description,url}]` schema converted to `sources`/`source_urls` for compat, evidence ladder for length (up to 1000 words), symbol rule describes conventional meaning not individual assertion, conflict resolution surfaces discrepancies in text, historical-figure exception requires Wikipedia in sources (memory not a source), `name_confidence: "low"` triggers identity hedging, TYPE_LABELS simplified to short tags.
-- **Phase 9** 🔄 — Freemium limits, device fingerprinting, portrait persistence, global-map portraits, security hardening complete. Remaining: privacy policy, RevenueCat, Cloudflare Worker origin check. On `phase-9` branch.
+- **Phase 9** 🔄 — All stories complete except Story 1.4 (Re-enable RevenueCat SDK — blocked on Play Store account + real RC key). `phase-9` merged to `main`. One remaining item before Play Store submission.
 
 ---
 
@@ -432,7 +432,7 @@ mobile/
 
 **Also completed (Phase 9 Session 2):**
 - ~~Freemium save limit~~ ✅ Bumped `FREE_LIMIT_USER` from 5 → 10 for launch. Guest cap stays at 3.
-- ~~Freemium scan limit~~ ✅ Bumped `SCAN_LIMIT_FREE_USER` from 5 → 10. Changed from monthly-reset to lifetime one-time trial (no reset) — controls Tavily API costs. `scan_events` table counts lifetime scans; `scan_credits` table holds purchased credits (service-role write only). Migration `005_scan_credits.sql` written; **still needs to be run in Supabase SQL editor**.
+- ~~Freemium scan limit~~ ✅ Bumped `SCAN_LIMIT_FREE_USER` from 5 → 10. Changed from monthly-reset to lifetime one-time trial (no reset) — controls Tavily API costs. `scan_events` table counts lifetime scans; `scan_credits` table holds purchased credits (service-role write only). Migration `005_scan_credits.sql` run ✅.
 - ~~Monetization model~~ ✅ Credits-only (no subscriptions). Three packs: Starter (5 scans/$0.99 · `gravestory_5_scans`), Explorer (20 scans/$2.99 · `gravestory_20_scans`), Historian (60 scans/$6.99 · `gravestory_60_scans`). Credits never expire.
 - ~~RevenueCat SDK~~ ✅ `react-native-purchases` installed. Products and offerings configured in RevenueCat dashboard (`gravestory_5_scans`, `gravestory_20_scans`, `gravestory_60_scans`). RevenueCat init currently **disabled** in `App.js` (test key caused native crash in release builds). `REVENUECAT_API_KEY` exported from `config.js`. Re-enable once Play Store account obtained and real production key issued.
 - ~~hasFamousSubject shared stone fix~~ ✅ When `multiple_subjects === true` and any Wikipedia summary was found for a subject, `hasFamousSubject = true` — unlocks full 2500-word bio for the notable person while still giving the lesser-documented person a dignified paragraph. Condition requires only `wikiSummaries.length > 0` (not a source-count threshold). Applied to both `js/biography.js` and `mobile/src/lib/biography.js`.
@@ -449,13 +449,20 @@ mobile/
 - ~~RevenueCat test key committed bare~~ ✅ Warning comment added; production key must be an EAS Secret.
 - ~~BMAD-METHOD install~~ ✅ `_bmad/` folder committed. 44 skills available in `.claude/skills/` for Claude Code sessions.
 
+**Also completed (Phase 9 Session 4):**
+- ~~Run `005_scan_credits.sql`~~ ✅ Story 1.1 — run in Supabase SQL editor 2026-06-05.
+- ~~Cloudflare Worker origin check~~ ✅ Story 1.2 — `ALLOWED_ORIGIN` enforced; `CLIENT_KEY` path unaffected. Deployed.
+- ~~RevenueCat webhook~~ ✅ Story 1.3 — `POST /revenuecat-webhook` handler in Worker; `REVENUECAT_WEBHOOK_SECRET` + `SUPABASE_SERVICE_KEY` set via wrangler; `NON_RENEWING_PURCHASE` + `INITIAL_PURCHASE` handled; smoke-tested. Migration `006_add_increment_credits_fn.sql` run. RevenueCat dashboard webhook active.
+- ~~Privacy policy page~~ ✅ Story 1.5 — live at `https://j3k420.github.io/gravestory-privacy/` (separate `J3K420/gravestory-privacy` GitHub Pages repo). Privacy Policy link added to mobile `SettingsScreen` (Linking.openURL) and web Settings screen (anchor tag).
+- ~~Store listing assets~~ ✅ Story 1.6 — `store-listing/description.md` (short 77 chars + full ~1450 chars) and `store-listing/feature-graphic.svg` (1024×500 dark gothic SVG). Screenshots pending user capture on device → `store-listing/screenshots/`.
+- ~~Dead code removal~~ ✅ Deleted orphaned `js/home-screen.append.js` (never loaded); removed redundant local `escapeHtml` in `js/render-result.js`.
+- ~~Home screen tagline~~ ✅ Added *"Other apps show you the grave. GraveStory discovers the life that was."* below desc on web + mobile home screens.
+- ~~Service worker bumped to v14~~ ✅ Forces cache refresh for users on old cached version.
+- ~~phase-9 merged to main~~ ✅ All Phase 9 work live on GitHub Pages.
+
 **Remaining:**
-- **Run `005_scan_credits.sql`** in Supabase SQL editor — creates `scan_credits` table with RLS. Use plain ASCII quotes (no curly/typographic quotes).
-- **Cloudflare Worker origin check** — add `Origin` header validation to the deployed Worker so third parties can't use GraveStory's API quota. Worker code is not in this repo; edit and redeploy separately.
-- **RevenueCat webhook** — Cloudflare Worker endpoint to receive RevenueCat purchase events and INSERT/UPDATE `scan_credits`. Requires secret key from RevenueCat dashboard.
-- **Re-enable RevenueCat SDK** — after Play Store account ($25) → real production API key from RevenueCat → uncomment imports in `App.js` and `PaywallScreen.js` → trigger new build.
-- **Privacy policy page** — draft written last session. Host on GitHub Pages (`https://j3k420.github.io/gravestory-privacy`). Link from Settings screen.
-- **Store listing assets** — screenshots, feature graphic, short/full description.
+- **Re-enable RevenueCat SDK** (Story 1.4) — after Play Store account ($25) → real production API key from RevenueCat → uncomment imports in `App.js` and `PaywallScreen.js` → trigger new build.
+- **Store listing screenshots** — capture on Android device: (1) home screen, (2) biography result, (3) optional cemetery map. Save to `store-listing/screenshots/` and commit.
 
 **Shelved:**
 - ~~GEDCOM export~~ — not enough family relationship data to produce meaningful family trees. Revisit if app later tracks spouse/parent/child links.

@@ -1,5 +1,5 @@
 # generated: 2026-06-05
-# last_updated: 2026-06-06-session5
+# last_updated: 2026-06-07-session6-session5
 # project: GraveStory
 # project_key: NOKEY
 # tracking_system: file-system
@@ -38,7 +38,7 @@
 # - Developer typically creates next story file after previous one is 'done'
 
 generated: 2026-06-05
-last_updated: 2026-06-06
+last_updated: 2026-06-07-session6
 project: GraveStory
 project_key: NOKEY
 tracking_system: file-system
@@ -62,8 +62,8 @@ development_status:
   # Play Store account activated 2026-06-06. Unblocked pending Story 1.4 RC key.
   epic-2: in-progress
 
-  2-1-generate-android-production-credentials: ready-for-dev  # run: npx eas credentials
-  2-2-build-and-submit-production-aab-to-play-store: backlog
+  2-1-generate-android-production-credentials: done  # keystore confirmed existing; downloaded backup 2026-06-07
+  2-2-build-and-submit-production-aab-to-play-store: in-progress  # AAB built + uploaded to Play Console internal testing; tester j3k420@gmail.com added; scan bug fixed via OTA 2026-06-07; need to verify OTA works then recruit 12 testers for closed testing (14-day requirement before production)
 
   epic-2-retrospective: optional
 

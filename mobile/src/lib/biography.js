@@ -1,4 +1,4 @@
-import { PROXY_BASE } from './config';
+import { PROXY_BASE, CLIENT_KEY } from './config';
 import { safeParseJSON } from './util-json';
 
 // Build a cross-source corroboration summary for the biography prompt.
@@ -116,13 +116,13 @@ function validateCitations(parsed) {
   };
 }
 
-const PRIMARY  = 'gemini-3.1-flash-lite';
+const PRIMARY  = 'gemini-2.5-flash-lite';
 const FALLBACK = 'gemini-2.5-flash';
 
 async function geminiText(payload) {
   const init = {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
     body: JSON.stringify(payload),
   };
   try {
@@ -303,7 +303,10 @@ For each [N] marker used, include a matching entry in the "citations" output arr
       responseSchema: RESPONSE_SCHEMA,
     },
   });
-  if (data.error) throw new Error(data.error.message);
+  if (data.error) {
+    const msg = typeof data.error === 'string' ? data.error : (data.error.message || data.error.status || JSON.stringify(data.error));
+    throw new Error(msg || 'Gemini biography error');
+  }
 
   const text = data.candidates[0].content.parts[0].text;
   const parsed = safeParseJSON(text, null);

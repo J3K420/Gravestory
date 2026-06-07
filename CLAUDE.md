@@ -399,7 +399,7 @@ mobile/
 - **Phase 8e** ✅ — Canonical graves + candle/flower tributes + EAS Update: `graves` table deduplicates multiple scans of the same physical stone; `tributes` table (one candle or flower per user per grave, UNIQUE constraint); `find_or_create_grave` RPC (atomic ~20 m name-match dedup); `update_grave_location` RPC (first user-correction wins, propagated from CemeteryMapScreen pin drag); `api-tributes.js` (getTributes/setTribute); `source` field on stories tracks camera vs library; GlobalMapScreen client-side dedup by grave_id then ~20 m GPS cell; ResultScreen shows tribute counts always + candle/flower buttons only for own camera-sourced stories; EAS Update configured (expo-updates installed, updates.url + runtimeVersion in app.config.js, channel on preview + production profiles) — testers install one new APK then all future JS changes push OTA via `npx eas update --branch preview`.
 - **Phase 8f** ✅ — Web parity for Phase 8e features: (1) `js/persistence.js` — added `grave_id` + `source` to `storyToRow`/`rowToStory`; (2) `index.html` pipeline — `currentPhotoSource` ('camera'/'library') tracked on upload, `findOrCreateGrave` RPC called after biography when signed-in user has GPS; (3) `js/map-global.js` — client-side dedup by `grave_id` then ~20 m GPS cell (same logic as mobile `GlobalMapScreen`); (4) new `js/api-tributes.js` — vanilla JS port of `getTributes`/`setTribute` using `supabaseClient`; (5) `js/render-result.js` — `renderTributeSection` shows tribute counts always when `grave_id` present, candle/flower buttons for camera-sourced non-global stories only.
 - **Phase 8g** ✅ — Search + biography quality pass: (1) Android nav bar fix — `CemeteryMapScreen` and `GlobalMapScreen` use `useSafeAreaInsets` to add `paddingBottom: insets.bottom + 8` to bottom panel (both screens use `edges={['top']}` so SafeAreaView doesn't handle the bottom); (2) Tavily query priority overhaul — queries now built in priority order so symbol-guided and general obituary queries actually fire (previously always cut off), duplicate FindAGrave merged into one, ChroniclingAmerica only for ≤1922 deaths, session-level `_searchCache` prevents re-querying same person on family plots; (3) Multi-person combined biography — when `multiple_subjects === true`, pipeline fetches Wikipedia for each person in parallel, `generateBiography` accepts `wikipediaSummary` as array, prompt explicitly names all subjects and requires proportional coverage, `name` uses " & " and `dates` uses " · " separators; (4) Biography prompt overhaul (Opus review) — Gemini structured output (`responseMimeType` + `responseSchema`), `citations [{n,description,url}]` schema converted to `sources`/`source_urls` for compat, evidence ladder for length (up to 1000 words), symbol rule describes conventional meaning not individual assertion, conflict resolution surfaces discrepancies in text, historical-figure exception requires Wikipedia in sources (memory not a source), `name_confidence: "low"` triggers identity hedging, TYPE_LABELS simplified to short tags.
-- **Phase 9** 🔄 — All stories complete except Story 1.4 (Re-enable RevenueCat SDK — blocked on Play Store account + real RC key). `phase-9` merged to `main`. One remaining item before Play Store submission.
+- **Phase 9** 🔄 — All stories complete except Story 1.4 (Re-enable RevenueCat SDK — Play Store account activated 2026-06-06; waiting on real RevenueCat production key). `phase-9` merged to `main`. Epic 2 (Play Store Launch) now unblocked for credentials + AAB build.
 
 ---
 
@@ -460,18 +460,20 @@ mobile/
 - ~~Service worker bumped to v14~~ ✅ Forces cache refresh for users on old cached version.
 - ~~phase-9 merged to main~~ ✅ All Phase 9 work live on GitHub Pages.
 
-**Remaining:**
-- **Re-enable RevenueCat SDK** (Story 1.4) — after Play Store account ($25) → real production API key from RevenueCat → uncomment imports in `App.js` and `PaywallScreen.js` → trigger new build.
-- **Store listing screenshots** — capture on Android device: (1) home screen, (2) biography result, (3) optional cemetery map. Save to `store-listing/screenshots/` and commit.
+**Also completed (Phase 9 Session 5):**
+- ~~Google Play developer account~~ ✅ Activated 2026-06-06. Individual account, developer display name TBD. Unblocks Epic 2 (Play Store Launch).
+
+**Remaining (Epic 1):**
+- **Re-enable RevenueCat SDK** (Story 1.4) — Play Store account now active ✅ → get real production API key from RevenueCat dashboard → uncomment imports in `App.js` and `PaywallScreen.js` → trigger new build.
+- **Store listing screenshots** — drop into `store-listing/screenshots/` and commit. Home screen + biography result captured; better shots in progress.
+
+**Epic 2 — Play Store Launch (now unblocked):**
+- **Story 2.1 — EAS credentials**: run `npx eas credentials` once to generate/upload Android keystore. Run before first production build.
+- **Story 2.2 — Production AAB + submission**: `npx eas build --platform android --profile production` → upload AAB to Play Console → content rating questionnaire → internal track → production rollout.
 
 **Shelved:**
 - ~~GEDCOM export~~ — not enough family relationship data to produce meaningful family trees. Revisit if app later tracks spouse/parent/child links.
 - ~~Family/subscription tier~~ — excluded due to unbounded Tavily API cost risk with unlimited scanning. Credits-only model chosen instead.
-
-**Requires $25 Google Play account:**
-- EAS credentials: run `npx eas credentials` once to generate/upload Android keystore
-- Production build: `npx eas build --platform android --profile production`
-- Play Store submission: store listing, content rating questionnaire, AAB upload, internal track → production rollout
 
 **Requires $99/yr Apple Developer account:**
 - iOS TestFlight build

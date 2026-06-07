@@ -1,5 +1,5 @@
 # generated: 2026-06-05
-# last_updated: 2026-06-06
+# last_updated: 2026-06-06-session5
 # project: GraveStory
 # project_key: NOKEY
 # tracking_system: file-system
@@ -52,17 +52,17 @@ development_status:
   1-1-run-scan-credits-database-migration: done
   1-2-add-cloudflare-worker-origin-validation: done
   1-3-build-revenuecat-purchase-webhook-endpoint: done
-  1-4-re-enable-revenuecat-sdk-in-mobile-app: backlog
+  1-4-re-enable-revenuecat-sdk-in-mobile-app: ready-for-dev  # Play Store account active 2026-06-06; need real RC production key from RevenueCat dashboard
   1-5-publish-privacy-policy-page: done
-  1-6-create-play-store-listing-assets: in-progress
+  1-6-create-play-store-listing-assets: in-progress  # text+SVG done; screenshots pending device transfer
 
   epic-1-retrospective: optional
 
   # ─── Epic 2: Play Store Launch ────────────────────────────────────────────
-  # Blocked until all Epic 1 stories are done
-  epic-2: backlog
+  # Play Store account activated 2026-06-06. Unblocked pending Story 1.4 RC key.
+  epic-2: in-progress
 
-  2-1-generate-android-production-credentials: backlog
+  2-1-generate-android-production-credentials: ready-for-dev  # run: npx eas credentials
   2-2-build-and-submit-production-aab-to-play-store: backlog
 
   epic-2-retrospective: optional

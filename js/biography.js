@@ -126,7 +126,10 @@ async function generateBiography(graveData, searchResults, wikiData, location, w
     (Array.isArray(wikipediaSummary) ? wikipediaSummary.some(Boolean) : wikipediaSummary != null);
   if (!hasRealSources) {
     console.log('📜 No real sources — returning stone-only biography, skipping LLM.');
-    const allPeople = (graveData.names || []).filter(Boolean);
+    // Prefer the deceased-subjects list so a shared family stone with no web sources
+    // still names every person, consistent with isMultiSubject elsewhere.
+    const _fbSubs = Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name) : [];
+    const allPeople = _fbSubs.length > 1 ? _fbSubs.map(s => s.name) : (graveData.names || []).filter(Boolean);
     const who = allPeople.length > 1
       ? allPeople.join(' and ')
       : (graveData.primary_name || allPeople[0] || 'an individual');
@@ -213,14 +216,27 @@ async function generateBiography(graveData, searchResults, wikiData, location, w
 
   const locationContext = location ? `Cemetery location: ${location}` : 'Cemetery location: unknown — infer from research results if possible.';
 
-  const isMultiSubject = graveData.multiple_subjects === true && (graveData.names?.length > 1);
-  // When one subject on a shared stone has a Wikipedia article + 3+ sources, let them
-  // have the full historical-figure word budget rather than splitting proportionally.
+  // Per-person deceased subjects with their own dates — more reliable than the single
+  // top-level birth_date/death_date pair, which on a shared stone reflects only ONE person.
+  const deceasedSubjects = Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name) : [];
+  // A shared family stone (e.g. grandmother + granddaughter) is NOT "multiple_subjects"
+  // by the OCR's narrow definition (separate physical stones), so also treat >1 deceased
+  // subject as multi-subject — otherwise the second person is never given a biography.
+  const isMultiSubject = deceasedSubjects.length > 1 || (graveData.multiple_subjects === true && (graveData.names?.length > 1));
+  const subjectNames = deceasedSubjects.length > 1
+    ? deceasedSubjects.map(s => s.name)
+    : (graveData.names?.length ? graveData.names : []);
+  const perSubjectDates = deceasedSubjects.length > 1
+    ? '\nEach person\'s own dates as recorded on the stone:\n' +
+      deceasedSubjects.map(s => `- ${s.name}: ${[s.birth_date, s.death_date].filter(Boolean).join(' – ') || 'dates not legible'}`).join('\n') + '\n'
+    : '';
+  // When one subject on a shared stone has a Wikipedia article, let them have the full
+  // historical-figure word budget rather than splitting proportionally.
   const hasFamousSubject = isMultiSubject && wikiSummaries.length > 0;
   const multiSubjectBlock = isMultiSubject
     ? hasFamousSubject
-      ? `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${graveData.names.join(' and ')}. The research sources contain substantial documentation for one subject and limited records for the other(s). Write a full biography for the well-documented subject using the historical-figure word budget; devote a respectful, dignified paragraph to the lesser-documented person(s), honouring their memory and their relationship to the famous subject. Weave their connection together — do not ignore either person.\n`
-      : `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${graveData.names.join(' and ')}. You MUST write a combined biography that gives each person meaningful, proportional coverage — do not focus exclusively on the most notable or primary subject. Weave their stories together and, where the stone or research reveals their relationship (e.g. grandmother and granddaughter, husband and wife), honour that connection explicitly.\n`
+      ? `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${subjectNames.join(' and ')}.${perSubjectDates}The research sources contain substantial documentation for one subject and limited records for the other(s). Write a full biography for the well-documented subject using the historical-figure word budget; devote a respectful, dignified paragraph to the lesser-documented person(s), honouring their memory and their relationship to the famous subject. Weave their connection together — do not ignore either person.\n`
+      : `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${subjectNames.join(' and ')}.${perSubjectDates}You MUST write a combined biography that gives each person meaningful, proportional coverage — do not focus exclusively on the most notable or primary subject. Weave their stories together and, where the stone or research reveals their relationship (e.g. grandmother and granddaughter, husband and wife), honour that connection explicitly.\n`
     : '';
 
   const prompt = `You are GraveStory AI, a careful historian writing a respectful life history.
@@ -262,10 +278,11 @@ CONFLICTING SOURCES:
 
 WELL-DOCUMENTED HISTORICAL FIGURES (narrow exception):
 - A figure of major historical significance earns a fuller biography only when all of the following hold:
-    (1) graveData birth/death dates are within ±5 years of the famous figure's actual dates
+    (1) The stone shows dates for THAT SPECIFIC PERSON — in the "subjects" array, the inscription text, or graveData.birth_date/death_date — within ±5 years of the famous figure's actual dates. On a shared or family stone, validate each candidate against THEIR OWN dates beside their name, never another person's. (Example: a stone commemorating a grandmother 1927–2006 AND her granddaughter 1983–2011 — validate the granddaughter against 1983–2011, not the grandmother's dates. The top-level birth_date/death_date may belong to a different person on the stone.)
     (2) A [Wikipedia] article confirming the same person is present in the numbered sources above
     (3) Every claim in the fuller biography is supported by a numbered source with an [N] marker
-- If any condition fails — including no Wikipedia article being present in the numbered sources — write the short source-grounded biography. Memory is not a source. A fabricated famous figure is worse than a brief accurate one.
+- These conditions are evaluated PER PERSON. On a shared stone, one subject may fully qualify for the historical-figure biography while another does not — give the qualifying subject the full treatment and the other a dignified, source-grounded paragraph honouring them and their relationship.
+- If a person fails any condition — including no Wikipedia article confirming them in the numbered sources — write the short source-grounded biography for that person. Memory is not a source. A fabricated famous figure is worse than a brief accurate one.
 
 CITATIONS:
 - After each specific factual claim drawn from a numbered source, append the source number: "Buried at Lake View Cemetery [2]." Multiple: "[2][4]"
@@ -279,7 +296,7 @@ BURIAL LOCATION (the "location" output field):
 - Do not substitute birth place or death place for burial location
 - For well-known figures, prefer the burial location confirmed by a numbered source over ambiguous search snippets about where they lived or died
 
-For each [N] marker used, include a matching entry in the "citations" output array with its number (n), a short description, and the source URL. Name field: when multiple_subjects is false, use primary_name only — do not join aliases or pen names with " & " (e.g. if the stone lists both "Samuel Langhorne Clemens" and "Mark Twain", the name field should be "Mark Twain" — use whichever form is most widely recognised). When multiple_subjects is true, join all subjects with " & ". Dates field: separate with " · " for multiple people.`;
+For each [N] marker used, include a matching entry in the "citations" output array with its number (n), a short description, and the source URL. Name field: ${isMultiSubject ? `this stone commemorates more than one deceased person — join all of them with " & " (e.g. "${subjectNames.join(' & ')}"), and separate their dates with " · " in the dates field.` : `this stone commemorates ONE person — use primary_name only; do not join aliases or pen names with " & " (e.g. if the stone lists both "Samuel Langhorne Clemens" and "Mark Twain", the name field should be "Mark Twain" — use whichever form is most widely recognised).`}`;
 
   const { data } = await geminiCallWithFallback({
     contents: [{ parts: [{ text: prompt }] }],

@@ -233,14 +233,23 @@ export default function CameraScreen({ navigation }) {
         const datesStr = [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ');
         const effectiveDeath = graveData.death_date?.match(/\d{4}/)?.[0] || '';
         const deathYrNum = effectiveDeath ? parseInt(effectiveDeath, 10) : 0;
-        const wikiNames = (graveData.multiple_subjects && graveData.names?.length > 1)
-          ? graveData.names.slice(0, 3)
-          : [primaryOcrName];
+        // Per-person deceased subjects (with their OWN dates) drive the research fan-out.
+        // A shared family stone (grandmother + granddaughter) is not "multiple_subjects"
+        // by the OCR's narrow definition, so key off the subjects array too — otherwise a
+        // famous secondary subject (e.g. Amy Winehouse beside her grandmother) is never
+        // researched and gets no Wikipedia article. Each target carries its own dates so
+        // the Wikipedia lookup matches the right person, not the primary's dates.
+        const deceasedSubjects = Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name) : [];
+        const isMulti = deceasedSubjects.length > 1 || (graveData.multiple_subjects === true && graveData.names?.length > 1);
+        const researchTargets = deceasedSubjects.length > 1
+          ? deceasedSubjects.slice(0, 3).map(s => ({ name: s.name, dates: [s.birth_date, s.death_date].filter(Boolean).join(' ') }))
+          : (isMulti ? graveData.names.slice(0, 3) : [primaryOcrName]).map(n => ({ name: n, dates: datesStr }));
+        const wikiNames = researchTargets.map(t => t.name);
 
-        // For multi-person stones, search WikiTree for each of the first 2 people.
-        const wikiTreeTargets = (graveData.multiple_subjects && graveData.names?.length > 1)
-          ? graveData.names.slice(0, 2)
-          : [primaryOcrName];
+        // For multi-person stones, search WikiTree for each of the first 2 deceased people.
+        const wikiTreeTargets = deceasedSubjects.length > 1
+          ? deceasedSubjects.slice(0, 2).map(s => s.name)
+          : (isMulti ? graveData.names.slice(0, 2) : [primaryOcrName]);
 
         // Fetch portraits for every person on the stone (wikiNames), not just the
         // primary name — on multi-person stones the primary subject (e.g. Cynthia Levy)
@@ -256,8 +265,8 @@ export default function CameraScreen({ navigation }) {
           (effectiveDeath && deathYrNum <= 1924)
             ? searchChroniclingAmerica(primaryOcrName, effectiveDeath)
             : Promise.resolve([]),
-          ...wikiNames.map(n => fetchWikipediaPortraits(n, datesStr)),
-          ...wikiNames.map(n => fetchWikipediaArticleSummary(n, datesStr)),
+          ...researchTargets.map(t => fetchWikipediaPortraits(t.name, t.dates)),
+          ...researchTargets.map(t => fetchWikipediaArticleSummary(t.name, t.dates)),
         ]);
 
         let idx = 0;
@@ -374,6 +383,7 @@ export default function CameraScreen({ navigation }) {
       navigation.navigate('Result', { story });
     } catch (err) {
       setLoading(false);
+      console.warn('Pipeline error:', String(err), 'message:', err?.message, 'stack:', err?.stack);
       setPipelineError(err.message || 'Something went wrong. Please try again.');
     }
   }

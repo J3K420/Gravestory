@@ -164,10 +164,14 @@ Return ONLY a valid JSON object with these exact fields:
   "name_confidence": "high if the name is clearly legible, medium if partially weathered or ambiguous, low if significantly uncertain",
   "alternate_names": ["if name_confidence is medium or low, list 1-2 plausible alternate readings of primary_name due to weathering or OCR ambiguity — otherwise empty array"],
   "multiple_subjects": "true if this photo clearly shows multiple SEPARATE, DISTINCT gravestones or memorial markers in the same frame (not a single shared family stone) — false otherwise",
+  "subjects": [{"name": "a deceased person commemorated on this stone", "birth_date": "their birth date/year if shown, else empty", "death_date": "their death date/year if shown, else empty"}],
   "notes": "any other text, observations, or ambiguity flags — e.g. 'Surname not visible for deceased; KNUVER is the wife's surname'"
 }
 
-If multiple deceased people share the stone (e.g. a couple both buried here with both sets of dates), use the names array and pick the most prominent as primary_name. Be precise about dates. Return only JSON.`;
+SUBJECTS ARRAY — IMPORTANT:
+Populate "subjects" with one entry for EACH DECEASED person commemorated on this stone, each with their OWN birth/death dates exactly as shown beside their name. A single shared family stone often commemorates more than one deceased person (e.g. a grandmother AND a granddaughter, each with separate dates) — list each as a separate entry with their individual dates. Exclude living relatives who are named only inside relational phrases ("beloved wife of", "devoted family", lists of survivors) — those are not the deceased. List each deceased person only ONCE: if a single deceased person is known by more than one name or an alias (e.g. a birth name and a stage/pen name), merge them into a single entry using their most recognised name — do NOT create separate entries for the same person. For a stone with one deceased person, return a single entry. This per-person date breakdown matters: top-level birth_date/death_date may reflect only one person, but each subject's own dates must be captured here.
+
+If multiple deceased people share the stone (e.g. a couple both buried here with both sets of dates), use the names array and pick the most prominent as primary_name, and list every deceased person with their own dates in subjects. Be precise about dates. Return only JSON.`;
 
   const { data } = await geminiCallWithFallback({
     contents: [{
@@ -182,5 +186,5 @@ If multiple deceased people share the stone (e.g. a couple both buried here with
 
   const text = data.candidates[0].content.parts[0].text;
   console.log('GRAVESTONE RAW:', text);
-  return safeParseJSON(text, {names:[], primary_name:'Unknown', birth_date:'', death_date:'', inscription:'', symbols:[], family_name:'', notes:'', name_confidence:'high', alternate_names:[], multiple_subjects:false});
+  return safeParseJSON(text, {names:[], primary_name:'Unknown', birth_date:'', death_date:'', inscription:'', symbols:[], family_name:'', notes:'', name_confidence:'high', alternate_names:[], multiple_subjects:false, subjects:[]});
 }

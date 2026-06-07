@@ -1,7 +1,7 @@
 import { PROXY_BASE, CLIENT_KEY } from './config';
 import { safeParseJSON } from './util-json';
 
-const PRIMARY  = 'gemini-3.1-flash-lite';
+const PRIMARY  = 'gemini-2.5-flash-lite';
 const FALLBACK = 'gemini-2.5-flash';
 const TIMEOUT_MS = 30000;
 
@@ -14,6 +14,14 @@ function fetchWithTimeout(url, init) {
   ]);
 }
 
+// Handles both Gemini error objects ({ message, code, status }) and
+// Worker string errors ({ error: 'Forbidden' }) so callers always get a string.
+function extractErrMsg(dataError) {
+  if (!dataError) return '';
+  if (typeof dataError === 'string') return dataError;
+  return dataError.message || dataError.status || dataError.detail || JSON.stringify(dataError);
+}
+
 async function geminiCallWithFallback(payload) {
   const init = {
     method: 'POST',
@@ -23,12 +31,15 @@ async function geminiCallWithFallback(payload) {
 
   const shouldFallback = (res, data) => {
     if (res && (res.status === 503 || res.status === 429)) return true;
-    if (data?.error) {
+    // Only inspect nested Gemini error objects — Worker string errors never trigger fallback
+    if (data?.error && typeof data.error === 'object') {
       const msg = (data.error.message || '').toLowerCase();
       const code = data.error.code;
-      if (code === 503 || code === 429) return true;
+      // 404 = model not found on Gemini → try fallback model
+      if (code === 503 || code === 429 || code === 404) return true;
       if (msg.includes('overload') || msg.includes('unavailable') ||
-          msg.includes('high demand') || msg.includes('try again later')) return true;
+          msg.includes('high demand') || msg.includes('try again later') ||
+          msg.includes('not found')) return true;
     }
     return false;
   };
@@ -82,7 +93,7 @@ Return only JSON.`;
   });
 
   if (data.error) {
-    console.warn('Gravestone verification failed — proceeding anyway:', data.error.message);
+    console.warn('verifyIsGravestone error — proceeding anyway. Response:', JSON.stringify(data));
     return;
   }
 
@@ -146,7 +157,10 @@ If multiple deceased people share the stone, use the names array and pick the mo
     contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }] }],
     generationConfig: { temperature: 0.1 },
   });
-  if (data.error) throw new Error(data.error.message);
+  if (data.error) {
+    console.warn('readGravestone API error. Full response:', JSON.stringify(data));
+    throw new Error(extractErrMsg(data.error) || 'Gemini API error');
+  }
 
   const text = data.candidates[0].content.parts[0].text;
   return safeParseJSON(text, {

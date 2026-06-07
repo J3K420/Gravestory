@@ -952,11 +952,12 @@ async function startAnalysis() {
     // Count this scan now that OCR succeeded (verification already passed)
     await incrementWebScanCount();
 
-    // Inform the user if multiple distinct gravestones are in frame — the bio
-    // focuses on the primary inscription; best results come from one stone per scan.
-    if (graveData.multiple_subjects === true) {
+    // Warn about separate physical stones only when subjects didn't capture all people.
+    // When subjects has multiple entries the pipeline already handles each person.
+    const _multiSubjectsInArray = Array.isArray(graveData.subjects) && graveData.subjects.filter(s => s && s.name).length > 1;
+    if (graveData.multiple_subjects === true && !_multiSubjectsInArray) {
       const el = document.getElementById('loading-step');
-      if (el) el.textContent = 'Multiple gravestones detected — focusing on primary inscription…';
+      if (el) el.textContent = 'Multiple gravestones detected — for best results photograph each separately…';
       console.log('⚠️ Multiple gravestones detected in frame');
     }
 

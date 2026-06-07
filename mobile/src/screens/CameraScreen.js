@@ -162,12 +162,13 @@ export default function CameraScreen({ navigation }) {
       setStepIndex(1);
       const graveData = await readGravestone(base64, locationHint);
 
-      // Inform the user if multiple distinct gravestones are visible — the bio
-      // focuses on the primary inscription; best results come from one stone per scan.
-      if (graveData.multiple_subjects === true) {
+      // Warn about separate physical stones only when subjects didn't capture all people.
+      // When subjects has multiple entries the pipeline already handles each person — no warning.
+      const _multiSubjectsInArray = Array.isArray(graveData.subjects) && graveData.subjects.filter(s => s && s.name).length > 1;
+      if (graveData.multiple_subjects === true && !_multiSubjectsInArray) {
         Alert.alert(
           'Multiple Gravestones Detected',
-          'This photo appears to show more than one separate gravestone. The biography will focus on the primary inscription. For best results, photograph each stone individually.',
+          'This photo appears to show more than one separate gravestone. For best results, photograph each stone individually.',
           [{ text: 'OK' }]
         );
       }

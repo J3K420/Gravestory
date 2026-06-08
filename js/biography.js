@@ -290,7 +290,7 @@ WELL-DOCUMENTED HISTORICAL FIGURES (narrow exception):
 
 FORMATTING (the "biography" output field is rendered as plain text, split into paragraphs on blank lines):
 - Separate every paragraph with a blank line (\\n\\n). Never return the whole biography as one unbroken block.
-- ${isMultiSubject ? 'Give each person their OWN paragraph(s) — start a new paragraph (with a blank line) when you move from one person to the next. Do not run two people\\'s lives together in a single paragraph.' : 'Use a new paragraph for each distinct phase of the life (early life, career, family, legacy).'}
+- ${isMultiSubject ? 'Give each person their OWN paragraph(s) — start a new paragraph (with a blank line) when you move from one person to the next. Do not run the lives of two people together in a single paragraph.' : 'Use a new paragraph for each distinct phase of the life (early life, career, family, legacy).'}
 - The ONLY brackets allowed in the biography text are numeric citation markers like [2] or [2][4]. NEVER write label-style brackets such as [Inscription], [Notes], [Stone], or [Wikipedia] in the prose — they are not citations and look broken to the reader. To refer to the inscription, write "the inscription reads…" in plain words, with no bracket.
 
 CITATIONS:

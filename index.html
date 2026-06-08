@@ -961,6 +961,17 @@ async function startAnalysis() {
       console.log('⚠️ Multiple gravestones detected in frame');
     }
 
+    // 3+ people on one stone: Tavily only has a dedicated research slot for the first
+    // two people, so the third person onward leans on the inscription + any Wikipedia
+    // article. Advise photographing each stone individually for a full per-person bio.
+    const _deceasedCount = (Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name).length : 0)
+      || (graveData.names?.length || 0);
+    if (_deceasedCount >= 3) {
+      const el = document.getElementById('loading-step');
+      if (el) el.textContent = 'Several people on this stone — research depth is reduced beyond the first two. Photograph each individually for a full biography…';
+      console.log('⚠️ 3+ people detected — reduced research depth beyond first two');
+    }
+
     // Primary OCR name — used for cache lookup and grave linking
     const primaryOcrName = graveData.primary_name || graveData.names?.[0] || '';
 

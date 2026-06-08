@@ -173,6 +173,19 @@ export default function CameraScreen({ navigation }) {
         );
       }
 
+      // 3+ people on one stone: Tavily only has a dedicated research slot for the first
+      // two people, so the third person onward leans on the inscription + any Wikipedia
+      // article. Advise photographing each stone individually for a full per-person bio.
+      const _deceasedCount = (Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name).length : 0)
+        || (graveData.names?.length || 0);
+      if (_deceasedCount >= 3) {
+        Alert.alert(
+          'Several People on This Stone',
+          'This stone lists three or more people. Research depth is reduced for the third person and beyond — for a full biography of each, photograph each stone individually.',
+          [{ text: 'OK' }]
+        );
+      }
+
       // Primary OCR name — used for cache lookup and grave linking
       const primaryOcrName = graveData.primary_name || graveData.names?.[0] || '';
 

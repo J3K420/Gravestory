@@ -1,5 +1,5 @@
 # generated: 2026-06-05
-# last_updated: 2026-06-07-session8
+# last_updated: 2026-06-08-session10
 # project: GraveStory
 # project_key: NOKEY
 # tracking_system: file-system
@@ -38,7 +38,7 @@
 # - Developer typically creates next story file after previous one is 'done'
 
 generated: 2026-06-05
-last_updated: 2026-06-07-session8
+last_updated: 2026-06-08-session10
 project: GraveStory
 project_key: NOKEY
 tracking_system: file-system
@@ -63,7 +63,7 @@ development_status:
   epic-2: in-progress
 
   2-1-generate-android-production-credentials: done  # keystore confirmed existing; downloaded backup 2026-06-07
-  2-2-build-and-submit-production-aab-to-play-store: in-progress  # AAB built + uploaded to Play Console internal testing; tester j3k420@gmail.com added; FOUR bugs fixed via OTA to production channel 2026-06-07 (scan X-Client-Key 403 = session6; multi-subject bio demotion = session7; OCR false-positive multiple_subjects + wrong warning = session8-r1; Wikipedia not identified as famous-person qualifier + model not authorised to use knowledge = session8-r2+r3); verify Amy Winehouse bio then recruit 12 testers for closed testing (14-day requirement before production)
+  2-2-build-and-submit-production-aab-to-play-store: in-progress  # AAB in Play Console internal testing; tester j3k420@gmail.com added. Session 10 (2026-06-08) infra audit: Gemini on paid Tier 1 (key under AI Studio "Gemini Project" gen-lang-client-0734604382, NOT the GraveHunter project); all 6 Supabase migrations confirmed live (006 fn is add_scan_credits); RC Pub/Sub warning ignorable (credits-only). 3-person-stone disclaimer coded in index.html + CameraScreen.js but HELD uncommitted to batch with next session. NEXT SESSION (in order): (1) bio-prompt tuning + bump primary Gemini model to a newer one [mobile still on gemini-2.5-flash-lite; add any new model to Worker ALLOWED_MODELS whitelist]; (2) commit held disclaimer + bio/model changes together, push, OTA to production channel; (3) build new production AAB; (4) upload to Play Console; (5) recruit 12 testers -> 14-day closed-testing clock. Tester unlimited-credits flow mapped: emails -> Play Console list -> testers sign in -> batch is_unlimited SQL keyed on email -> token-refresh latency (~1hr/restart; onboarding note promises up to 48hr).
 
   epic-2-retrospective: optional
 

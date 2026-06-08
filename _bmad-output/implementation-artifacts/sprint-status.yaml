@@ -1,5 +1,5 @@
 # generated: 2026-06-05
-# last_updated: 2026-06-08-session11
+# last_updated: 2026-06-08-session12
 # project: GraveStory
 # project_key: NOKEY
 # tracking_system: file-system
@@ -38,7 +38,7 @@
 # - Developer typically creates next story file after previous one is 'done'
 
 generated: 2026-06-05
-last_updated: 2026-06-08-session11
+last_updated: 2026-06-08-session12
 project: GraveStory
 project_key: NOKEY
 tracking_system: file-system
@@ -63,7 +63,7 @@ development_status:
   epic-2: in-progress
 
   2-1-generate-android-production-credentials: done  # keystore confirmed existing; downloaded backup 2026-06-07
-  2-2-build-and-submit-production-aab-to-play-store: in-progress  # AAB in Play Console internal testing; tester j3k420@gmail.com added. Session 11 (2026-06-08): mobile primary Gemini model bumped gemini-2.5-flash-lite -> gemini-3.1-flash-lite (web parity) in mobile/src/lib/api-gemini.js + biography.js; no Worker change (3.1-flash-lite already in ALLOWED_MODELS); committed 539ec8e, pushed phase-9, OTA'd to production channel (group 43c05b1b). 3-person-stone disclaimer also already committed a62d72b + OTA'd. NEXT SESSION (in order): (1) optional further bio-prompt tuning (no longer blocking); (2) build new production AAB (npx eas build --platform android --profile production) -- RC is a native module + current AAB lacks RC SDK, so a rebuild is required; (3) upload to Play Console (replaces current draft); (4) recruit 12 testers -> 14-day closed-testing clock. Tester unlimited-credits flow mapped: emails -> Play Console list -> testers sign in -> batch is_unlimited SQL keyed on email -> token-refresh latency (~1hr/restart; onboarding note promises up to 48hr). Session 10 infra audit (still valid): Gemini on paid Tier 1 (key under AI Studio "Gemini Project" gen-lang-client-0734604382); all 6 Supabase migrations live (006 fn is add_scan_credits); RC Pub/Sub warning ignorable (credits-only).
+  2-2-build-and-submit-production-aab-to-play-store: in-progress  # AAB in Play Console internal testing; tester j3k420@gmail.com added. ⚠ BLOCKER (Session 12, 2026-06-08): MAPS RENDER SOLID WHITE on the production AAB (internal track). Native issue, NOT OTA-fixable. Root cause: Google Play App Signing re-signs the AAB, so on-device cert != EAS keystore; Maps Android API key is restricted to the EAS SHA-1, so Google rejects the Play-signed install -> blank tiles. FIX (no rebuild needed): Play Console -> Test and release -> Setup -> App signing -> copy "App signing key certificate" SHA-1 -> Google Cloud Console -> APIs & Services -> Credentials -> Maps Android key -> Application restrictions -> Android apps -> add com.gravestory.app + that Play SHA-1 (KEEP the existing EAS-keystore entry too). Also confirm Maps SDK for Android enabled + billing active. Propagates in minutes; reopen app on tester device to verify. SEPARATE finding: EAS GOOGLE_MAPS_ANDROID_API_KEY secret exists ONLY in the `production` environment; `preview`/`development` envs have NO vars, so preview/dev APK builds compile an empty key and also show white maps (key is in local mobile/.env; eas env:create to fix). Session 11: mobile primary Gemini model bumped gemini-2.5-flash-lite -> gemini-3.1-flash-lite (web parity); committed 539ec8e, OTA'd (group 43c05b1b). Session 12: biography formatting fix -- validateCitations strips non-numeric [Word] bracket labels (e.g. [Inscription]/[Notes] that were leaking into prose); biography prompt FORMATTING section forces \n\n paragraph breaks (one+ per person on multi-subject stones) + bans label-style brackets; web+mobile parity; commits 06b0ab1 + 44b41ac, OTA group 142aac57 to production. Gemini 3.1 confirmed actually running on mobile (proxy response modelVersion echoes gemini-3.1-flash-lite, not a 404 fallback). NEXT (in order): (1) FIX WHITE MAPS via Play App Signing SHA-1 in Google Cloud Console (above); (2) optional bio-prompt tuning; (3) build new production AAB (npx eas build --platform android --profile production) -- RC native module + current AAB lacks RC SDK, rebuild required; (4) upload to Play Console; (5) recruit 12 testers -> 14-day closed-testing clock. Tester unlimited-credits flow mapped: emails -> Play Console list -> testers sign in -> batch is_unlimited SQL keyed on email -> token-refresh latency (~1hr/restart; onboarding note promises up to 48hr). Session 10 infra audit (still valid): Gemini on paid Tier 1 (key under AI Studio "Gemini Project" gen-lang-client-0734604382); all 6 Supabase migrations live (006 fn is add_scan_credits); RC Pub/Sub warning ignorable (credits-only).
 
   epic-2-retrospective: optional
 

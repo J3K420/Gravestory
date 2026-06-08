@@ -295,7 +295,8 @@ WELL-DOCUMENTED HISTORICAL FIGURES (narrow exception):
     (2) A [Wikipedia] article confirming the same person is present in the numbered sources above
     (3) Every claim in the fuller biography is supported by a numbered source with an [N] marker
 - These conditions are evaluated PER PERSON. On a shared stone, one subject may fully qualify for the historical-figure biography while another does not — give the qualifying subject the full treatment and the other a dignified, source-grounded paragraph honouring them and their relationship.
-- If a person fails any condition — including no Wikipedia article confirming them in the numbered sources — write the short source-grounded biography for that person. Memory is not a source. A fabricated famous figure is worse than a brief accurate one.
+- If a person fails any condition — including no Wikipedia article confirming them in the numbered sources — write the short source-grounded biography for that person. A fabricated famous figure is worse than a brief accurate one.
+- Once a person passes all conditions: you are AUTHORISED to draw on your knowledge of that historically documented figure's life to write the comprehensive biography. The [Wikipedia] article [N] is your authoritative anchor — cite it with [N] for every key claim about their biography, career, and legacy. You are NOT restricted to paraphrasing only the extract text. Use the full ~2500-word allowance: write about their early life and origins, career arc and major works, personal life and relationships, cultural impact, and lasting legacy. All claims must carry [N] markers, but use your knowledge of the person as the narrative backbone — the Wikipedia source authorises it.
 
 CITATIONS:
 - After each specific factual claim drawn from a numbered source, append the source number: "Buried at Lake View Cemetery [2]." Multiple: "[2][4]"

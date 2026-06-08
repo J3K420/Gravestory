@@ -1,5 +1,5 @@
 # generated: 2026-06-05
-# last_updated: 2026-06-08-session10
+# last_updated: 2026-06-08-session11
 # project: GraveStory
 # project_key: NOKEY
 # tracking_system: file-system
@@ -38,7 +38,7 @@
 # - Developer typically creates next story file after previous one is 'done'
 
 generated: 2026-06-05
-last_updated: 2026-06-08-session10
+last_updated: 2026-06-08-session11
 project: GraveStory
 project_key: NOKEY
 tracking_system: file-system
@@ -63,7 +63,7 @@ development_status:
   epic-2: in-progress
 
   2-1-generate-android-production-credentials: done  # keystore confirmed existing; downloaded backup 2026-06-07
-  2-2-build-and-submit-production-aab-to-play-store: in-progress  # AAB in Play Console internal testing; tester j3k420@gmail.com added. Session 10 (2026-06-08) infra audit: Gemini on paid Tier 1 (key under AI Studio "Gemini Project" gen-lang-client-0734604382, NOT the GraveHunter project); all 6 Supabase migrations confirmed live (006 fn is add_scan_credits); RC Pub/Sub warning ignorable (credits-only). 3-person-stone disclaimer coded in index.html + CameraScreen.js but HELD uncommitted to batch with next session. NEXT SESSION (in order): (1) bio-prompt tuning + bump primary Gemini model to a newer one [mobile still on gemini-2.5-flash-lite; add any new model to Worker ALLOWED_MODELS whitelist]; (2) commit held disclaimer + bio/model changes together, push, OTA to production channel; (3) build new production AAB; (4) upload to Play Console; (5) recruit 12 testers -> 14-day closed-testing clock. Tester unlimited-credits flow mapped: emails -> Play Console list -> testers sign in -> batch is_unlimited SQL keyed on email -> token-refresh latency (~1hr/restart; onboarding note promises up to 48hr).
+  2-2-build-and-submit-production-aab-to-play-store: in-progress  # AAB in Play Console internal testing; tester j3k420@gmail.com added. Session 11 (2026-06-08): mobile primary Gemini model bumped gemini-2.5-flash-lite -> gemini-3.1-flash-lite (web parity) in mobile/src/lib/api-gemini.js + biography.js; no Worker change (3.1-flash-lite already in ALLOWED_MODELS); committed 539ec8e, pushed phase-9, OTA'd to production channel (group 43c05b1b). 3-person-stone disclaimer also already committed a62d72b + OTA'd. NEXT SESSION (in order): (1) optional further bio-prompt tuning (no longer blocking); (2) build new production AAB (npx eas build --platform android --profile production) -- RC is a native module + current AAB lacks RC SDK, so a rebuild is required; (3) upload to Play Console (replaces current draft); (4) recruit 12 testers -> 14-day closed-testing clock. Tester unlimited-credits flow mapped: emails -> Play Console list -> testers sign in -> batch is_unlimited SQL keyed on email -> token-refresh latency (~1hr/restart; onboarding note promises up to 48hr). Session 10 infra audit (still valid): Gemini on paid Tier 1 (key under AI Studio "Gemini Project" gen-lang-client-0734604382); all 6 Supabase migrations live (006 fn is add_scan_credits); RC Pub/Sub warning ignorable (credits-only).
 
   epic-2-retrospective: optional
 

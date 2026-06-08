@@ -291,6 +291,8 @@ export default function CemeteryMapScreen({ navigation, route }) {
               <Text style={styles.calloutWarn}>⚠ approximate location</Text>
             )}
 
+            <Text style={styles.calloutHint}>✦ Pin in the wrong spot? Press and hold the marker, then drag it to the correct grave.</Text>
+
             {/* Inline bio preview — first two paragraphs */}
             {bioExpanded && !!selectedStory.biography && (
               <ScrollView style={styles.calloutBioScroll} showsVerticalScrollIndicator={false}>
@@ -405,6 +407,10 @@ const styles = StyleSheet.create({
   calloutDates: { color: colors.ash, fontSize: 13, fontFamily: fonts.serifItalic, marginBottom: 2 },
   calloutLocation: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, marginBottom: 6 },
   calloutWarn: { color: colors.ember, fontSize: 11, fontFamily: fonts.body, marginBottom: 6 },
+  calloutHint: {
+    color: colors.flame, fontSize: 11, fontFamily: fonts.body, lineHeight: 16,
+    marginBottom: 8, fontStyle: 'italic',
+  },
   calloutBioScroll: { maxHeight: 140, marginBottom: 8 },
   calloutBioText: {
     color: colors.ash, fontSize: 13, fontFamily: fonts.serif, lineHeight: 20,

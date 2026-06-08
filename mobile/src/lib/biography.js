@@ -116,7 +116,7 @@ function validateCitations(parsed) {
   };
 }
 
-const PRIMARY  = 'gemini-2.5-flash-lite';
+const PRIMARY  = 'gemini-3.1-flash-lite';
 const FALLBACK = 'gemini-2.5-flash';
 
 async function geminiText(payload) {

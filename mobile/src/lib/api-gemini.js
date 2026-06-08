@@ -1,7 +1,7 @@
 import { PROXY_BASE, CLIENT_KEY } from './config';
 import { safeParseJSON } from './util-json';
 
-const PRIMARY  = 'gemini-2.5-flash-lite';
+const PRIMARY  = 'gemini-3.1-flash-lite';
 const FALLBACK = 'gemini-2.5-flash';
 const TIMEOUT_MS = 30000;
 

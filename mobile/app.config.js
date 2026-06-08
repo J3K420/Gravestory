@@ -50,6 +50,11 @@ export default {
       eas: {
         projectId: 'f26f7a8b-2c63-4a68-bb44-903d7ed01b30',
       },
+      // RevenueCat Android (Google) SDK key. Injected from the EAS Secret
+      // REVENUECAT_API_KEY at build time; read back via expo-constants in
+      // src/lib/config.js. Empty in local dev unless the env var is set, in
+      // which case config.js falls back to the RevenueCat test key.
+      revenueCatApiKey: process.env.REVENUECAT_API_KEY ?? '',
     },
     plugins: [
       'expo-secure-store',

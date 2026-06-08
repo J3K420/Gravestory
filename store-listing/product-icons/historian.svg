@@ -1,0 +1,71 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="34%" r="82%">
+      <stop offset="0%" stop-color="#3a2c18"/>
+      <stop offset="60%" stop-color="#221809"/>
+      <stop offset="100%" stop-color="#120c05"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fbe7b0"/>
+      <stop offset="45%" stop-color="#d8b85a"/>
+      <stop offset="100%" stop-color="#8a6418"/>
+    </linearGradient>
+    <radialGradient id="flame" cx="50%" cy="68%" r="62%">
+      <stop offset="0%" stop-color="#fffaf0"/>
+      <stop offset="40%" stop-color="#ffd479"/>
+      <stop offset="80%" stop-color="#f2933c"/>
+      <stop offset="100%" stop-color="#cf5a2a"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffd479" stop-opacity="0.8"/>
+      <stop offset="55%" stop-color="#f2b65c" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#f2b65c" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- radiant halo -->
+  <circle cx="256" cy="220" r="210" fill="url(#halo)"/>
+  <!-- light rays -->
+  <g stroke="url(#gold)" stroke-width="4" opacity="0.55" stroke-linecap="round">
+    <line x1="256" y1="40" x2="256" y2="86"/>
+    <line x1="120" y1="96" x2="150" y2="130"/>
+    <line x1="392" y1="96" x2="362" y2="130"/>
+    <line x1="70" y1="220" x2="116" y2="220"/>
+    <line x1="442" y1="220" x2="396" y2="220"/>
+    <line x1="150" y1="64" x2="170" y2="104"/>
+    <line x1="362" y1="64" x2="342" y2="104"/>
+  </g>
+
+  <!-- ornate double frame -->
+  <rect x="64" y="64" width="384" height="384" rx="26" fill="none" stroke="url(#gold)" stroke-width="6" opacity="0.7"/>
+  <rect x="80" y="80" width="352" height="352" rx="20" fill="none" stroke="url(#gold)" stroke-width="3" opacity="0.5"/>
+  <!-- corner gems -->
+  <g fill="url(#gold)">
+    <circle cx="64" cy="64" r="11"/><circle cx="448" cy="64" r="11"/>
+    <circle cx="64" cy="448" r="11"/><circle cx="448" cy="448" r="11"/>
+  </g>
+
+  <!-- grand brazier base -->
+  <path d="M196 418 h120 l-16 -34 H212 Z" fill="url(#gold)"/>
+  <rect x="240" y="360" width="32" height="34" fill="url(#gold)"/>
+  <path d="M188 360 h136 a18 18 0 0 1 -18 18 H206 a18 18 0 0 1 -18 -18 Z" fill="url(#gold)"/>
+  <!-- bowl rim highlight -->
+  <path d="M196 360 h120" stroke="#fff4d6" stroke-width="3" opacity="0.6"/>
+
+  <!-- gem on base -->
+  <path d="M256 396 l12 12 -12 12 -12 -12 Z" fill="#aabedc"/>
+
+  <!-- grand flame -->
+  <path d="M256 150
+           C212 210 224 300 200 318
+           C236 352 276 352 312 318
+           C288 300 300 210 256 150 Z" fill="url(#flame)"/>
+  <!-- inner flame -->
+  <path d="M256 206 C234 250 240 300 256 318 C272 300 278 250 256 206 Z" fill="#fffaf0" opacity="0.92"/>
+  <!-- spark tips -->
+  <circle cx="232" cy="170" r="5" fill="#ffd479"/>
+  <circle cx="288" cy="184" r="4" fill="#ffd479"/>
+  <circle cx="256" cy="120" r="6" fill="#fff4d6"/>
+</svg>

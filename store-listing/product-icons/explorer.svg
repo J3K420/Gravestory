@@ -1,0 +1,54 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="36%" r="78%">
+      <stop offset="0%" stop-color="#2f2418"/>
+      <stop offset="100%" stop-color="#181109"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e7cf86"/>
+      <stop offset="50%" stop-color="#c9a84c"/>
+      <stop offset="100%" stop-color="#977322"/>
+    </linearGradient>
+    <radialGradient id="flame" cx="50%" cy="65%" r="60%">
+      <stop offset="0%" stop-color="#fff4d6"/>
+      <stop offset="45%" stop-color="#f2b65c"/>
+      <stop offset="100%" stop-color="#cf7a3a"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f2b65c" stop-opacity="0.65"/>
+      <stop offset="100%" stop-color="#f2b65c" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- ornate gold arch frame -->
+  <path d="M110 430 V250 a146 146 0 0 1 292 0 V430" fill="none" stroke="url(#gold)" stroke-width="10"/>
+  <path d="M88 430 H424" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"/>
+  <!-- filigree dots -->
+  <circle cx="110" cy="250" r="9" fill="url(#gold)"/>
+  <circle cx="402" cy="250" r="9" fill="url(#gold)"/>
+  <circle cx="256" cy="120" r="7" fill="url(#gold)"/>
+
+  <!-- big glow -->
+  <ellipse cx="256" cy="210" rx="170" ry="150" fill="url(#glow)"/>
+
+  <!-- candelabra base -->
+  <path d="M236 410 h40 v-14 h-40 Z" fill="url(#gold)"/>
+  <rect x="250" y="300" width="12" height="100" fill="url(#gold)"/>
+  <!-- arms -->
+  <path d="M256 330 C200 320 188 300 186 282" fill="none" stroke="url(#gold)" stroke-width="9"/>
+  <path d="M256 330 C312 320 324 300 326 282" fill="none" stroke="url(#gold)" stroke-width="9"/>
+
+  <!-- three candles -->
+  <!-- left -->
+  <rect x="176" y="246" width="20" height="44" rx="5" fill="#e8d4a0"/>
+  <path d="M186 210 C175 230 178 256 186 262 C194 256 197 230 186 210 Z" fill="url(#flame)"/>
+  <!-- center (tall) -->
+  <rect x="245" y="232" width="22" height="74" rx="5" fill="#efe4d2"/>
+  <path d="M256 178 C241 206 245 240 256 250 C267 240 271 206 256 178 Z" fill="url(#flame)"/>
+  <path d="M256 206 C249 224 251 242 256 248 C261 242 263 224 256 206 Z" fill="#fff4d6"/>
+  <!-- right -->
+  <rect x="316" y="246" width="20" height="44" rx="5" fill="#e8d4a0"/>
+  <path d="M326 210 C315 230 318 256 326 262 C334 256 337 230 326 210 Z" fill="url(#flame)"/>
+</svg>

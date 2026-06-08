@@ -248,7 +248,7 @@ export async function generateBiography(graveData, searchResults, wikiData, loca
   const hasFamousSubject = isMultiSubject && wikiSummaries.length > 0;
   const multiSubjectBlock = isMultiSubject
     ? hasFamousSubject
-      ? `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${subjectNames.join(' and ')}.${perSubjectDates}The research sources contain substantial documentation for one subject and limited records for the other(s). Write a full biography for the well-documented subject using the historical-figure word budget; devote a respectful, dignified paragraph to the lesser-documented person(s), honouring their memory and their relationship to the famous subject. Weave their connection together — do not ignore either person.\n`
+      ? `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${subjectNames.join(' and ')}.${perSubjectDates}One of the numbered sources is labelled "[Wikipedia article]" — the subject whose name (or a common variant of it) matches that article title is the historically notable person on this stone. Do NOT judge significance by how many FindAGrave / WikiTree / Tavily records a person has — a Wikipedia article outweighs all of them. Write the historically notable subject's full biography FIRST (up to ~2500 words, all claims cited with [N] markers), then devote a respectful, dignified paragraph to the other person(s), honouring their memory and their relationship to the famous subject.\n`
       : `\nMULTIPLE PEOPLE ON THIS STONE: This memorial commemorates ${subjectNames.join(' and ')}.${perSubjectDates}You MUST write a combined biography that gives each person meaningful, proportional coverage — do not focus exclusively on the most notable or primary subject. Weave their stories together and, where the stone or research reveals their relationship (e.g. grandmother and granddaughter, husband and wife), honour that connection explicitly.\n`
     : '';
 
@@ -271,7 +271,7 @@ LENGTH — scale to the evidence available:
 - Two corroborating sources: 2–4 paragraphs.
 - Three or more independent sources: a full biography, up to ~1500 words.
 - Well-documented historical figure (Wikipedia article confirmed in sources AND 3+ independent sources): write a comprehensive life history up to ~2500 words. Cover their early life and origins, career arc and major achievements, personal life and relationships, cultural impact, and legacy. Use the full allowance — do not stop at a surface summary when the sources support depth.
-- Shared stone where one person is a well-documented historical figure and the other has limited records: give the historical figure the full ~2500-word treatment, then add a respectful paragraph for the lesser-documented person honouring their memory and their relationship to the famous subject.
+- Shared stone where one subject has a [Wikipedia article] in the numbered sources: THAT subject is the historical figure regardless of how many other sources they have — a Wikipedia article alone qualifies. Give them the full ~2500-word treatment (all claims cited), then add a respectful paragraph for the other person(s) honouring their memory and relationship.
 
 WRITE A BIOGRAPHY THAT:
 - Opens with the full name(s), birth/death dates, and the era they lived in
@@ -279,7 +279,7 @@ WRITE A BIOGRAPHY THAT:
 - Weaves in verified details of family, marriage, faith, community, and relationships
 - Explains any symbols on the stone by their conventional meaning in that era and region — e.g. an anchor often signified hope or a maritime life; a Masonic square-and-compass indicated Freemasonry membership; clasped hands often marked marriage or farewell. Describe what the symbol conventionally meant; do not assert it as fact about this individual's beliefs or inner life
 - Reflects on the inscription with restraint and humanity — let the feeling come from the facts, not from added sentiment
-${isMultiSubject ? (hasFamousSubject ? '- Gives the well-documented subject a full historical-figure biography with citations, then honours the lesser-documented person with a respectful paragraph acknowledging their relationship and shared memorial' : '- Devotes proportional space to each person on the stone, weaves their stories together, and closes with a brief reflection on their shared legacy and relationship') : ''}
+${isMultiSubject ? (hasFamousSubject ? '- Identifies which subject has a [Wikipedia article] in the numbered sources, writes their full historical-figure biography first with all claims cited, then honours the other person(s) with a respectful paragraph acknowledging their relationship and shared memorial' : '- Devotes proportional space to each person on the stone, weaves their stories together, and closes with a brief reflection on their shared legacy and relationship') : ''}
 
 SURNAME / IDENTITY:
 - You may note that a surname is commonly associated with a cultural heritage, but do not infer anything about this person's ancestry or experience from their name alone

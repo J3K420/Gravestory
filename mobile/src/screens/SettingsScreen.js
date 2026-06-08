@@ -149,10 +149,23 @@ export default function SettingsScreen({ navigation }) {
               </View>
             )}
 
-            {/* Scan limit progress */}
+            {/* Scan limit progress — tap to open the scan-pack paywall */}
             {scanCount !== null && (
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Free Scans Used</Text>
+              <TouchableOpacity
+                style={styles.section}
+                activeOpacity={0.7}
+                onPress={() =>
+                  navigation.navigate('Paywall', {
+                    type: 'scan',
+                    count: scanCount,
+                    isGuest: false,
+                  })
+                }
+              >
+                <View style={styles.sectionHeaderRow}>
+                  <Text style={[styles.sectionLabel, styles.sectionLabelInline]}>Free Scans Used</Text>
+                  <Text style={styles.buyMoreLink}>Buy more ›</Text>
+                </View>
                 <View style={styles.progressRow}>
                   <Text style={styles.progressLabel}>
                     {scanCount} of {scanLimit} scans
@@ -171,9 +184,9 @@ export default function SettingsScreen({ navigation }) {
                   />
                 </View>
                 <Text style={styles.progressHint}>
-                  Buy more scans to keep exploring.
+                  Tap to buy more scans and keep exploring.
                 </Text>
-              </View>
+              </TouchableOpacity>
             )}
 
             {/* Display name */}
@@ -308,6 +321,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingTop: 10, paddingBottom: 6,
     borderTopWidth: 1, borderTopColor: colors.line,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingRight: 14,
+  },
+  sectionLabelInline: { flex: 1 },
+  buyMoreLink: { color: colors.flame, fontSize: 12, fontFamily: fonts.bodyMedium },
   progressLabel: { color: colors.parchment, fontSize: 14, fontFamily: fonts.bodyMedium },
   progressFull:  { color: colors.ember, fontSize: 12, fontFamily: fonts.body },
   barTrack: {

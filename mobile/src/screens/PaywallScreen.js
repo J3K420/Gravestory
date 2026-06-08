@@ -25,21 +25,34 @@ export default function PaywallScreen({ navigation, route }) {
 
   const [packages, setPackages]     = useState([]);
   const [loading, setLoading]       = useState(true);
+  const [loadError, setLoadError]   = useState(null);
   const [purchasing, setPurchasing] = useState(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const offerings = await Purchases.getOfferings();
-        if (offerings.current?.availablePackages?.length > 0) {
-          setPackages(offerings.current.availablePackages);
-        }
-      } catch (e) {
-        console.warn('RC getOfferings failed:', e.message);
-      } finally {
-        setLoading(false);
+  async function loadOfferings() {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const offerings = await Purchases.getOfferings();
+      const pkgs = offerings.current?.availablePackages ?? [];
+      if (pkgs.length > 0) {
+        setPackages(pkgs);
+      } else {
+        setPackages([]);
+        // Offerings fetched OK but empty — RevenueCat dashboard offering is
+        // missing, has no packages, or the products aren't approved in Play Console.
+        setLoadError('Scan packs are not available right now. Please try again shortly.');
       }
-    })();
+    } catch (e) {
+      console.warn('RC getOfferings failed:', e.message);
+      setPackages([]);
+      setLoadError('Could not load scan packs. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadOfferings();
   }, []);
 
   async function handlePurchase(pkg) {
@@ -141,18 +154,25 @@ export default function PaywallScreen({ navigation, route }) {
                 );
               })
             ) : (
-              PRODUCT_IDS.map(id => {
-                const info = PACK_INFO[id];
-                return (
-                  <View key={id} style={[styles.packBtn, styles.packBtnDisabled]}>
-                    <View>
-                      <Text style={styles.packLabel}>{info.label}</Text>
-                      <Text style={styles.packScans}>{info.scans} scans</Text>
+              <>
+                {/* Preview of the packs — greyed out because they couldn't load */}
+                {PRODUCT_IDS.map(id => {
+                  const info = PACK_INFO[id];
+                  return (
+                    <View key={id} style={[styles.packBtn, styles.packBtnDisabled]}>
+                      <View>
+                        <Text style={styles.packLabel}>{info.label}</Text>
+                        <Text style={styles.packScans}>{info.scans} scans</Text>
+                      </View>
+                      <Text style={styles.packPrice}>{info.price}</Text>
                     </View>
-                    <Text style={styles.packPrice}>{info.price}</Text>
-                  </View>
-                );
-              })
+                  );
+                })}
+                {loadError && <Text style={styles.errorText}>{loadError}</Text>}
+                <TouchableOpacity onPress={loadOfferings} style={styles.retryBtn} activeOpacity={0.7}>
+                  <Text style={styles.retryText}>Tap to retry</Text>
+                </TouchableOpacity>
+              </>
             )}
 
             <TouchableOpacity onPress={handleRestore} style={styles.restoreBtn}>
@@ -267,6 +287,24 @@ const styles = StyleSheet.create({
     color: colors.onFlame,
     fontSize: 16,
     fontFamily: fonts.sansBold,
+  },
+
+  errorText: {
+    color: colors.ember,
+    fontSize: 13,
+    fontFamily: fonts.body,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  retryBtn: { marginTop: 4, marginBottom: 8, paddingVertical: 8 },
+  retryText: {
+    color: colors.flame,
+    fontSize: 14,
+    fontFamily: fonts.bodyMedium,
+    textDecorationLine: 'underline',
+    textAlign: 'center',
   },
 
   restoreBtn: { marginTop: 4, marginBottom: 16 },

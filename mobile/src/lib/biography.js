@@ -106,6 +106,9 @@ function validateCitations(parsed) {
     const mapped = nMap[parseInt(nStr, 10)];
     return mapped ? `[${mapped}]` : '';
   });
+  // Strip non-numeric bracket labels the model sometimes invents (e.g.
+  // "[Inscription]", "[Notes]", "[Web]"). Only numeric [N] citations are valid.
+  bio = bio.replace(/\[(?!\d+\])[^\]]*\]/g, '');
   bio = bio.replace(/[ \t]{2,}/g, ' ').replace(/\s+([.,;!?])/g, '$1');
 
   return {
@@ -297,6 +300,11 @@ WELL-DOCUMENTED HISTORICAL FIGURES (narrow exception):
 - These conditions are evaluated PER PERSON. On a shared stone, one subject may fully qualify for the historical-figure biography while another does not — give the qualifying subject the full treatment and the other a dignified, source-grounded paragraph honouring them and their relationship.
 - If a person fails any condition — including no Wikipedia article confirming them in the numbered sources — write the short source-grounded biography for that person. A fabricated famous figure is worse than a brief accurate one.
 - Once a person passes all conditions: you are AUTHORISED to draw on your knowledge of that historically documented figure's life to write the comprehensive biography. The [Wikipedia] article [N] is your authoritative anchor — cite it with [N] for every key claim about their biography, career, and legacy. You are NOT restricted to paraphrasing only the extract text. Use the full ~2500-word allowance: write about their early life and origins, career arc and major works, personal life and relationships, cultural impact, and lasting legacy. All claims must carry [N] markers, but use your knowledge of the person as the narrative backbone — the Wikipedia source authorises it.
+
+FORMATTING (the "biography" output field is rendered as plain text, split into paragraphs on blank lines):
+- Separate every paragraph with a blank line (\\n\\n). Never return the whole biography as one unbroken block.
+- ${isMultiSubject ? 'Give each person their OWN paragraph(s) — start a new paragraph (with a blank line) when you move from one person to the next. Do not run two people\\'s lives together in a single paragraph.' : 'Use a new paragraph for each distinct phase of the life (early life, career, family, legacy).'}
+- The ONLY brackets allowed in the biography text are numeric citation markers like [2] or [2][4]. NEVER write label-style brackets such as [Inscription], [Notes], [Stone], or [Wikipedia] in the prose — they are not citations and look broken to the reader. To refer to the inscription, write "the inscription reads…" in plain words, with no bracket.
 
 CITATIONS:
 - After each specific factual claim drawn from a numbered source, append the source number: "Buried at Lake View Cemetery [2]." Multiple: "[2][4]"

@@ -77,13 +77,23 @@ export default function App() {
 
 
   useEffect(() => {
-    if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.DEBUG);
-    Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    // Guard: a release build with no real key must NOT initialize RevenueCat —
+    // configuring with an empty or test key crashes the SDK on release. When the
+    // key is missing, skip RC entirely; the paywall shows its "not available"
+    // state instead of taking down the whole app.
+    const rcEnabled = !!REVENUECAT_API_KEY;
+    if (rcEnabled) {
+      if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+      Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    } else {
+      console.warn('RevenueCat API key missing — purchases disabled for this session.');
+    }
 
     // Tie RevenueCat's app_user_id to the Supabase user UUID so the
     // purchase webhook credits the correct account. Without this, purchases
     // fire with RevenueCat's anonymous ID and scan_credits is never updated.
     async function syncRevenueCatIdentity(userId) {
+      if (!rcEnabled) return;
       try {
         if (userId) {
           await Purchases.logIn(userId);

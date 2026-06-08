@@ -80,6 +80,31 @@ export default function App() {
     if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.DEBUG);
     Purchases.configure({ apiKey: REVENUECAT_API_KEY });
 
+    // Tie RevenueCat's app_user_id to the Supabase user UUID so the
+    // purchase webhook credits the correct account. Without this, purchases
+    // fire with RevenueCat's anonymous ID and scan_credits is never updated.
+    async function syncRevenueCatIdentity(userId) {
+      try {
+        if (userId) {
+          await Purchases.logIn(userId);
+        } else {
+          await Purchases.logOut();
+        }
+      } catch (e) {
+        console.warn('RevenueCat identity sync failed:', e.message);
+      }
+    }
+
+    // Log in immediately if a session already exists (returning user).
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      syncRevenueCatIdentity(session?.user?.id ?? null);
+    });
+
+    // Keep RevenueCat identity in sync with auth state changes.
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      syncRevenueCatIdentity(session?.user?.id ?? null);
+    });
+
     Linking.getInitialURL().then(url => {
       if (url?.includes('login-callback') && url.includes('code=')) {
         const params = new URLSearchParams(url.split('?')[1] ?? '');
@@ -87,6 +112,10 @@ export default function App() {
         if (code) supabase.auth.exchangeCodeForSession(code);
       }
     });
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
   }, []);
 
   if (!fontsLoaded) return null;

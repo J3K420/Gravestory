@@ -3,7 +3,6 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Purchases from 'react-native-purchases';
 import { colors, fonts, radius } from '../lib/theme';
-import { FREE_LIMIT_GUEST, FREE_LIMIT_USER } from '../lib/save-limit';
 import { SCAN_LIMIT_GUEST, SCAN_LIMIT_USER } from '../lib/scan-limit';
 
 // Product IDs must match exactly what's created in Google Play Console + RevenueCat
@@ -16,12 +15,11 @@ const PACK_INFO = {
 };
 
 export default function PaywallScreen({ navigation, route }) {
-  const { count = 0, isGuest = false, type = 'save' } = route.params ?? {};
+  // The paywall is now only reached for the scan limit — saved-story limits were removed.
+  const { count = 0, isGuest = false } = route.params ?? {};
 
-  const isScan = type === 'scan';
-  const limit  = isScan
-    ? (isGuest ? SCAN_LIMIT_GUEST : SCAN_LIMIT_USER)
-    : (isGuest ? FREE_LIMIT_GUEST : FREE_LIMIT_USER);
+  const isScan = true;
+  const limit  = isGuest ? SCAN_LIMIT_GUEST : SCAN_LIMIT_USER;
 
   const [packages, setPackages]     = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -79,13 +77,9 @@ export default function PaywallScreen({ navigation, route }) {
     }
   }
 
-  const title = isScan
-    ? (isGuest ? 'Scan Limit Reached' : 'Free Scans Used Up')
-    : (isGuest ? 'Story Limit Reached' : 'Collection Full');
+  const title = isGuest ? 'Scan Limit Reached' : 'Free Scans Used Up';
 
-  const countLabel = isScan
-    ? `${count} of ${limit} free scans used`
-    : `${count} of ${limit} stories saved`;
+  const countLabel = `${count} of ${limit} free scans used`;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -105,9 +99,7 @@ export default function PaywallScreen({ navigation, route }) {
         {isGuest ? (
           <>
             <Text style={styles.body}>
-              {isScan
-                ? `Guest accounts get ${SCAN_LIMIT_GUEST} free scans. Sign in for free to get ${SCAN_LIMIT_USER} scans.`
-                : `Guest accounts can save ${FREE_LIMIT_GUEST} stories. Sign in for free to save up to ${FREE_LIMIT_USER}.`}
+              {`Guest accounts get ${SCAN_LIMIT_GUEST} free scans. Sign in for free to get ${SCAN_LIMIT_USER} scans.`}
             </Text>
             <TouchableOpacity
               style={styles.primaryBtn}
@@ -186,9 +178,7 @@ export default function PaywallScreen({ navigation, route }) {
         )}
 
         <Text style={styles.hint}>
-          {isScan
-            ? 'Scan packs never expire — use them at your own pace.'
-            : 'You can delete old stories to make room.'}
+          Scan packs never expire — use them at your own pace.
         </Text>
 
         <TouchableOpacity

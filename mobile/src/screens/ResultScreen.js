@@ -6,7 +6,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
-import { cloudUpdateStory, cloudDeleteStory } from '../lib/sync';
+import { cloudSaveStory, cloudUpdateStory, cloudDeleteStory, findOrCreateGrave } from '../lib/sync';
+import { uploadGravestoneImage } from '../lib/api-r2';
 import { getTributes, setTribute } from '../lib/api-tributes';
 import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
 import { useRefresh } from '../lib/use-refresh';
@@ -19,6 +20,7 @@ export default function ResultScreen({ navigation, route }) {
   const [story, setStory]               = useState(route.params?.story);
   const [user, setUser]                 = useState(null);
   const [sharing, setSharing]           = useState(false);
+  const [saving, setSaving]             = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [tributes, setTributes]         = useState({ candles: 0, flowers: 0, userTribute: null });
@@ -103,6 +105,69 @@ export default function ResultScreen({ navigation, route }) {
     ...portraitUris.map(uri => ({ uri, label: 'Portrait' })),
   ].filter(Boolean);
 
+  async function handleSave() {
+    if (saving || !story._unsaved) return;
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const sessionUser = session?.user ?? null;
+      const uid = sessionUser?.id ?? null;
+      const base64 = story._base64;
+      const primaryName = story._primaryName || story.name || '';
+
+      // Resolve the canonical grave at save time. On a find_grave cache hit the
+      // grave_id is already set; otherwise dedup via find_or_create (~20m name match).
+      let graveId = story.grave_id || null;
+      if (!graveId && sessionUser && story.gps && primaryName) {
+        graveId = await findOrCreateGrave(primaryName, story.gps.lat, story.gps.lng, story.is_public);
+      }
+
+      // Strip transient pipeline-only fields before persisting.
+      const { _unsaved, _base64, _primaryName, ...clean } = story;
+      let saved = { ...clean, grave_id: graveId };
+
+      // Local save first so the story is always available offline.
+      const existing = await loadStories(uid);
+      await saveStories([saved, ...existing], uid);
+
+      // Cloud save + R2 image upload if signed in.
+      if (sessionUser) {
+        saved = await cloudSaveStory(saved, sessionUser);
+        if (base64) {
+          const imageUrl = await uploadGravestoneImage(base64);
+          if (imageUrl) {
+            saved = await cloudUpdateStory({ ...saved, image_url: imageUrl }, sessionUser);
+            // Contribute to the grave's community photo pool (non-blocking).
+            if (saved.grave_id) {
+              (async () => {
+                try {
+                  await supabase.from('grave_photos').insert({
+                    grave_id: saved.grave_id,
+                    user_id: sessionUser.id,
+                    image_url: imageUrl,
+                  });
+                } catch (e) {
+                  console.warn('grave_photos insert failed (non-fatal):', e.message);
+                }
+              })();
+            }
+            // Persist image_url locally too so the saved story shows the photo offline.
+            const all = await loadStories(uid);
+            const idx = all.findIndex(s => s.timestamp === saved.timestamp);
+            if (idx >= 0) { all[idx] = saved; await saveStories(all, uid); }
+          }
+        }
+      }
+
+      setStory(saved);
+    } catch (err) {
+      console.warn('Save failed:', err?.message);
+      Alert.alert('Save Failed', 'Could not save this story. Please check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDelete() {
     if (story._isGlobal) return;
     Alert.alert(
@@ -156,12 +221,28 @@ export default function ResultScreen({ navigation, route }) {
     setTributeLoading(false);
   }
 
-  const showPublicToggle = user && !story._isGlobal;
+  const isUnsaved = !!story._unsaved;
+  const showPublicToggle = user && !story._isGlobal && !isUnsaved;
   const isPublic = story.is_public;
+
+  function handleBack() {
+    if (isUnsaved && !saving) {
+      Alert.alert(
+        'Discard this story?',
+        'You haven\'t saved this story yet. Leaving now will discard it.',
+        [
+          { text: 'Keep editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
+        ]
+      );
+      return;
+    }
+    navigation.goBack();
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+      <TouchableOpacity onPress={handleBack} style={styles.back}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 
@@ -254,7 +335,7 @@ export default function ResultScreen({ navigation, route }) {
         )}
 
         {/* Tributes */}
-        {story.grave_id && (
+        {story.grave_id && !isUnsaved && (
           <View style={styles.tributeSection}>
             <Text style={styles.tributeLabel}>Tributes at this grave</Text>
             <View style={styles.tributeCounts}>
@@ -291,6 +372,17 @@ export default function ResultScreen({ navigation, route }) {
           </View>
         )}
 
+        {/* Save (unsaved stories only) — primary action */}
+        {isUnsaved && (
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Story'}</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Action chips */}
         <View style={styles.chipsRow}>
           {(story.gps || story.location) && (
@@ -325,10 +417,13 @@ export default function ResultScreen({ navigation, route }) {
           <Text style={styles.scanAgainText}>Scan Another Gravestone</Text>
         </TouchableOpacity>
 
-        {/* Delete */}
+        {/* Delete (saved) / Discard (unsaved) */}
         {!story._isGlobal && (
-          <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-            <Text style={styles.deleteBtnText}>Delete Story</Text>
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={isUnsaved ? () => navigation.navigate('Home') : handleDelete}
+          >
+            <Text style={styles.deleteBtnText}>{isUnsaved ? 'Discard' : 'Delete Story'}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -410,6 +505,13 @@ const styles = StyleSheet.create({
   },
   chipActive: { borderColor: 'rgba(170,190,220,0.4)', backgroundColor: 'rgba(170,190,220,0.08)' },
   chipText: { color: colors.ash, fontSize: 11, fontFamily: fonts.body },
+
+  saveBtn: {
+    backgroundColor: colors.flame,
+    paddingVertical: 16, borderRadius: radius.sm, marginBottom: 16, alignItems: 'center',
+  },
+  saveBtnDisabled: { opacity: 0.6 },
+  saveBtnText: { color: colors.onFlame, fontFamily: fonts.sansBold, letterSpacing: 0.5, fontSize: 15 },
 
   scanAgainBtn: {
     borderWidth: 1, borderColor: colors.line, backgroundColor: colors.stone2,

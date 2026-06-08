@@ -18,11 +18,7 @@ import { queryWikidata } from '../lib/api-wikidata';
 import { searchChroniclingAmerica } from '../lib/api-chroniclingamerica';
 import { fetchWikipediaPortraits, fetchWikipediaArticleSummary } from '../lib/api-wikipedia';
 import { generateBiography } from '../lib/biography';
-import { saveStories, loadStories } from '../lib/storage';
-import { cloudSaveStory, cloudUpdateStory, findOrCreateGrave } from '../lib/sync';
-import { uploadGravestoneImage } from '../lib/api-r2';
 import { forwardGeocode, reverseGeocode } from '../lib/api-nominatim';
-import { checkSaveLimit } from '../lib/save-limit';
 import { checkScanLimit, incrementScanCount } from '../lib/scan-limit';
 
 const STEPS = [
@@ -71,18 +67,15 @@ export default function CameraScreen({ navigation }) {
     setRejected(null);
     setPipelineError(null);
 
-    // Check both save and scan limits before opening the picker — no API credits burned.
-    // app_metadata.is_unlimited bypasses all limits (set via Supabase dashboard, read-only by clients).
+    // Check the scan limit before opening the picker — no API credits burned.
+    // Saved-story limits were removed; scans are the cost control (they drive all paid AI work).
+    // app_metadata.is_unlimited bypasses the limit (set via Supabase dashboard, read-only by clients).
     try {
       const { data: { session: initSession } } = await supabase.auth.getSession();
       const uid = initSession?.user?.id ?? null;
       const isUnlimited = initSession?.user?.app_metadata?.is_unlimited === true;
       if (!isUnlimited) {
-        const [saveCheck, scanCheck] = await Promise.all([checkSaveLimit(uid), checkScanLimit(uid, initSession?.user)]);
-        if (saveCheck.atLimit) {
-          navigation.navigate('Paywall', { count: saveCheck.count, limit: saveCheck.limit, type: 'save', isGuest: saveCheck.isGuest });
-          return;
-        }
+        const scanCheck = await checkScanLimit(uid, initSession?.user);
         if (scanCheck.atLimit) {
           if (scanCheck._checkFailed) {
             Alert.alert('Connection Error', 'Could not verify your scan limit. Please check your connection and try again.');
@@ -341,17 +334,17 @@ export default function CameraScreen({ navigation }) {
       const { data: { session } } = await supabase.auth.getSession();
       const defaultPublic = session?.user?.user_metadata?.default_public ?? false;
 
-      // Biography resolved successfully — count this as a used scan
+      // Biography resolved successfully — count this as a used scan.
+      // (This is the cost gate — the paid AI work is done regardless of whether
+      // the user chooses to save, so the scan is counted at scan time, not save time.)
       await incrementScanCount(session?.user?.id ?? null);
 
-      // Link to canonical grave — on a cache hit the grave_id is already known;
-      // otherwise call find_or_create to dedup multiple scans of the same stone.
-      let graveId = cachedBio?.grave_id || null;
-      if (!graveId && session?.user && refinedGps && primaryName) {
-        graveId = await findOrCreateGrave(primaryName, refinedGps.lat, refinedGps.lng, defaultPublic);
-      }
-
-      let story = {
+      // Build the story but DO NOT persist it yet. Persistence (local save, cloud
+      // save, R2 upload, canonical-grave linking, grave_photos contribution) now
+      // happens only when the user taps "Save" on the Result screen. We carry the
+      // raw base64 and a few resolution hints so the save handler has what it needs.
+      // A cache-hit grave_id (read-only find_grave result) is safe to keep here.
+      const story = {
         ...bioResult,
         graveData,
         portraits: resolvedPortraits,
@@ -360,38 +353,11 @@ export default function CameraScreen({ navigation }) {
         timestamp: Date.now(),
         is_public: defaultPublic,
         source: fromCamera ? 'camera' : 'library',
-        grave_id: graveId,
+        grave_id: cachedBio?.grave_id || null,
+        _unsaved: true,        // ResultScreen shows the Save button for this
+        _base64: base64,       // needed for R2 upload at save time
+        _primaryName: primaryName,
       };
-
-      // Save locally first so the story is always accessible offline
-      const uid = session?.user?.id ?? null;
-      const existing = await loadStories(uid);
-      await saveStories([story, ...existing], uid);
-
-      // Attempt cloud save, then R2 image upload, if signed in
-      if (session?.user) {
-        story = await cloudSaveStory(story, session.user);
-
-        // Upload image to R2 non-blocking — failure is safe to ignore
-        const imageUrl = await uploadGravestoneImage(base64);
-        if (imageUrl) {
-          story = await cloudUpdateStory({ ...story, image_url: imageUrl }, session.user);
-          // Contribute to the grave's community photo pool (non-blocking)
-          if (story.grave_id) {
-            (async () => {
-              try {
-                await supabase.from('grave_photos').insert({
-                  grave_id: story.grave_id,
-                  user_id: session.user.id,
-                  image_url: imageUrl,
-                });
-              } catch (e) {
-                console.warn('grave_photos insert failed (non-fatal):', e.message);
-              }
-            })();
-          }
-        }
-      }
 
       setLoading(false);
       navigation.navigate('Result', { story });

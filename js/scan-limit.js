@@ -4,8 +4,6 @@
 
 const WEB_SCAN_LIMIT_GUEST  = 3;
 const WEB_SCAN_LIMIT_USER   = 10;
-const WEB_SAVE_LIMIT_GUEST  = 3;
-const WEB_SAVE_LIMIT_USER   = 10;
 const WEB_GUEST_SCAN_KEY    = 'gs_web_scan_count';
 
 async function checkWebScanLimit() {
@@ -60,12 +58,9 @@ async function incrementWebScanCount() {
   }
 }
 
+// Saved-story limits have been removed — saving is free. Kept as a no-op in case
+// any caller still references it; always returns atLimit: false.
 function checkWebSaveLimit() {
-  const isGuest = !currentUser;
-  const isUnlimited = !isGuest && currentUser?.app_metadata?.is_unlimited === true;
-  if (isUnlimited) return { count: 0, limit: Infinity, atLimit: false };
-
-  const limit = isGuest ? WEB_SAVE_LIMIT_GUEST : WEB_SAVE_LIMIT_USER;
   const count = (savedStories || []).filter(s => !s._deletedAt).length;
-  return { count, limit, atLimit: count >= limit, isGuest };
+  return { count, limit: Infinity, atLimit: false, isGuest: !currentUser };
 }

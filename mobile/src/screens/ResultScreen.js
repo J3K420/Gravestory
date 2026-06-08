@@ -88,13 +88,18 @@ export default function ResultScreen({ navigation, route }) {
   const paragraphs = (biography || '').split('\n\n').filter(Boolean);
 
   // Global map bios: show all community photos of this stone when available.
-  // Own stories: show only the user's own gravestone photo.
+  // Own stories: show only the user's own gravestone photo. For a freshly
+  // scanned (still _unsaved) story there's no R2 image_url yet — the photo
+  // only lives in memory as _base64 until the user taps Save — so fall back
+  // to a data URI so the gravestone still appears in the carousel immediately.
+  const localGraveUri = story.image_url
+    || (story._base64 ? `data:image/jpeg;base64,${story._base64}` : null);
   const graveSlots = (story._isGlobal && gravePhotos.length > 0)
     ? gravePhotos.map((uri, i) => ({
         uri,
         label: gravePhotos.length > 1 ? `Photo ${i + 1} of ${gravePhotos.length}` : 'Gravestone',
       }))
-    : (story.image_url ? [{ uri: story.image_url, label: 'Gravestone' }] : []);
+    : (localGraveUri ? [{ uri: localGraveUri, label: 'Gravestone' }] : []);
 
   const portraitUris = normalizePortraits(portraits).length > 0
     ? normalizePortraits(portraits)

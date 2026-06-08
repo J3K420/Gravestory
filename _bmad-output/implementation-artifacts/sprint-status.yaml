@@ -1,5 +1,5 @@
 # generated: 2026-06-05
-# last_updated: 2026-06-07-session7
+# last_updated: 2026-06-07-session8
 # project: GraveStory
 # project_key: NOKEY
 # tracking_system: file-system
@@ -38,7 +38,7 @@
 # - Developer typically creates next story file after previous one is 'done'
 
 generated: 2026-06-05
-last_updated: 2026-06-07-session7
+last_updated: 2026-06-07-session8
 project: GraveStory
 project_key: NOKEY
 tracking_system: file-system
@@ -63,7 +63,7 @@ development_status:
   epic-2: in-progress
 
   2-1-generate-android-production-credentials: done  # keystore confirmed existing; downloaded backup 2026-06-07
-  2-2-build-and-submit-production-aab-to-play-store: in-progress  # AAB built + uploaded to Play Console internal testing; tester j3k420@gmail.com added; TWO bugs fixed via OTA to production channel 2026-06-07 (scan X-Client-Key 403 = session6; multi-subject biography demotion = session7); need to verify OTAs apply on device then recruit 12 testers for closed testing (14-day requirement before production)
+  2-2-build-and-submit-production-aab-to-play-store: in-progress  # AAB built + uploaded to Play Console internal testing; tester j3k420@gmail.com added; FOUR bugs fixed via OTA to production channel 2026-06-07 (scan X-Client-Key 403 = session6; multi-subject bio demotion = session7; OCR false-positive multiple_subjects + wrong warning = session8-r1; Wikipedia not identified as famous-person qualifier + model not authorised to use knowledge = session8-r2+r3); verify Amy Winehouse bio then recruit 12 testers for closed testing (14-day requirement before production)
 
   epic-2-retrospective: optional
 

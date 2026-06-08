@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-// import Purchases from 'react-native-purchases'; // re-enable when production key is ready
+import Purchases from 'react-native-purchases';
 import { colors, fonts, radius } from '../lib/theme';
 import { FREE_LIMIT_GUEST, FREE_LIMIT_USER } from '../lib/save-limit';
 import { SCAN_LIMIT_GUEST, SCAN_LIMIT_USER } from '../lib/scan-limit';
@@ -28,16 +28,42 @@ export default function PaywallScreen({ navigation, route }) {
   const [purchasing, setPurchasing] = useState(null);
 
   useEffect(() => {
-    // RevenueCat disabled until production key is configured
-    setLoading(false);
+    (async () => {
+      try {
+        const offerings = await Purchases.getOfferings();
+        if (offerings.current?.availablePackages?.length > 0) {
+          setPackages(offerings.current.availablePackages);
+        }
+      } catch (e) {
+        console.warn('RC getOfferings failed:', e.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   async function handlePurchase(pkg) {
-    Alert.alert('Coming soon', 'In-app purchases will be available at launch.');
+    setPurchasing(pkg.product.identifier);
+    try {
+      await Purchases.purchasePackage(pkg);
+      Alert.alert('Purchase complete', 'Your scans have been added to your account.');
+      navigation.goBack();
+    } catch (e) {
+      if (!e.userCancelled) {
+        Alert.alert('Purchase failed', e.message ?? 'Please try again.');
+      }
+    } finally {
+      setPurchasing(null);
+    }
   }
 
   async function handleRestore() {
-    Alert.alert('Coming soon', 'Purchase restore will be available at launch.');
+    try {
+      await Purchases.restorePurchases();
+      Alert.alert('Restored', 'Any previous purchases have been restored.');
+    } catch (e) {
+      Alert.alert('Restore failed', e.message ?? 'Please try again.');
+    }
   }
 
   const title = isScan
@@ -115,7 +141,6 @@ export default function PaywallScreen({ navigation, route }) {
                 );
               })
             ) : (
-              // Fallback when RevenueCat offerings aren't configured yet
               PRODUCT_IDS.map(id => {
                 const info = PACK_INFO[id];
                 return (

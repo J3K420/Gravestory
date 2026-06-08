@@ -17,8 +17,8 @@ import {
   HankenGrotesk_600SemiBold,
 } from '@expo-google-fonts/hanken-grotesk';
 import { supabase } from './src/lib/supabase';
-import Purchases, { LOG_LEVEL } from 'react-native-purchases';
-import { REVENUECAT_API_KEY } from './src/lib/config';
+// import Purchases, { LOG_LEVEL } from 'react-native-purchases';
+// import { REVENUECAT_API_KEY } from './src/lib/config';
 
 import HomeScreen from './src/screens/HomeScreen';
 import AuthScreen from './src/screens/AuthScreen';
@@ -77,9 +77,6 @@ export default function App() {
 
 
   useEffect(() => {
-    Purchases.setLogLevel(LOG_LEVEL.DEBUG);
-    Purchases.configure({ apiKey: REVENUECAT_API_KEY });
-
     Linking.getInitialURL().then(url => {
       if (url?.includes('login-callback') && url.includes('code=')) {
         const params = new URLSearchParams(url.split('?')[1] ?? '');

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Linking, Share, Image, Alert, FlatList, Dimensions,
+  Linking, Share, Image, Alert, FlatList, Dimensions, Modal, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
@@ -13,6 +13,7 @@ import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedi
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { MapStack, ShareIcon, Globe } from '../components/Icons';
+import { SYMBOL_CONTEXT } from '../lib/biography';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -27,6 +28,7 @@ export default function ResultScreen({ navigation, route }) {
   const [tributeLoading, setTributeLoading] = useState(false);
   const [gravePhotos, setGravePhotos]   = useState([]);
   const [livePortraits, setLivePortraits] = useState([]);
+  const [symbolModal, setSymbolModal]   = useState(null); // { name, text }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -317,11 +319,24 @@ export default function ResultScreen({ navigation, route }) {
         {/* Symbols */}
         {graveData?.symbols?.length > 0 && (
           <View style={styles.tagsRow}>
-            {graveData.symbols.map((s, i) => (
-              <View key={i} style={styles.tag}>
-                <Text style={styles.tagText}>{s}</Text>
-              </View>
-            ))}
+            {graveData.symbols.map((s, i) => {
+              const lower = s.toLowerCase();
+              const contextText = Object.entries(SYMBOL_CONTEXT).find(([k]) => lower.includes(k))?.[1] ?? null;
+              return contextText ? (
+                <TouchableOpacity
+                  key={i}
+                  style={[styles.tag, styles.tagTappable]}
+                  onPress={() => setSymbolModal({ name: s, text: contextText })}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.tagText, styles.tagTextTappable]}>{s} ›</Text>
+                </TouchableOpacity>
+              ) : (
+                <View key={i} style={styles.tag}>
+                  <Text style={styles.tagText}>{s}</Text>
+                </View>
+              );
+            })}
           </View>
         )}
 
@@ -432,6 +447,25 @@ export default function ResultScreen({ navigation, route }) {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Symbol info modal */}
+      <Modal
+        visible={!!symbolModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSymbolModal(null)}
+      >
+        <Pressable style={styles.symbolOverlay} onPress={() => setSymbolModal(null)}>
+          <Pressable style={styles.symbolSheet} onPress={() => {}}>
+            <View style={styles.symbolSheetHandle} />
+            <Text style={styles.symbolSheetName}>{symbolModal?.name}</Text>
+            <Text style={styles.symbolSheetText}>{symbolModal?.text}</Text>
+            <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setSymbolModal(null)}>
+              <Text style={styles.symbolSheetCloseText}>Close</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -557,4 +591,35 @@ const styles = StyleSheet.create({
   },
   tributeBtnText: { color: colors.ash, fontFamily: fonts.body, fontSize: 13, letterSpacing: 0.3 },
   tributeBtnTextActive: { color: colors.flame },
+
+  tagTappable: { borderColor: 'rgba(201,168,76,0.35)', backgroundColor: 'rgba(201,168,76,0.07)' },
+  tagTextTappable: { color: colors.flame },
+
+  symbolOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  symbolSheet: {
+    backgroundColor: colors.stone, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 36,
+  },
+  symbolSheetHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: colors.line, alignSelf: 'center', marginBottom: 20,
+  },
+  symbolSheetName: {
+    color: colors.flame, fontSize: 18, fontFamily: fonts.name,
+    marginBottom: 12, textTransform: 'capitalize',
+  },
+  symbolSheetText: {
+    color: colors.parchment, fontSize: 14, fontFamily: fonts.serif,
+    lineHeight: 22,
+  },
+  symbolSheetClose: {
+    marginTop: 24, alignSelf: 'center',
+    paddingVertical: 12, paddingHorizontal: 32,
+    backgroundColor: colors.stone2, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  symbolSheetCloseText: { color: colors.ash, fontFamily: fonts.body, fontSize: 14 },
 });

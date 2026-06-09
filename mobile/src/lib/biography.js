@@ -5,7 +5,7 @@ import { safeParseJSON } from './util-json';
 // funerary/fraternal meaning. Injected into the bio prompt so Gemini has grounded
 // context rather than recalling from training alone — especially useful for obscure
 // fraternal emblems where training data is thin.
-const SYMBOL_CONTEXT = {
+export const SYMBOL_CONTEXT = {
   // ── Military & Veterans ──────────────────────────────────────────────────────
   'gar':                  'Grand Army of the Republic (GAR) — Union Army veteran emblem, Civil War service 1861–1865. GAR posts were active through 1956. Pension and service records may exist at Fold3 or the National Archives.',
   'grand army':           'Grand Army of the Republic (GAR) — Union Army veteran emblem, Civil War service 1861–1865. Pension and service records may exist at Fold3 or the National Archives.',

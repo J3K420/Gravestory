@@ -101,6 +101,9 @@ export default function AuthScreen({ navigation }) {
           <TouchableOpacity style={styles.googleBtn} onPress={signInWithGoogle} disabled={loading} activeOpacity={0.85}>
             <Text style={styles.googleBtnText}>G  Continue with Google</Text>
           </TouchableOpacity>
+          <Text style={styles.testerHint}>
+            Testers: please use Continue with Google to sign in.
+          </Text>
 
           {/* Divider */}
           <View style={styles.orRow}>
@@ -167,6 +170,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm, alignItems: 'center', marginBottom: 20,
   },
   googleBtnText: { color: '#2a2017', fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.3 },
+
+  testerHint: {
+    color: colors.ash, fontFamily: fonts.bodyItalic, fontSize: 13,
+    textAlign: 'center', marginTop: -8, marginBottom: 20, lineHeight: 18,
+  },
 
   orRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   orLine: { flex: 1, height: 1, backgroundColor: colors.line },

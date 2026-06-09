@@ -269,7 +269,7 @@ Parallel codebase in `mobile/`. Do not touch web files when working on mobile an
 | Navigation | React Navigation v7 native stack |
 | Auth | Supabase (same project as web) + AsyncStorage session |
 | Storage | AsyncStorage (local, user-scoped keys) + Supabase delta sync |
-| Camera/picker | expo-image-picker + expo-image-manipulator |
+| Camera/picker | expo-image-picker (legacy picker on Android) + expo-image-manipulator + expo-media-library (GPS EXIF recovery) |
 | SVG | react-native-svg |
 | Maps | react-native-maps (Apple Maps on iOS, Google Maps on Android) |
 | Location | expo-location (foreground GPS on scan) |
@@ -333,6 +333,7 @@ mobile/
       api-nominatim.js          — forwardGeocode + reverseGeocode (ES module). forwardGeocode: multi-query fallback, geographic context filter, strict/fuzzy cemetery matching, US state low-confidence flag, two-pass grave-name search (Pass 1: Nominatim viewbox bias without bounded=1 + proximity filter; Pass 2: Photon bbox search), AsyncStorage grave cache. Signature: forwardGeocode(locationStr, personName, dates). reverseGeocode(lat, lng): converts GPS coords to "City, State" string via Nominatim /reverse; used by CameraScreen to build locationHint before search queries fire.
       grave-cache.js            — AsyncStorage-backed grave coordinate cache (30-day TTL). graveCacheKey, readGraveCache, writeGraveCache. Port of web grave-cache.js (localStorage → AsyncStorage).
       api-r2.js                 — uploadGravestoneImage(base64): POST to /upload-image with { data, contentType } body, returns URL or null
+      media-gps.js              — getLibraryAssetGps(assetId): Android-only GPS EXIF recovery for library picks. Android 10+ redacts GPS tags from picker-read EXIF streams, so asset.exif never has them; expo-media-library's getAssetInfoAsync holds ACCESS_MEDIA_LOCATION + setRequireOriginal natively and returns the unredacted location. Requires the picker launched with legacy: true (modern system Photo Picker returns no assetId AND cannot be unredacted at all). require('expo-media-library') is lazy + guarded so an OTA landing on an older binary degrades to null instead of crashing. Requests READ_MEDIA_IMAGES (granular 'photo') at call time; permission denial → null → pipeline continues GPS-less.
       map-utils.js              — getDistanceMeters, groupGravesByCemetery (ES module)
       sync.js                   — storyToRow/rowToStory, cloudSaveStory/Update/Delete, syncDelta, syncOnSignIn, pushLocalOnly. syncOnSignIn always does a full cloud pull (not delta) — cloud is authoritative, local stories only kept if no cloud id (unsynced).
     screens/
@@ -361,7 +362,7 @@ mobile/
 ### Mobile pipeline (CameraScreen.js)
 
 1. expo-image-picker (`exif: true`) → read EXIF GPS before compression strips it → compress to 1024px JPEG → base64 via expo-image-manipulator
-2. GPS source: EXIF coords from the photo if present; device GPS fallback only for **camera shots** (not library picks — device location would be wrong for historical photos)
+2. GPS source: EXIF coords from the photo if present; on Android library picks `asset.exif` GPS is always OS-redacted, so `getLibraryAssetGps(asset.assetId)` (media-gps.js, needs `legacy: true` picker option) recovers it via expo-media-library; device GPS fallback only for **camera shots** (not library picks — device location would be wrong for historical photos)
 3. `reverseGeocode(gps.lat, gps.lng)` fires **in parallel** with `verifyIsGravestone` — converts GPS coords to "City, State" string (`locationHint`) before any search queries execute. If no GPS, locationHint is null.
 4. `verifyIsGravestone(base64)` — throws `{ __verificationRejection: true }` → rejection UI
 5. `readGravestone(base64, locationHint)` — Gemini OCR → structured JSON including `name_confidence`, `alternate_names`, and specific symbol names

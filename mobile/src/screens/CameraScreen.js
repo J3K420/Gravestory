@@ -20,6 +20,7 @@ import { fetchWikipediaPortraits, fetchWikipediaArticleSummary } from '../lib/ap
 import { generateBiography } from '../lib/biography';
 import { forwardGeocode, reverseGeocode } from '../lib/api-nominatim';
 import { checkScanLimit, incrementScanCount } from '../lib/scan-limit';
+import { getLibraryAssetGps } from '../lib/media-gps';
 
 const STEPS = [
   'Verifying gravestone…',
@@ -91,8 +92,11 @@ export default function CameraScreen({ navigation }) {
       return;
     }
 
-    // exif: true so we can read GPS coords before compression strips them
-    const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true };
+    // exif: true so we can read GPS coords before compression strips them.
+    // legacy: true (Android only, ignored on iOS) swaps the system Photo Picker
+    // for ACTION_GET_CONTENT — the modern picker returns no MediaStore assetId,
+    // which getLibraryAssetGps needs to recover the redacted GPS EXIF.
+    const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true, legacy: true };
 
     let result;
     if (fromCamera) {
@@ -111,6 +115,14 @@ export default function CameraScreen({ navigation }) {
     // Only fall back to device GPS for camera shots — for library photos the device
     // is not physically at the grave, so device location would be wrong.
     let gps = extractExifGps(asset.exif);
+
+    // Android redacts GPS tags from picker-read EXIF (asset.exif never has them).
+    // For library picks, recover the location via expo-media-library, which can
+    // read the unredacted original. No-op on iOS / camera shots / missing assetId.
+    if (!gps && !fromCamera) {
+      gps = await getLibraryAssetGps(asset.assetId);
+    }
+
     const needsDeviceGps = !gps && fromCamera;
 
     const [manipResult, deviceGps] = await Promise.all([

@@ -67,6 +67,20 @@ export default {
             'Allow GraveStory to use your location to pin graves on the map.',
         },
       ],
+      [
+        // Android strips GPS EXIF from photos read through the system picker.
+        // expo-media-library's getAssetInfoAsync does the ACCESS_MEDIA_LOCATION +
+        // setRequireOriginal dance natively so library picks can recover the
+        // photo's location. granularPermissions limited to images only —
+        // READ_MEDIA_VIDEO/AUDIO would complicate Play Store review.
+        'expo-media-library',
+        {
+          photosPermission:
+            'Allow GraveStory to read photo location data so gravestone photos can be pinned on the map.',
+          isAccessMediaLocationEnabled: true,
+          granularPermissions: ['photo'],
+        },
+      ],
     ],
   },
 };

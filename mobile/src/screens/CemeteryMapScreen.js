@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
-import Svg, { Rect, Path, Line } from 'react-native-svg';
+import { GraveMarkerSvg } from '../components/GraveMarkers';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory, updateGraveLocation } from '../lib/sync';
 import { supabase } from '../lib/supabase';
@@ -20,6 +20,7 @@ const STONE     = colors.ash;
 
 // Wrapper that owns tracksViewChanges: starts true so the SVG is captured,
 // flips to false after the first layout so map updates don't re-snapshot.
+// Re-snapshots when the chosen marker style changes (key includes marker_style).
 function GraveMarker({ story, onPress, onDragEnd }) {
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
   return (
@@ -31,32 +32,17 @@ function GraveMarker({ story, onPress, onDragEnd }) {
       onPress={onPress}
     >
       <View onLayout={() => setTracksViewChanges(false)}>
-        <GravestoneMarker lowConfidence={story._lowConfidence} />
+        <GravestoneMarker styleId={story.marker_style} lowConfidence={story._lowConfidence} />
       </View>
     </Marker>
   );
 }
 
-// SVG gravestone marker — matches the web Leaflet divIcon design
-function GravestoneMarker({ lowConfidence }) {
+// Renders the grave's chosen marker style (falls back to the default 'book').
+function GravestoneMarker({ styleId, lowConfidence }) {
   return (
     <View style={markerStyles.shadow}>
-      <Svg width={32} height={32} viewBox="0 0 100 100" fill="none">
-        {/* Base step */}
-        <Rect x="22" y="84" width="56" height="6" stroke="#c9a84c" strokeWidth="2" fill="rgba(20,15,8,0.85)" />
-        {/* Stone body with arched top */}
-        <Path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="#c9a84c" strokeWidth="2" fill="rgba(20,15,8,0.85)" />
-        {/* Open book — left page */}
-        <Path d="M38 40 L38 56 Q44 54 49 56 L49 42 Q44 40 38 40 Z" stroke="#e8d4a0" strokeWidth="2" fill="rgba(232,212,160,0.25)" />
-        {/* Open book — right page */}
-        <Path d="M51 42 Q56 40 62 40 L62 56 Q56 54 51 56 Z" stroke="#e8d4a0" strokeWidth="2" fill="rgba(232,212,160,0.25)" />
-        {/* Book spine */}
-        <Line x1="50" y1="41" x2="50" y2="56" stroke="#e8d4a0" strokeWidth="1.5" />
-        {/* Cross vertical */}
-        <Line x1="50" y1="63" x2="50" y2="76" stroke="#e8d4a0" strokeWidth="1.5" />
-        {/* Cross horizontal */}
-        <Line x1="44" y1="68" x2="56" y2="68" stroke="#e8d4a0" strokeWidth="1.5" />
-      </Svg>
+      <GraveMarkerSvg styleId={styleId} size={32} />
       {lowConfidence && (
         <View style={markerStyles.badge}>
           <Text style={markerStyles.badgeText}>?</Text>
@@ -255,7 +241,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
         >
           {mappedStories.map((story, i) => (
             <GraveMarker
-              key={story.timestamp ?? i}
+              key={`${story.timestamp ?? i}-${story.marker_style || 'book'}`}
               story={story}
               onPress={() => { setSelectedStory(story); setBioExpanded(false); }}
               onDragEnd={e => handleDragEnd(story, e.nativeEvent.coordinate)}

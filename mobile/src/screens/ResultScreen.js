@@ -13,6 +13,7 @@ import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedi
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { MapStack, ShareIcon, Globe } from '../components/Icons';
+import { MARKER_STYLES, getMarker, GraveMarkerSvg } from '../components/GraveMarkers';
 import { SYMBOL_CONTEXT } from '../lib/biography';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -29,6 +30,8 @@ export default function ResultScreen({ navigation, route }) {
   const [gravePhotos, setGravePhotos]   = useState([]);
   const [livePortraits, setLivePortraits] = useState([]);
   const [symbolModal, setSymbolModal]   = useState(null); // { name, text }
+  const [markerModal, setMarkerModal]   = useState(false);
+  const [savingMarker, setSavingMarker] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -217,6 +220,21 @@ export default function ResultScreen({ navigation, route }) {
     setTogglingPublic(false);
   }
 
+  async function handlePickMarker(styleId) {
+    if (savingMarker) return;
+    setMarkerModal(false);
+    if ((story.marker_style || 'book') === styleId) return;
+    setSavingMarker(true);
+    const updated = { ...story, marker_style: styleId };
+    const uid = user?.id ?? null;
+    const all = await loadStories(uid);
+    const idx = all.findIndex(s => s.timestamp === story.timestamp);
+    if (idx >= 0) { all[idx] = updated; await saveStories(all, uid); }
+    setStory(updated);
+    if (updated.id && user) setStory(await cloudUpdateStory(updated, user));
+    setSavingMarker(false);
+  }
+
   async function handleTribute(type) {
     if (!user || !story.grave_id || tributeLoading) return;
     setTributeLoading(true);
@@ -230,6 +248,10 @@ export default function ResultScreen({ navigation, route }) {
 
   const isUnsaved = !!story._unsaved;
   const showPublicToggle = user && !story._isGlobal && !isUnsaved;
+  // Marker style applies to the user's own My-Cemetery pin — only meaningful for
+  // a saved, own (non-global) story that has a location to map.
+  const showMarkerChip = !story._isGlobal && !isUnsaved && (story.gps || story.location);
+  const currentMarker = getMarker(story.marker_style);
   const isPublic = story.is_public;
 
   function handleBack() {
@@ -414,6 +436,16 @@ export default function ResultScreen({ navigation, route }) {
               <Text style={styles.chipText}>Map</Text>
             </TouchableOpacity>
           )}
+          {showMarkerChip && (
+            <TouchableOpacity
+              style={styles.chip}
+              onPress={() => setMarkerModal(true)}
+              disabled={savingMarker}
+            >
+              <GraveMarkerSvg styleId={story.marker_style} size={18} />
+              <Text style={styles.chipText}>{savingMarker ? '…' : 'Marker'}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.chip} onPress={handleShare} disabled={sharing}>
             <ShareIcon size={18} color={colors.flame} />
             <Text style={styles.chipText}>{sharing ? '…' : 'Share'}</Text>
@@ -447,6 +479,52 @@ export default function ResultScreen({ navigation, route }) {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Marker style picker */}
+      <Modal
+        visible={markerModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMarkerModal(false)}
+      >
+        <Pressable style={styles.symbolOverlay} onPress={() => setMarkerModal(false)}>
+          <Pressable style={styles.markerSheet} onPress={() => {}}>
+            <View style={styles.symbolSheetHandle} />
+            <Text style={styles.symbolSheetName}>Choose a marker</Text>
+            <Text style={styles.markerSheetHint}>
+              How this grave appears on your Cemetery map.
+            </Text>
+            <ScrollView
+              style={styles.markerGridScroll}
+              contentContainerStyle={styles.markerGrid}
+              showsVerticalScrollIndicator={false}
+            >
+              {MARKER_STYLES.map(m => {
+                const selected = currentMarker.id === m.id;
+                return (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={[styles.markerCell, selected && styles.markerCellSelected]}
+                    onPress={() => handlePickMarker(m.id)}
+                    activeOpacity={0.7}
+                  >
+                    <GraveMarkerSvg styleId={m.id} size={44} />
+                    <Text
+                      style={[styles.markerCellLabel, selected && styles.markerCellLabelSelected]}
+                      numberOfLines={1}
+                    >
+                      {m.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setMarkerModal(false)}>
+              <Text style={styles.symbolSheetCloseText}>Close</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Symbol info modal */}
       <Modal
@@ -622,4 +700,35 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
   symbolSheetCloseText: { color: colors.ash, fontFamily: fonts.body, fontSize: 14 },
+
+  markerSheet: {
+    backgroundColor: colors.stone, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28,
+    maxHeight: '80%',
+  },
+  markerSheetHint: {
+    color: colors.ash, fontSize: 13, fontFamily: fonts.body,
+    marginBottom: 14, lineHeight: 18,
+  },
+  markerGridScroll: { flexGrow: 0 },
+  markerGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between',
+    gap: 0,
+  },
+  markerCell: {
+    width: '23%', aspectRatio: 0.82, marginBottom: 12,
+    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 8,
+    borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm,
+    backgroundColor: colors.stone2,
+  },
+  markerCellSelected: {
+    borderColor: colors.flame,
+    backgroundColor: 'rgba(201,168,76,0.1)',
+  },
+  markerCellLabel: {
+    color: colors.ashDim, fontSize: 9, fontFamily: fonts.body,
+    marginTop: 4, textAlign: 'center', letterSpacing: 0.2,
+  },
+  markerCellLabelSelected: { color: colors.flame },
 });

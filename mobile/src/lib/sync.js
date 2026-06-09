@@ -29,6 +29,7 @@ export function rowToStory(row) {
     _updatedAt: row.updated_at,
     grave_id: row.grave_id || null,
     source: row.source || 'library',
+    marker_style: row.marker_style || null,
   };
 }
 
@@ -56,6 +57,7 @@ function storyToRow(story, userId) {
     client_timestamp: story.timestamp || null,
     grave_id: story.grave_id || null,
     source: story.source || 'library',
+    marker_style: story.marker_style || null,
   };
 }
 

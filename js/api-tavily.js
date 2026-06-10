@@ -202,15 +202,21 @@ async function searchForPerson(graveData, location, cemeteryName) {
   // Previous approach appended symbol queries and the general obituary query to the end of a
   // 10+ item list — both were always cut off by the slice(0,6) cap and never fired.
   // Duplicate FindAGrave queries also wasted a slot. Fixed below.
+  //
+  // Each entry is { q, domains } — `domains` (when present) is passed to Tavily's
+  // include_domains, which is enforced API-side instead of relying on the search
+  // engine honouring a `site:` operator in the query string. For domain-scoped
+  // slots the `site:` prefix is dropped from `q` (it's redundant once include_domains
+  // is set, and leaving it in can over-constrain Tavily's parsing).
   const queries = [];
 
   if (primaryVar) {
     // Slot 1: FindAGrave — merged into one query (was two separate FindAGrave slots before).
     // Cemetery name appended when known — FindAGrave pages list the burial cemetery.
-    queries.push(`site:findagrave.com "${primaryVar}"${yr ? ' ' + yr : ''}${cemPhrase} buried`.trim());
+    queries.push({ q: `"${primaryVar}"${yr ? ' ' + yr : ''}${cemPhrase} buried`.trim(), domains: ['findagrave.com'] });
 
     // Slot 2: BillionGraves
-    queries.push(`site:billiongraves.com "${primaryVar}"`);
+    queries.push({ q: `"${primaryVar}"`, domains: ['billiongraves.com'] });
 
     // Slot 3: General obituary + year + location (was at position ~6 — never fired before).
     // Cemetery name disambiguates common names ("John Smith" + "Green-Wood Cemetery").
@@ -218,7 +224,7 @@ async function searchForPerson(graveData, location, cemeteryName) {
     if (yr) obitParts.push(yr);
     if (cem) obitParts.push(`"${cem.replace(/"/g, '')}"`);
     else if (loc) obitParts.push(loc);
-    queries.push(obitParts.join(' '));
+    queries.push({ q: obitParts.join(' ') });
 
     // Slot 4: Symbol-guided (was appended to end — never fired before)
     //         OR expanded/formal name FindAGrave variant (e.g. "Wm" → "William")
@@ -227,14 +233,14 @@ async function searchForPerson(graveData, location, cemeteryName) {
       const symbolStr = graveData.symbols.join(' ').toLowerCase();
       for (const [key, suffixes] of Object.entries(_SYMBOL_QUERIES)) {
         if (symbolStr.includes(key)) {
-          queries.push(`"${primaryVar}" ${suffixes[0]}`);
+          queries.push({ q: `"${primaryVar}" ${suffixes[0]}` });
           slot4Used = true;
           break;
         }
       }
     }
     if (!slot4Used && allVariants[1] && allVariants[1] !== primaryVar) {
-      queries.push(`site:findagrave.com "${allVariants[1]}"${yr ? ' ' + yr : ''} buried`.trim());
+      queries.push({ q: `"${allVariants[1]}"${yr ? ' ' + yr : ''} buried`.trim(), domains: ['findagrave.com'] });
     }
 
     // Slot 5: Era-appropriate source.
@@ -246,18 +252,18 @@ async function searchForPerson(graveData, location, cemeteryName) {
     if (effectiveDeath && deathYrNum <= 1928) {
       const histParts = [`"${primaryVar}" obituary`];
       if (effectiveDeath) histParts.push(effectiveDeath);
-      queries.push(histParts.join(' ') + ' death');
+      queries.push({ q: histParts.join(' ') + ' death' });
     } else {
-      queries.push(`site:legacy.com "${primaryVar}" obituary${loc ? ' ' + loc : ''}`.trim());
+      queries.push({ q: `"${primaryVar}" obituary${loc ? ' ' + loc : ''}`.trim(), domains: ['legacy.com'] });
     }
 
     // Slot 6: Secondary fallback — pre-1928 gets a Legacy.com pass too (some
     // memorialised historical figures appear there); modern deaths fall back to
     // a family-name Newspapers.com search.
     if (effectiveDeath && deathYrNum <= 1928) {
-      queries.push(`site:legacy.com "${primaryVar}" obituary${loc ? ' ' + loc : ''}`.trim());
+      queries.push({ q: `"${primaryVar}" obituary${loc ? ' ' + loc : ''}`.trim(), domains: ['legacy.com'] });
     } else if (graveData.family_name) {
-      queries.push(`site:newspapers.com "${graveData.family_name}"${loc ? ' ' + loc : ''}${effectiveDeath ? ' ' + effectiveDeath : ''}`.trim());
+      queries.push({ q: `"${graveData.family_name}"${loc ? ' ' + loc : ''}${effectiveDeath ? ' ' + effectiveDeath : ''}`.trim(), domains: ['newspapers.com'] });
     }
   }
 
@@ -266,7 +272,7 @@ async function searchForPerson(graveData, location, cemeteryName) {
     graveData.alternate_names.slice(0, 1).forEach(alt => {
       const clean = (alt || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
       if (clean && !variantSeen.has(clean)) {
-        queries.push(`site:findagrave.com "${clean}"${yr ? ' ' + yr : ''} buried`.trim());
+        queries.push({ q: `"${clean}"${yr ? ' ' + yr : ''} buried`.trim(), domains: ['findagrave.com'] });
       }
     });
   }
@@ -275,48 +281,53 @@ async function searchForPerson(graveData, location, cemeteryName) {
   // Bare surname with inscription context, or no dates at all — the inscription
   // phrase is more specific than the name alone.
   if (!effectiveDeath && !effectiveBirth && inscr.length > 30) {
-    queries.unshift(`"${inscr.slice(0, 55).replace(/"/g, '').trim()}"`);
+    queries.unshift({ q: `"${inscr.slice(0, 55).replace(/"/g, '').trim()}"` });
   }
   if (primaryName && !primaryName.includes(' ') && inscr.length > 15) {
-    queries.unshift(`"${primaryName}" ${inscr.slice(0, 55).replace(/"/g, '').trim()}`);
+    queries.unshift({ q: `"${primaryName}" ${inscr.slice(0, 55).replace(/"/g, '').trim()}` });
   }
 
-  const results = [];
   const seen = new Set();
 
-  for (const query of queries.slice(0, 6)) {
-    try {
-      const res = await fetch(`${PROXY_BASE}/tavily`, {
+  // Fire all (≤6) queries in parallel. Tavily slots are independent — running them
+  // sequentially in a for-await loop was ~5× slower for no benefit. Results are
+  // merged in original priority order (Promise.all preserves array order) so the
+  // dedup `seen` set still keeps the highest-priority copy of any duplicate URL.
+  const settled = await Promise.allSettled(
+    queries.slice(0, 6).map(({ q, domains }) => {
+      const body = { query: q, search_depth: 'advanced', max_results: 2, include_answer: false };
+      if (domains) body.include_domains = domains;
+      return fetch(`${PROXY_BASE}/tavily`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
-        body: JSON.stringify({
-          query,
-          search_depth: 'advanced',
-          max_results: 2,
-          include_answer: false
-        })
-      });
-      const data = await res.json();
-      if (data.results) {
-        data.results.forEach(r => {
-          if (!seen.has(r.url)) {
-            seen.add(r.url);
-            const u = (r.url || '').toLowerCase();
-            results.push({
-              title: r.title,
-              url: r.url,
-              content: r.content?.slice(0, 6000),
-              source_type:
-                u.includes('billiongraves.com')          ? 'verified_transcription' :
-                u.includes('findagrave.com')             ? 'memorial' :
-                u.includes('chroniclingamerica.loc.gov') ? 'public_domain' :
-                u.includes('legacy.com') || u.includes('newspapers.com') ? 'obituary' :
-                'web'
-            });
-          }
+        body: JSON.stringify(body)
+      }).then(res => res.json());
+    })
+  );
+
+  const results = [];
+  for (const outcome of settled) {
+    if (outcome.status !== 'fulfilled' || !outcome.value?.results) {
+      if (outcome.status === 'rejected') console.warn('Tavily query failed:', outcome.reason?.message);
+      continue;
+    }
+    outcome.value.results.forEach(r => {
+      if (!seen.has(r.url)) {
+        seen.add(r.url);
+        const u = (r.url || '').toLowerCase();
+        results.push({
+          title: r.title,
+          url: r.url,
+          content: r.content?.slice(0, 6000),
+          source_type:
+            u.includes('billiongraves.com')          ? 'verified_transcription' :
+            u.includes('findagrave.com')             ? 'memorial' :
+            u.includes('chroniclingamerica.loc.gov') ? 'public_domain' :
+            u.includes('legacy.com') || u.includes('newspapers.com') ? 'obituary' :
+            'web'
         });
       }
-    } catch (e) { console.warn('Tavily query failed:', query, e?.message); }
+    });
   }
 
   if (primaryName && effectiveDeath) _searchCache.set(cacheKey, results);

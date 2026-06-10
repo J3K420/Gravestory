@@ -7,7 +7,9 @@
 // engraved name differs from the article title (e.g. "Erik Weisz" → "Harry
 // Houdini") can still bridge to the right Wikipedia article downstream.
 // Only useful for notable figures (ordinary people have no Wikidata entry — returns null).
-// Only fires when name_confidence === 'high' to avoid false matches on uncertain OCR.
+// Gated by the caller: fires on high confidence always, and on medium confidence
+// when a death year is present (the death-year proximity filter below rejects
+// namesakes >5yr off, so a known year makes medium-confidence safe).
 //
 // Matching strategy (changed from exact rdfs:label): uses the wbsearchentities
 // action, which matches on labels AND aliases AND near-spellings — so maiden

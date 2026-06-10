@@ -303,8 +303,14 @@ export default function CameraScreen({ navigation }) {
         const allParallel = await Promise.all([
           searchForPerson(graveData, locationHint, cemeteryName),
           ...wikiTreeTargets.map(name => searchWikiTree({ ...graveData, primary_name: name }, locationHint)),
-          // Wikidata: only when OCR confidence is high to avoid false matches
-          graveData.name_confidence === 'high'
+          // Wikidata: high confidence always; medium confidence only when a death
+          // year is present. queryWikidata's death-year proximity filter (rejects
+          // candidates >5yr off, returns null if all rejected) guards against
+          // namesakes, so medium-confidence weathered stones — where structured
+          // corroboration helps most — can fire safely. Low confidence or no year
+          // skips (no year = no namesake guard).
+          (graveData.name_confidence === 'high' ||
+           (graveData.name_confidence === 'medium' && effectiveDeath))
             ? queryWikidata(primaryOcrName, effectiveDeath)
             : Promise.resolve(null),
           // Chronicling America: direct OCR-text API for pre-1928 deaths (module

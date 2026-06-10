@@ -184,7 +184,9 @@ Built for one-handed use in a cemetery. Service worker caches the app shell (`gr
 
 - **Geographic context filter in geocoding** — `forwardGeocode` extracts city/state tokens from the AI-returned location string and requires them in Nominatim results, preventing cross-city false matches.
 
-- **Low-confidence pin flag** — if Nominatim resolves a cemetery to a different US state than the query specified, the map pin gets a `_lowConfidence` badge instead of silently showing a wrong location.
+- **Low-confidence pin flag** — if Nominatim resolves a cemetery to a different US state than the query specified, the map pin gets a `_lowConfidence` badge instead of silently showing a wrong location. `forwardGeocode` (web + mobile) also returns `approximate: true` when it falls back to the cemetery centroid (no grave-node match) — pipelines and view-time geocoding mark those pins `_lowConfidence` too, since every GPS-less stone in the same cemetery shares that exact coordinate.
+
+- **Overlapping pin spread** — `spreadOverlappingPins()` (mobile `CemeteryMapScreen.js` + web `map-cemetery.js` `renderLeafletMap`) fans out markers whose coords match to ~1 m (`toFixed(5)`) in a ~7 m ring so stacked pins (e.g. multiple cemetery-centroid fallbacks) stay individually visible and tappable. Display-only: the saved `gps` is untouched and drag-to-correct still persists the drop point.
 
 - **Grave-node cache** — `grave-cache.js` caches successful Overpass name-match results so the same person's grave isn't re-queried on subsequent map opens.
 

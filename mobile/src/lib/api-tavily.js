@@ -269,6 +269,12 @@ export async function searchForPerson(graveData, location, cemeteryName) {
 // for a known URL — one extra credit, fired ONLY when we already have a
 // date-matching FindAGrave hit. Returns a single enriched result (or null), which
 // the caller MERGES into searchResults — never replacing the original.
+// FindAGrave renders slowly and intermittently times out on Tavily's per-URL
+// fetch ceiling (empty results / "Failed to fetch url"). It's flakiness, not a
+// block — a retry catches the page once warm — so we try up to twice. The retry
+// credit is only spent on a confirmed-FindAGrave hit whose first attempt failed.
+const EXTRACT_MAX_ATTEMPTS = 2;
+
 export async function extractFindAGraveDetail(results, deathYear) {
   if (!Array.isArray(results) || results.length === 0) return null;
 
@@ -282,30 +288,35 @@ export async function extractFindAGraveDetail(results, deathYear) {
     if (!hay.includes(yr)) return null;
   }
 
-  try {
-    const res = await fetch(`${PROXY_BASE}/tavily-extract`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
-      body: JSON.stringify({
-        urls: fg.url,
-        extract_depth: 'advanced',
-        format: 'text',
-        query: 'biography family plot inscription burial obituary',
-      }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const item = Array.isArray(data.results) ? data.results[0] : null;
-    const raw = (item?.raw_content || '').replace(/\s+/g, ' ').trim();
-    if (!raw || raw.length < 200) return null;
-    return {
-      title: fg.title || 'FindAGrave memorial (full page)',
-      url: fg.url,
-      content: raw.slice(0, 6000),
-      source_type: 'memorial',
-    };
-  } catch (e) {
-    console.warn('Tavily extract failed:', fg.url, e?.message);
-    return null;
+  for (let attempt = 1; attempt <= EXTRACT_MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(`${PROXY_BASE}/tavily-extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
+        body: JSON.stringify({
+          urls: fg.url,
+          extract_depth: 'advanced',
+          format: 'text',
+          query: 'biography family plot inscription burial obituary',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const item = Array.isArray(data.results) ? data.results[0] : null;
+        const raw = (item?.raw_content || '').replace(/\s+/g, ' ').trim();
+        if (raw && raw.length >= 200) {
+          return {
+            title: fg.title || 'FindAGrave memorial (full page)',
+            url: fg.url,
+            content: raw.slice(0, 6000),
+            source_type: 'memorial',
+          };
+        }
+        // Empty = FindAGrave timed out on Tavily's side; retry once more.
+      }
+    } catch (e) {
+      console.warn('Tavily extract failed (attempt', attempt + '):', fg.url, e?.message);
+    }
   }
+  return null;
 }

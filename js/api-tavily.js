@@ -332,6 +332,15 @@ async function searchForPerson(graveData, location, cemeteryName) {
 //
 // `results` is the array searchForPerson returned; `deathYear` is the OCR death
 // year used to confirm the memorial is the right person before we spend a credit.
+//
+// FindAGrave renders slowly and intermittently doesn't respond before Tavily's
+// internal per-URL fetch ceiling (~8–22s) — observed live as "Failed to fetch
+// url" with empty results. It's flakiness, not a block: a retry catches the page
+// once it's warm (attempt 2 succeeded where 1 and 3 failed in testing). So we try
+// up to twice. The retry credit is only ever spent on a confirmed-FindAGrave hit
+// whose first attempt came back empty — never on famous/no-match scans.
+const _EXTRACT_MAX_ATTEMPTS = 2;
+
 async function extractFindAGraveDetail(results, deathYear) {
   if (!Array.isArray(results) || results.length === 0) return null;
 
@@ -348,31 +357,36 @@ async function extractFindAGraveDetail(results, deathYear) {
     if (!hay.includes(yr)) return null;
   }
 
-  try {
-    const res = await fetch(`${PROXY_BASE}/tavily-extract`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
-      body: JSON.stringify({
-        urls: fg.url,
-        extract_depth: 'advanced',
-        format: 'text',
-        query: 'biography family plot inscription burial obituary'
-      })
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    // Tavily /extract returns { results: [{ url, raw_content }], failed_results: [] }
-    const item = Array.isArray(data.results) ? data.results[0] : null;
-    const raw = (item?.raw_content || '').replace(/\s+/g, ' ').trim();
-    if (!raw || raw.length < 200) return null;
-    return {
-      title: fg.title || 'FindAGrave memorial (full page)',
-      url: fg.url,
-      content: raw.slice(0, 6000),
-      source_type: 'memorial',
-    };
-  } catch (e) {
-    console.warn('Tavily extract failed:', fg.url, e?.message);
-    return null;
+  for (let attempt = 1; attempt <= _EXTRACT_MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(`${PROXY_BASE}/tavily-extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
+        body: JSON.stringify({
+          urls: fg.url,
+          extract_depth: 'advanced',
+          format: 'text',
+          query: 'biography family plot inscription burial obituary'
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Tavily /extract returns { results: [{ url, raw_content }], failed_results }
+        const item = Array.isArray(data.results) ? data.results[0] : null;
+        const raw = (item?.raw_content || '').replace(/\s+/g, ' ').trim();
+        if (raw && raw.length >= 200) {
+          return {
+            title: fg.title || 'FindAGrave memorial (full page)',
+            url: fg.url,
+            content: raw.slice(0, 6000),
+            source_type: 'memorial',
+          };
+        }
+        // Empty results = FindAGrave timed out on Tavily's side; retry once more.
+      }
+    } catch (e) {
+      console.warn('Tavily extract failed (attempt', attempt + '):', fg.url, e?.message);
+    }
   }
+  return null;
 }

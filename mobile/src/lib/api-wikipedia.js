@@ -1,6 +1,10 @@
 // Direct Wikipedia fetch — no proxy needed.
 import * as ImageManipulator from 'expo-image-manipulator';
-import * as FileSystem from 'expo-file-system';
+// expo-file-system v19 (SDK 54) moved the URI-based helpers (documentDirectory,
+// getInfoAsync, makeDirectoryAsync, copyAsync, …) to the /legacy entrypoint;
+// the default export throws at runtime for these. persistPortrait swallows
+// errors and falls back to the temp URI, so this was failing silently before.
+import * as FileSystem from 'expo-file-system/legacy';
 
 const PORTRAITS_DIR = FileSystem.documentDirectory + 'portraits/';
 

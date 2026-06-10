@@ -2,7 +2,12 @@
 // so the research pipeline can run later, once connectivity returns. A pending
 // story carries `_pending: true` + `photoUri` and is local-only (sync.js skips
 // it) until research completes and replaces it with a real story.
-import * as FileSystem from 'expo-file-system';
+//
+// expo-file-system v19 (SDK 54) moved the URI-based helpers
+// (documentDirectory, getInfoAsync, writeAsStringAsync, …) to the /legacy
+// entrypoint — the default export now throws at runtime for these. Import
+// from /legacy until/unless this migrates to the new File/Directory API.
+import * as FileSystem from 'expo-file-system/legacy';
 
 const PENDING_DIR = FileSystem.documentDirectory + 'pending/';
 

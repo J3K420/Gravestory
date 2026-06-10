@@ -195,26 +195,41 @@ const AnchorGlyph = () => (
   </G>
 );
 
-// ── 16. Lamb (child's grave) ──────────────────────────────────────────────────
+// ── 16. Lamb (child's grave) — recumbent lamb on a plinth ─────────────────────
 const LambGlyph = () => (
   <G>
-    <Rect x="28" y="78" width="44" height="10" stroke={GOLD} strokeWidth="2" fill={FILL} />
-    <Ellipse cx="50" cy="58" rx="16" ry="11" stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} />
-    <Circle cx="36" cy="54" r="6" stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} />
-    <Line x1="42" y1="69" x2="42" y2="78" stroke={PARCH} strokeWidth="1.6" />
-    <Line x1="58" y1="69" x2="58" y2="78" stroke={PARCH} strokeWidth="1.6" />
+    <Rect x="26" y="76" width="48" height="10" stroke={GOLD} strokeWidth="2" fill={FILL} />
+    {/* fleecy body — scalloped back, flat belly resting on the plinth */}
+    <Path d="M40 74 Q34 74 33 67 Q27 65 30 58 Q28 51 35 51 Q37 44 45 47 Q50 42 57 47 Q65 46 65 54 Q70 58 65 64 Q67 72 60 74 Z"
+      stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} strokeLinejoin="round" />
+    {/* head, lowered and turned out to the left */}
+    <Ellipse cx="30" cy="62" rx="6.5" ry="5" stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} />
+    <Path d="M24 60 Q21 60 22 63" stroke={PARCH} strokeWidth="1.3" fill="none" />
+    <Circle cx="29" cy="61" r="1" fill={PARCH} />
+    {/* two front legs tucked under */}
+    <Line x1="44" y1="74" x2="44" y2="76" stroke={PARCH} strokeWidth="1.6" />
+    <Line x1="56" y1="74" x2="56" y2="76" stroke={PARCH} strokeWidth="1.6" />
   </G>
 );
 
-// ── 17. Urn on plinth ─────────────────────────────────────────────────────────
+// ── 17. Draped funerary urn on plinth ─────────────────────────────────────────
 const UrnGlyph = () => (
   <G>
-    <Rect x="34" y="78" width="32" height="10" stroke={GOLD} strokeWidth="2" fill={FILL} />
-    <Rect x="40" y="66" width="20" height="12" stroke={GOLD} strokeWidth="2" fill={FILL} />
-    <Path d="M40 64 Q38 44 50 40 Q62 44 60 64 Z" stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} />
-    <Path d="M40 48 Q34 50 38 54" stroke={PARCH} strokeWidth="1.4" fill="none" />
-    <Path d="M60 48 Q66 50 62 54" stroke={PARCH} strokeWidth="1.4" fill="none" />
-    <Rect x="44" y="34" width="12" height="6" stroke={PARCH} strokeWidth="1.4" fill="none" />
+    <Rect x="32" y="80" width="36" height="8" stroke={GOLD} strokeWidth="2" fill={FILL} />
+    {/* stepped plinth */}
+    <Rect x="40" y="72" width="20" height="8" stroke={GOLD} strokeWidth="2" fill={FILL} />
+    {/* footed base of the urn */}
+    <Path d="M44 72 L42 66 L58 66 L56 72 Z" stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} strokeLinejoin="round" />
+    {/* urn body — narrow neck flaring to a rounded bowl */}
+    <Path d="M44 66 Q36 56 38 46 Q40 40 50 40 Q60 40 62 46 Q64 56 56 66 Z"
+      stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} strokeLinejoin="round" />
+    {/* rim and domed lid with finial */}
+    <Line x1="40" y1="42" x2="60" y2="42" stroke={PARCH} strokeWidth="1.6" />
+    <Path d="M41 42 Q41 34 50 34 Q59 34 59 42 Z" stroke={PARCH} strokeWidth="1.5" fill={PARCH_FILL} strokeLinejoin="round" />
+    <Line x1="50" y1="34" x2="50" y2="30" stroke={PARCH} strokeWidth="1.5" />
+    {/* symmetric handles */}
+    <Path d="M44 47 Q36 47 39 56" stroke={PARCH} strokeWidth="1.4" fill="none" />
+    <Path d="M56 47 Q64 47 61 56" stroke={PARCH} strokeWidth="1.4" fill="none" />
   </G>
 );
 

@@ -139,6 +139,7 @@ function _buildCorroborationSummary(graveData, searchResults, wikiData, wikidata
     obituary: 'Obituary',
     verified_transcription: 'BillionGraves',
     public_domain: 'Chronicling America',
+    archive: 'Internet Archive',
   };
   for (const r of searchResults) {
     const label = SOURCE_LABEL[r.source_type];
@@ -271,6 +272,7 @@ async function generateBiography(graveData, searchResults, wikiData, location, w
   const TYPE_LABELS = {
     verified_transcription: '[BillionGraves]',
     public_domain:          '[Chronicling America]',
+    archive:                '[Internet Archive]',
     memorial:               '[Find A Grave]',
     obituary:               '[Obituary]',
     wikidata:               '[Wikidata]',

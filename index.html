@@ -57,6 +57,7 @@
 <script src="js/api-nominatim.js"></script>
 <script src="js/api-wikidata.js"></script>
 <script src="js/api-chroniclingamerica.js"></script>
+<script src="js/api-internetarchive.js"></script>
 <script src="js/api-wikitree.js"></script>
 <script src="js/api-tavily.js"></script>
 <script src="js/api-wikipedia.js"></script>
@@ -1098,6 +1099,11 @@ async function startAnalysis() {
         (effectiveDeath && deathYrNum <= 1928)
           ? searchChroniclingAmerica(primaryOcrName, effectiveDeath)
           : Promise.resolve([]),
+        // Internet Archive: county/local-history full text for pre-1925 ordinary
+        // people. Free (not Tavily), CORS-open; gated on the IA cutoff.
+        (effectiveDeath && deathYrNum <= 1925)
+          ? searchInternetArchive(primaryOcrName, effectiveDeath, locationStr)
+          : Promise.resolve([]),
         ...researchTargets.map(t => fetchWikipediaArticleSummary(t.name, t.dates)),
       ]);
 
@@ -1106,13 +1112,25 @@ async function startAnalysis() {
       const wikiTreeResults    = allParallel.slice(idx, idx += wikiTreeTargets.length);
       wikidataResult           = allParallel[idx++];
       const chronResults       = allParallel[idx++];
+      const archiveResults     = allParallel[idx++];
       const wikiSummaryResults = allParallel.slice(idx);
 
       // Primary WikiTree result; pass all as array when multiple subjects
       const wikiData = wikiTreeTargets.length > 1 ? wikiTreeResults.filter(Boolean) : wikiTreeResults[0];
 
-      // Merge Chronicling America results into searchResults
-      const mergedSearchResults = [...searchResults, ...(chronResults || [])];
+      // Two-stage Tavily: if round one matched a FindAGrave memorial for the right
+      // person, /extract the full page (family links, plot, contributor bio that
+      // the snippet misses). One extra Tavily credit, fired only on a confirmed
+      // hit — sequential because it needs the resolved URL. Best-effort.
+      const fgDetail = await extractFindAGraveDetail(searchResults, effectiveDeath);
+
+      // Merge extra sources into searchResults (all additive — never replacing).
+      const mergedSearchResults = [
+        ...searchResults,
+        ...(fgDetail ? [fgDetail] : []),
+        ...(chronResults || []),
+        ...(archiveResults || []),
+      ];
 
       const wikipediaSummary = wikiSummaryResults.length === 1
         ? wikiSummaryResults[0]

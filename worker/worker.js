@@ -3,6 +3,7 @@
 // Front-end calls:
 //   POST /gemini/{model-id}       body: Gemini generateContent payload
 //   POST /tavily                  body: { query, search_depth, max_results, include_answer }
+//   POST /tavily-extract          body: { urls: <string|string[]> }
 //   POST /wikitree                body: WikiTree searchPerson params as JSON
 //   POST /overpass                body: { query: <QL string> }
 //   POST /upload-image            body: { data: <base64>, contentType: <mime> }
@@ -28,6 +29,7 @@
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const TAVILY_URL  = 'https://api.tavily.com/search';
+const TAVILY_EXTRACT_URL = 'https://api.tavily.com/extract';
 
 // Allowlist of model IDs that may be called. Prevents callers from requesting
 // expensive or experimental models we don't intend to expose.
@@ -104,6 +106,9 @@ export default {
       if (url.pathname === '/tavily') {
         return await handleTavily(request, env, origin, allowed);
       }
+      if (url.pathname === '/tavily-extract') {
+        return await handleTavilyExtract(request, env, origin, allowed);
+      }
       if (url.pathname === '/wikitree') {
         return await handleWikiTree(request, origin, allowed);
       }
@@ -176,6 +181,43 @@ async function handleTavily(request, env, origin, allowed) {
   payload.api_key = env.TAVILY_KEY;
 
   const res = await fetch(TAVILY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const text = await res.text();
+  return new Response(text, {
+    status: res.status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...corsHeaders(origin, allowed),
+    },
+  });
+}
+
+// ── Tavily Extract: POST /tavily-extract ──────────────────────────
+// Returns the full page text for a known URL (e.g. a FindAGrave memorial that
+// slot 1 already matched). The Tavily search snippet misses the family links,
+// plot info, and contributor bio further down the page; /extract returns the
+// whole thing. Fired conditionally by the client, so this is just a thin proxy.
+async function handleTavilyExtract(request, env, origin, allowed) {
+  if (request.method !== 'POST') {
+    return json({ error: 'Method not allowed' }, 405, origin, allowed);
+  }
+  if (!env.TAVILY_KEY) {
+    return json({ error: 'TAVILY_KEY not configured' }, 500, origin, allowed);
+  }
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return json({ error: 'Invalid JSON body' }, 400, origin, allowed);
+  }
+  payload.api_key = env.TAVILY_KEY;
+
+  const res = await fetch(TAVILY_EXTRACT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

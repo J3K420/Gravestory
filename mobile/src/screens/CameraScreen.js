@@ -12,10 +12,11 @@ import { supabase } from '../lib/supabase';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { verifyIsGravestone, readGravestone } from '../lib/api-gemini';
-import { searchForPerson } from '../lib/api-tavily';
+import { searchForPerson, extractFindAGraveDetail } from '../lib/api-tavily';
 import { searchWikiTree } from '../lib/api-wikitree';
 import { queryWikidata } from '../lib/api-wikidata';
 import { searchChroniclingAmerica } from '../lib/api-chroniclingamerica';
+import { searchInternetArchive } from '../lib/api-internetarchive';
 import { fetchWikipediaPortraits, fetchWikipediaArticleSummary } from '../lib/api-wikipedia';
 import { generateBiography } from '../lib/biography';
 import { forwardGeocode, reverseGeocode, reverseGeocodeCemetery } from '../lib/api-nominatim';
@@ -311,6 +312,11 @@ export default function CameraScreen({ navigation }) {
           (effectiveDeath && deathYrNum <= 1928)
             ? searchChroniclingAmerica(primaryOcrName, effectiveDeath)
             : Promise.resolve([]),
+          // Internet Archive: county/local-history full text for pre-1925 ordinary
+          // people. Free (not Tavily); gated on the IA cutoff.
+          (effectiveDeath && deathYrNum <= 1925)
+            ? searchInternetArchive(primaryOcrName, effectiveDeath, locationHint)
+            : Promise.resolve([]),
           ...researchTargets.map(t => fetchWikipediaPortraits(t.name, t.dates)),
           ...researchTargets.map(t => fetchWikipediaArticleSummary(t.name, t.dates)),
         ]);
@@ -320,14 +326,25 @@ export default function CameraScreen({ navigation }) {
         const wikiTreeResults    = allParallel.slice(idx, idx += wikiTreeTargets.length);
         wikidataResult           = allParallel[idx++];
         const chronResults       = allParallel[idx++];
+        const archiveResults     = allParallel[idx++];
         const portraitArrays     = allParallel.slice(idx, idx += wikiNames.length);
         const wikiSummaryResults = allParallel.slice(idx);
 
         // Primary WikiTree result; pass all as array when multiple subjects
         const wikiData = wikiTreeTargets.length > 1 ? wikiTreeResults.filter(Boolean) : wikiTreeResults[0];
 
-        // Merge Chronicling America results into searchResults
-        const mergedSearchResults = [...searchResults, ...(chronResults || [])];
+        // Two-stage Tavily: if round one matched a FindAGrave memorial for the
+        // right person, /extract the full page (family links, plot, contributor
+        // bio the snippet misses). One extra Tavily credit, confirmed hits only.
+        const fgDetail = await extractFindAGraveDetail(searchResults, effectiveDeath);
+
+        // Merge extra sources into searchResults (all additive — never replacing).
+        const mergedSearchResults = [
+          ...searchResults,
+          ...(fgDetail ? [fgDetail] : []),
+          ...(chronResults || []),
+          ...(archiveResults || []),
+        ];
 
         const portraits = portraitArrays.flat();
         const wikipediaSummary = wikiSummaryResults.length === 1

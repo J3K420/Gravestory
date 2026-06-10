@@ -322,3 +322,57 @@ async function searchForPerson(graveData, location, cemeteryName) {
   if (primaryName && effectiveDeath) _searchCache.set(cacheKey, results);
   return results;
 }
+
+// ── TAVILY EXTRACT: deepen a confirmed FindAGrave memorial ──────────
+// Tavily search snippets of a FindAGrave page miss the family links, plot info,
+// and contributor bio further down the page. /extract returns the full page text
+// for a known URL — one extra credit, fired ONLY when we already have a
+// date-matching FindAGrave hit. Returns a single enriched result (or null), which
+// the caller MERGES into searchResults — never replacing the original.
+//
+// `results` is the array searchForPerson returned; `deathYear` is the OCR death
+// year used to confirm the memorial is the right person before we spend a credit.
+async function extractFindAGraveDetail(results, deathYear) {
+  if (!Array.isArray(results) || results.length === 0) return null;
+
+  // Pick the first FindAGrave memorial result.
+  const fg = results.find(r => (r.url || '').toLowerCase().includes('findagrave.com/memorial'));
+  if (!fg || !fg.url) return null;
+
+  // Only spend the credit when round one looks like the right person: either the
+  // death year appears in the snippet, or we had no year to check against (in
+  // which case the single matched memorial is our best lead anyway).
+  const yr = (deathYear || '').toString().match(/\d{4}/)?.[0];
+  if (yr) {
+    const hay = `${fg.title || ''} ${fg.content || ''}`;
+    if (!hay.includes(yr)) return null;
+  }
+
+  try {
+    const res = await fetch(`${PROXY_BASE}/tavily-extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
+      body: JSON.stringify({
+        urls: fg.url,
+        extract_depth: 'advanced',
+        format: 'text',
+        query: 'biography family plot inscription burial obituary'
+      })
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    // Tavily /extract returns { results: [{ url, raw_content }], failed_results: [] }
+    const item = Array.isArray(data.results) ? data.results[0] : null;
+    const raw = (item?.raw_content || '').replace(/\s+/g, ' ').trim();
+    if (!raw || raw.length < 200) return null;
+    return {
+      title: fg.title || 'FindAGrave memorial (full page)',
+      url: fg.url,
+      content: raw.slice(0, 6000),
+      source_type: 'memorial',
+    };
+  } catch (e) {
+    console.warn('Tavily extract failed:', fg.url, e?.message);
+    return null;
+  }
+}

@@ -340,7 +340,10 @@ export default function CameraScreen({ navigation }) {
       // Wikidata burial coords are a precise fallback for famous figures when no GPS was captured
       const wikidataCoords = wikidataResult?.burialCoords || null;
       const refinedGps = gps ?? (geoResult ? { lat: geoResult.lat, lng: geoResult.lng } : null) ?? wikidataCoords;
-      const lowConfidence = geoResult?.lowConfidence || undefined;
+      // Flag the pin when it isn't the grave's real position: state-mismatch
+      // geocodes, and cemetery-centroid fallbacks used in place of missing GPS
+      // (those all share one coordinate, so the user needs the drag-to-correct hint).
+      const lowConfidence = (geoResult?.lowConfidence || (!gps && geoResult?.approximate === true)) || undefined;
 
       // Read default visibility from user metadata
       const { data: { session } } = await supabase.auth.getSession();

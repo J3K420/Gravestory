@@ -283,7 +283,10 @@ async function initCemeteryMap() {
         // Write coords back to the canonical saved story so they persist
         story.gps = { lat: coords.lat, lng: coords.lng };
         story._isCemetery = coords.isCemetery === true;
-        story._lowConfidence = coords.lowConfidence === true;
+        // Cemetery-centroid fallbacks (approximate) get the "?" badge too — the
+        // coordinate is shared by every GPS-less stone in this cemetery, so the
+        // user needs to know it's not the actual grave position.
+        story._lowConfidence = coords.lowConfidence === true || coords.approximate === true;
         // Persist to localStorage + cloud so the global map can use them
         await persistUpdate(story);
         mapped.push({ ...story, _isCemetery: story._isCemetery, _lowConfidence: story._lowConfidence });
@@ -579,8 +582,31 @@ async function fetchOSMCemeteryBoundary(lat, lng, skipEstateFallback = false, ce
   }
 }
 
+// ── OVERLAP SPREAD ───────────────────────────────────────────────
+// Stories that all fell back to the same cemetery-center coordinate render as
+// one stacked marker — the pins underneath are invisible and unclickable. Fan
+// exact-overlap groups out in a small ring (~7 m per step) so every grave stays
+// visible. Display-only: the saved gps is untouched, and drag-to-correct still
+// persists wherever the user drops the pin.
+function spreadOverlappingPins(graves) {
+  const seen = {};
+  return graves.map(story => {
+    if (!story.gps) return story;
+    const key = story.gps.lat.toFixed(5) + ',' + story.gps.lng.toFixed(5);
+    const n = seen[key] = (seen[key] === undefined ? 0 : seen[key] + 1);
+    if (n === 0) return story;
+    const angle = n * (Math.PI / 4);
+    const ring = 0.00006 * Math.ceil(n / 8); // ~6.7 m of latitude per ring
+    return {
+      ...story,
+      gps: { lat: story.gps.lat + ring * Math.cos(angle), lng: story.gps.lng + ring * Math.sin(angle) }
+    };
+  });
+}
+
 // ── RENDER MAP WITH BOUNDARY ─────────────────────────────────────
 async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
+  graves = spreadOverlappingPins(graves);
   // Clear stale cache so deleted/updated stories don't persist across map opens
   Object.keys(_cemeteryStoryCache).forEach(k => delete _cemeteryStoryCache[k]);
 
@@ -635,7 +661,7 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
           <em style="font-size:0.85rem;color:#666">${escapeHtml(story.dates || '')}</em><br>
           <small style="color:#888">${escapeHtml(story.location || '')}</small>
           ${story.userCorrected ? '<br><span style="font-size:0.75rem;color:#2a7a2a">✓ location corrected</span>' : ''}
-          ${story._lowConfidence && !story.userCorrected ? '<br><span style="font-size:0.75rem;color:#a87a2a">⚠ approximate — state may not match</span>' : ''}
+          ${story._lowConfidence && !story.userCorrected ? '<br><span style="font-size:0.75rem;color:#a87a2a">⚠ approximate location</span>' : ''}
           ${canDrag ? '<br><small style="color:#aaa;font-size:0.7rem;font-style:italic">Drag pin to correct location</small>' : ''}
           ${buildPopupBio(story)}
         </div>

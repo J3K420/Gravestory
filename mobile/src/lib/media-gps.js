@@ -17,15 +17,33 @@
 
 import { Platform } from 'react-native';
 
+// getLibraryAssetGps returns { gps, reason }:
+//   gps    — { lat, lng } on success, else null
+//   reason — a short diagnostic code naming why GPS was NOT recovered, so the
+//            silent-failure modes (denied permission, cloud-only Google Photos
+//            pick, modern-picker URI with no assetId) can be told apart at
+//            runtime instead of all collapsing to a single null. Callers that
+//            only want the coords can read `.gps`.
+//
+// Reason codes:
+//   'not-android'    — iOS/web; expo-media-library recovery is Android-only
+//   'no-asset-id'    — picker returned no MediaStore assetId (modern Photo
+//                      Picker / cloud share target). Unrecoverable.
+//   'module-missing' — binary predates expo-media-library (old OTA target)
+//   'permission'     — user denied the photo-location permission prompt
+//   'no-location'    — asset has no stored location (e.g. cloud-backed Google
+//                      Photos that never synced original EXIF, screenshot, etc.)
+//   'error'          — getAssetInfoAsync threw
 export async function getLibraryAssetGps(assetId) {
-  if (Platform.OS !== 'android' || !assetId) return null;
+  if (Platform.OS !== 'android') return { gps: null, reason: 'not-android' };
+  if (!assetId) return { gps: null, reason: 'no-asset-id' };
 
   let MediaLibrary;
   try {
     MediaLibrary = require('expo-media-library');
   } catch (e) {
     // Binary predates expo-media-library — behave as if no GPS was found.
-    return null;
+    return { gps: null, reason: 'module-missing' };
   }
 
   try {
@@ -33,17 +51,17 @@ export async function getLibraryAssetGps(assetId) {
     if (!perm.granted) {
       perm = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
     }
-    if (!perm.granted) return null;
+    if (!perm.granted) return { gps: null, reason: 'permission' };
 
     const info = await MediaLibrary.getAssetInfoAsync(assetId);
     const loc = info?.location;
     if (typeof loc?.latitude === 'number' && typeof loc?.longitude === 'number' &&
         (loc.latitude !== 0 || loc.longitude !== 0)) {
-      return { lat: loc.latitude, lng: loc.longitude };
+      return { gps: { lat: loc.latitude, lng: loc.longitude }, reason: null };
     }
-    return null;
+    return { gps: null, reason: 'no-location' };
   } catch (e) {
     console.warn('Media-library GPS lookup failed:', e.message);
-    return null;
+    return { gps: null, reason: 'error' };
   }
 }

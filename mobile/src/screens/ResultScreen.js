@@ -11,6 +11,7 @@ import { uploadGravestoneImage } from '../lib/api-r2';
 import { getTributes, setTribute } from '../lib/api-tributes';
 import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
 import { useRefresh } from '../lib/use-refresh';
+import { deletePendingPhoto } from '../lib/pending';
 import { colors, fonts, radius } from '../lib/theme';
 import { MapStack, ShareIcon, Globe } from '../components/Icons';
 import { MARKER_STYLES, getMarker, GraveMarkerSvg } from '../components/GraveMarkers';
@@ -38,6 +39,15 @@ export default function ResultScreen({ navigation, route }) {
       setUser(session?.user ?? null);
     });
   }, []);
+
+  // When CameraScreen finishes researching a pending story it navigates back
+  // here with the fresh story as a new param — adopt it (useState's initial
+  // value only reads route.params once, on first mount).
+  useEffect(() => {
+    if (route.params?.story && route.params.story !== story) {
+      setStory(route.params.story);
+    }
+  }, [route.params?.story]);
 
   useEffect(() => {
     if (story?.grave_id) {
@@ -85,6 +95,81 @@ export default function ResultScreen({ navigation, route }) {
         <View style={styles.center}>
           <Text style={styles.emptyText}>No story to display.</Text>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Offline-scanned placeholder: photo was captured without connectivity and
+  // research hasn't run yet. Show a template page with a "Run Research" button
+  // that routes back through CameraScreen's pipeline (which replaces this
+  // placeholder with the real story on success).
+  if (story._pending) {
+    const discardPending = () => {
+      Alert.alert(
+        'Discard Scan',
+        'Delete this saved photo without researching it?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Discard', style: 'destructive',
+            onPress: async () => {
+              const { data: { session } } = await supabase.auth.getSession();
+              const uid = session?.user?.id ?? null;
+              const all = await loadStories(uid);
+              await saveStories(all.filter(s => s.timestamp !== story.timestamp), uid);
+              deletePendingPhoto(story.photoUri);
+              navigation.navigate('Home');
+            },
+          },
+        ]
+      );
+    };
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+        <ScrollView contentContainerStyle={styles.scroll}>
+          {!!story.photoUri && (
+            <View style={styles.carouselOuter}>
+              <View style={styles.carouselSlide}>
+                <Image source={{ uri: story.photoUri }} style={styles.carouselImage} resizeMode="contain" />
+                <View style={styles.carouselLabelBadge}>
+                  <Text style={styles.carouselLabelText}>Gravestone</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          <Text style={styles.name}>Awaiting Research</Text>
+          <View style={styles.datesRow}>
+            <Text style={styles.datesText}>
+              Scanned offline · {new Date(story.timestamp).toLocaleDateString()}
+            </Text>
+          </View>
+          {story.gps && <Text style={styles.location}>✦ Location captured with photo</Text>}
+
+          <View style={styles.divider} />
+
+          <Text style={styles.bio}>
+            This stone was photographed without an internet connection. The photo
+            {story.gps ? ' and its location were' : ' was'} saved — once you're back
+            online, run the research to read the inscription and build this
+            person's story.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.saveBtn}
+            onPress={() => navigation.navigate('Camera', { pending: story })}
+          >
+            <Text style={styles.saveBtnText}>Run Research</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.deleteBtn} onPress={discardPending}>
+            <Text style={styles.deleteBtnText}>Discard</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </SafeAreaView>
     );
   }

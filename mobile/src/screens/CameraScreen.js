@@ -22,6 +22,8 @@ import { generateBiography } from '../lib/biography';
 import { forwardGeocode, reverseGeocode, reverseGeocodeCemetery } from '../lib/api-nominatim';
 import { checkScanLimit, incrementScanCount } from '../lib/scan-limit';
 import { getLibraryAssetGps } from '../lib/media-gps';
+import { loadStories, saveStories } from '../lib/storage';
+import { savePendingPhoto, readPendingPhoto, deletePendingPhoto } from '../lib/pending';
 
 const STEPS = [
   'Verifying gravestone…',
@@ -31,7 +33,7 @@ const STEPS = [
   'Finishing up…',
 ];
 
-export default function CameraScreen({ navigation }) {
+export default function CameraScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [rejected, setRejected] = useState(null);
@@ -65,32 +67,60 @@ export default function CameraScreen({ navigation }) {
     setPipelineError(null);
   });
 
-  async function pickAndAnalyze(fromCamera) {
+  // Resume a pending (offline-scanned) story: Result screen's "Run Research"
+  // navigates here with the pending story so the full pipeline UI (loading
+  // steps, rejection, error screens) is reused as-is.
+  useEffect(() => {
+    const pending = route.params?.pending;
+    if (pending) {
+      navigation.setParams({ pending: null });
+      resumePending(pending);
+    }
+  }, [route.params?.pending]);
+
+  // Offers the offline-queue path when the scan-limit check can't reach the
+  // server (fail-closed limit = the user is almost certainly offline).
+  function offerOfflineScan(fromCamera) {
+    Alert.alert(
+      'No Connection',
+      "Could not reach the server. You can photograph the stone now — it will be saved with its location, and you can run the research once you're back online.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Scan Offline', onPress: () => pickAndAnalyze(fromCamera, true) },
+      ]
+    );
+  }
+
+  async function pickAndAnalyze(fromCamera, offline = false) {
     setRejected(null);
     setPipelineError(null);
 
     // Check the scan limit before opening the picker — no API credits burned.
     // Saved-story limits were removed; scans are the cost control (they drive all paid AI work).
     // app_metadata.is_unlimited bypasses the limit (set via Supabase dashboard, read-only by clients).
-    try {
-      const { data: { session: initSession } } = await supabase.auth.getSession();
-      const uid = initSession?.user?.id ?? null;
-      const isUnlimited = initSession?.user?.app_metadata?.is_unlimited === true;
-      if (!isUnlimited) {
-        const scanCheck = await checkScanLimit(uid, initSession?.user);
-        if (scanCheck.atLimit) {
-          if (scanCheck._checkFailed) {
-            Alert.alert('Connection Error', 'Could not verify your scan limit. Please check your connection and try again.');
+    // Offline scans skip the check — no AI work happens until research runs,
+    // and the limit is enforced then (resumePending re-checks).
+    if (!offline) {
+      try {
+        const { data: { session: initSession } } = await supabase.auth.getSession();
+        const uid = initSession?.user?.id ?? null;
+        const isUnlimited = initSession?.user?.app_metadata?.is_unlimited === true;
+        if (!isUnlimited) {
+          const scanCheck = await checkScanLimit(uid, initSession?.user);
+          if (scanCheck.atLimit) {
+            if (scanCheck._checkFailed) {
+              offerOfflineScan(fromCamera);
+              return;
+            }
+            navigation.navigate('Paywall', { count: scanCheck.count, limit: scanCheck.limit, type: 'scan', isGuest: scanCheck.isGuest });
             return;
           }
-          navigation.navigate('Paywall', { count: scanCheck.count, limit: scanCheck.limit, type: 'scan', isGuest: scanCheck.isGuest });
-          return;
         }
+      } catch (e) {
+        console.warn('Limit check error:', e.message);
+        offerOfflineScan(fromCamera);
+        return;
       }
-    } catch (e) {
-      console.warn('Limit check error:', e.message);
-      Alert.alert('Connection Error', 'Could not verify your scan limit. Please check your connection and try again.');
-      return;
     }
 
     // exif: true so we can read GPS coords before compression strips them.
@@ -160,10 +190,82 @@ export default function CameraScreen({ navigation }) {
       Alert.alert('No photo location', diagnosticForReason(mediaReason));
     }
 
+    if (offline) {
+      await createPendingStory(manipResult.base64, gps, fromCamera);
+      return;
+    }
+
     await runPipeline(manipResult.base64, false, gps, fromCamera);
   }
 
-  async function runPipeline(base64, skipVerify = false, gps = null, fromCamera = false) {
+  // Saves an offline scan as a local-only placeholder story. The photo goes to
+  // documentDirectory/pending/ (AsyncStorage can't hold base64 images); the
+  // story carries _pending so ResultScreen shows the "Run Research" template
+  // and sync.js keeps it out of the cloud.
+  async function createPendingStory(base64, gps, fromCamera) {
+    try {
+      const timestamp = Date.now();
+      const photoUri = await savePendingPhoto(base64, timestamp);
+      const story = {
+        _pending: true,
+        name: 'Awaiting Research',
+        photoUri,
+        gps: gps || null,
+        timestamp,
+        is_public: false,
+        source: fromCamera ? 'camera' : 'library',
+      };
+      // getSession reads the locally cached session — works offline.
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id ?? null;
+      const existing = await loadStories(uid);
+      await saveStories([story, ...existing], uid);
+      navigation.navigate('Result', { story });
+    } catch (e) {
+      console.warn('Pending save failed:', e.message);
+      Alert.alert('Could Not Save', 'Failed to save this scan for later. Please try again.');
+    }
+  }
+
+  // Runs the full pipeline for a previously offline-scanned story. Re-checks
+  // the scan limit (skipped at offline capture time), then feeds the persisted
+  // photo through the normal flow. On success runPipeline removes the
+  // placeholder and its photo file.
+  async function resumePending(pending) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const uid = session?.user?.id ?? null;
+      const isUnlimited = session?.user?.app_metadata?.is_unlimited === true;
+      if (!isUnlimited) {
+        const scanCheck = await checkScanLimit(uid, session?.user);
+        if (scanCheck.atLimit) {
+          if (scanCheck._checkFailed) {
+            Alert.alert('Still Offline', 'Could not reach the server. Your scan is saved — try again once you have a connection.');
+            navigation.goBack();
+            return;
+          }
+          navigation.navigate('Paywall', { count: scanCheck.count, limit: scanCheck.limit, type: 'scan', isGuest: scanCheck.isGuest });
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Limit check error:', e.message);
+      Alert.alert('Still Offline', 'Could not reach the server. Your scan is saved — try again once you have a connection.');
+      navigation.goBack();
+      return;
+    }
+
+    const base64 = await readPendingPhoto(pending.photoUri);
+    if (!base64) {
+      Alert.alert('Photo Missing', 'The saved photo for this scan could not be read. Please discard it and scan again.');
+      navigation.goBack();
+      return;
+    }
+
+    await runPipeline(base64, false, pending.gps, pending.source === 'camera', pending);
+  }
+
+  async function runPipeline(base64, skipVerify = false, gps = null, fromCamera = false, pending = null) {
     setLoading(true);
     setStepIndex(0);
 
@@ -180,7 +282,7 @@ export default function CameraScreen({ navigation }) {
           await verifyIsGravestone(base64);
         } catch (err) {
           if (err.__verificationRejection) {
-            setRejected({ reason: err.reason, base64, gps, fromCamera });
+            setRejected({ reason: err.reason, base64, gps, fromCamera, pending });
             setLoading(false);
             return;
           }
@@ -424,12 +526,29 @@ export default function CameraScreen({ navigation }) {
         _primaryName: primaryName,
       };
 
+      // Research succeeded for a previously offline-scanned story — remove the
+      // placeholder and its persisted photo; the fresh story replaces it.
+      if (pending) {
+        const uid = session?.user?.id ?? null;
+        const all = await loadStories(uid);
+        await saveStories(all.filter(s => s.timestamp !== pending.timestamp), uid);
+        deletePendingPhoto(pending.photoUri);
+      }
+
       setLoading(false);
       navigation.navigate('Result', { story });
     } catch (err) {
       setLoading(false);
       console.warn('Pipeline error:', String(err), 'message:', err?.message, 'stack:', err?.stack);
-      setPipelineError(err.message || 'Something went wrong. Please try again.');
+      // For fresh scans, offer to queue the photo for later — the common cause
+      // here is the signal dropping mid-pipeline. Resumed pending scans are
+      // already queued, so they just get the error.
+      setPipelineError({
+        message: err.message || 'Something went wrong. Please try again.',
+        base64: pending ? null : base64,
+        gps,
+        fromCamera,
+      });
     }
   }
 
@@ -458,7 +577,19 @@ export default function CameraScreen({ navigation }) {
         </TouchableOpacity>
         <View style={styles.rejectedBox}>
           <Text style={styles.rejectedTitle}>Analysis Failed</Text>
-          <Text style={styles.rejectedReason}>{pipelineError}</Text>
+          <Text style={styles.rejectedReason}>{pipelineError.message}</Text>
+          {!!pipelineError.base64 && (
+            <TouchableOpacity
+              style={styles.tryAnyway}
+              onPress={() => {
+                const { base64, gps, fromCamera } = pipelineError;
+                setPipelineError(null);
+                createPendingStory(base64, gps, fromCamera);
+              }}
+            >
+              <Text style={styles.tryAnywayText}>Save & Research Later</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.retryBtn} onPress={() => setPipelineError(null)}>
             <Text style={styles.retryText}>Try Again</Text>
           </TouchableOpacity>
@@ -476,7 +607,7 @@ export default function CameraScreen({ navigation }) {
         <View style={styles.rejectedBox}>
           <Text style={styles.rejectedTitle}>Not a Gravestone</Text>
           <Text style={styles.rejectedReason}>{rejected.reason}</Text>
-          <TouchableOpacity style={styles.tryAnyway} onPress={() => runPipeline(rejected.base64, true, rejected.gps, rejected.fromCamera)}>
+          <TouchableOpacity style={styles.tryAnyway} onPress={() => runPipeline(rejected.base64, true, rejected.gps, rejected.fromCamera, rejected.pending)}>
             <Text style={styles.tryAnywayText}>Use it anyway</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.retryBtn} onPress={() => setRejected(null)}>

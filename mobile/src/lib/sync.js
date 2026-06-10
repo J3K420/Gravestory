@@ -139,7 +139,9 @@ async function pushLocalOnly(user, stories) {
   if (!user || _pushInFlight) return stories;
   _pushInFlight = true;
   try {
-    const candidates = stories.filter(s => (!s.id || s._needsCloudSync) && s.timestamp);
+    // _pending stories are offline scans awaiting research — local-only until
+    // the pipeline runs (they have no biography and a device-local photoUri).
+    const candidates = stories.filter(s => (!s.id || s._needsCloudSync) && s.timestamp && !s._pending);
     if (candidates.length === 0) return stories;
 
     const stamps = candidates.map(s => s.timestamp).filter(Boolean);

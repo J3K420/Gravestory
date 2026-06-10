@@ -195,41 +195,43 @@ const AnchorGlyph = () => (
   </G>
 );
 
-// ── 16. Lamb (child's grave) — recumbent lamb on a plinth ─────────────────────
-const LambGlyph = () => (
+// ── 16. Broken column (life cut short) — snapped classical column on a plinth ──
+const BrokenColumnGlyph = () => (
   <G>
-    <Rect x="26" y="76" width="48" height="10" stroke={GOLD} strokeWidth="2" fill={FILL} />
-    {/* fleecy body — scalloped back, flat belly resting on the plinth */}
-    <Path d="M40 74 Q34 74 33 67 Q27 65 30 58 Q28 51 35 51 Q37 44 45 47 Q50 42 57 47 Q65 46 65 54 Q70 58 65 64 Q67 72 60 74 Z"
-      stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} strokeLinejoin="round" />
-    {/* head, lowered and turned out to the left */}
-    <Ellipse cx="30" cy="62" rx="6.5" ry="5" stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} />
-    <Path d="M24 60 Q21 60 22 63" stroke={PARCH} strokeWidth="1.3" fill="none" />
-    <Circle cx="29" cy="61" r="1" fill={PARCH} />
-    {/* two front legs tucked under */}
-    <Line x1="44" y1="74" x2="44" y2="76" stroke={PARCH} strokeWidth="1.6" />
-    <Line x1="56" y1="74" x2="56" y2="76" stroke={PARCH} strokeWidth="1.6" />
+    {/* two-step plinth */}
+    <Rect x="28" y="80" width="44" height="8" stroke={GOLD} strokeWidth="2" fill={FILL} />
+    <Rect x="34" y="72" width="32" height="8" stroke={GOLD} strokeWidth="2" fill={FILL} />
+    {/* column shaft, snapped off on a diagonal near the top */}
+    <Path d="M40 72 L40 40 L42 36 L58 32 L60 36 L60 72 Z"
+      stroke={PARCH} strokeWidth="1.8" fill={PARCH_FILL} strokeLinejoin="round" />
+    {/* fluting on the shaft */}
+    <Line x1="46" y1="44" x2="46" y2="70" stroke={PARCH} strokeWidth="1.2" />
+    <Line x1="50" y1="42" x2="50" y2="70" stroke={PARCH} strokeWidth="1.2" />
+    <Line x1="54" y1="40" x2="54" y2="70" stroke={PARCH} strokeWidth="1.2" />
+    {/* base moulding ring */}
+    <Line x1="38" y1="70" x2="62" y2="70" stroke={PARCH} strokeWidth="1.6" />
   </G>
 );
 
-// ── 17. Draped funerary urn on plinth ─────────────────────────────────────────
+// ── 17. Classical funerary urn on a stepped plinth ────────────────────────────
 const UrnGlyph = () => (
   <G>
-    <Rect x="32" y="80" width="36" height="8" stroke={GOLD} strokeWidth="2" fill={FILL} />
-    {/* stepped plinth */}
-    <Rect x="40" y="72" width="20" height="8" stroke={GOLD} strokeWidth="2" fill={FILL} />
-    {/* footed base of the urn */}
-    <Path d="M44 72 L42 66 L58 66 L56 72 Z" stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} strokeLinejoin="round" />
-    {/* urn body — narrow neck flaring to a rounded bowl */}
-    <Path d="M44 66 Q36 56 38 46 Q40 40 50 40 Q60 40 62 46 Q64 56 56 66 Z"
-      stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} strokeLinejoin="round" />
-    {/* rim and domed lid with finial */}
-    <Line x1="40" y1="42" x2="60" y2="42" stroke={PARCH} strokeWidth="1.6" />
-    <Path d="M41 42 Q41 34 50 34 Q59 34 59 42 Z" stroke={PARCH} strokeWidth="1.5" fill={PARCH_FILL} strokeLinejoin="round" />
-    <Line x1="50" y1="34" x2="50" y2="30" stroke={PARCH} strokeWidth="1.5" />
-    {/* symmetric handles */}
-    <Path d="M44 47 Q36 47 39 56" stroke={PARCH} strokeWidth="1.4" fill="none" />
-    <Path d="M56 47 Q64 47 61 56" stroke={PARCH} strokeWidth="1.4" fill="none" />
+    {/* two-step plinth */}
+    <Rect x="30" y="80" width="40" height="8" stroke={GOLD} strokeWidth="2" fill={FILL} />
+    <Rect x="38" y="73" width="24" height="7" stroke={GOLD} strokeWidth="2" fill={FILL} />
+    {/* foot of the urn */}
+    <Path d="M45 73 L43 68 L57 68 L55 73 Z" stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} strokeLinejoin="round" />
+    {/* urn bowl — rounded body tapering to the foot */}
+    <Path d="M43 68 Q34 60 38 50 L62 50 Q66 60 57 68 Z"
+      stroke={PARCH} strokeWidth="1.8" fill={PARCH_FILL} strokeLinejoin="round" />
+    {/* wide rim */}
+    <Rect x="36" y="46" width="28" height="4" rx="1" stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} />
+    {/* domed lid with finial */}
+    <Path d="M40 46 Q40 38 50 38 Q60 38 60 46 Z" stroke={PARCH} strokeWidth="1.6" fill={PARCH_FILL} strokeLinejoin="round" />
+    <Circle cx="50" cy="35" r="2.4" stroke={PARCH} strokeWidth="1.5" fill={FILL} />
+    {/* paired scroll handles */}
+    <Path d="M40 53 Q31 53 35 62" stroke={PARCH} strokeWidth="1.5" fill="none" />
+    <Path d="M60 53 Q69 53 65 62" stroke={PARCH} strokeWidth="1.5" fill="none" />
   </G>
 );
 
@@ -281,7 +283,7 @@ export const MARKER_STYLES = [
   { id: 'praying',    label: 'Praying Hands', Glyph: PrayingHandsGlyph },
   { id: 'dove',       label: 'Dove',          Glyph: DoveGlyph },
   { id: 'anchor',     label: 'Anchor',        Glyph: AnchorGlyph },
-  { id: 'lamb',       label: 'Lamb',          Glyph: LambGlyph },
+  { id: 'column',     label: 'Broken Column', Glyph: BrokenColumnGlyph },
   { id: 'urn',        label: 'Urn',           Glyph: UrnGlyph },
   { id: 'willow',     label: 'Willow',        Glyph: WillowGlyph },
   { id: 'star',       label: 'Star of David', Glyph: StarOfDavidGlyph },

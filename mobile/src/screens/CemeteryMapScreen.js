@@ -82,6 +82,27 @@ const markerStyles = StyleSheet.create({
   },
 });
 
+// Stories that all fell back to the same cemetery-center coordinate render as
+// one stacked marker — the pins underneath are invisible and untappable. Fan
+// exact-overlap groups out in a small ring (~7 m per step) so every grave stays
+// visible. Display-only: the saved gps is untouched, and drag-to-correct still
+// persists wherever the user drops the pin.
+function spreadOverlappingPins(stories) {
+  const seen = {};
+  return stories.map(story => {
+    if (!story.gps) return story;
+    const key = `${story.gps.lat.toFixed(5)},${story.gps.lng.toFixed(5)}`;
+    const n = seen[key] = (seen[key] === undefined ? 0 : seen[key] + 1);
+    if (n === 0) return story;
+    const angle = n * (Math.PI / 4);
+    const ring = 0.00006 * Math.ceil(n / 8); // ~6.7 m of latitude per ring
+    return {
+      ...story,
+      gps: { lat: story.gps.lat + ring * Math.cos(angle), lng: story.gps.lng + ring * Math.sin(angle) },
+    };
+  });
+}
+
 // Geographic center of the contiguous US — used before any graves are located
 const DEFAULT_REGION = {
   latitude: 39.5,
@@ -122,20 +143,28 @@ export default function CemeteryMapScreen({ navigation, route }) {
       }
     }
 
-    // Geocode stories that have a location string but no GPS coords
+    // Geocode stories that have a location string but no GPS coords.
+    // Pass the single OCR name + dates so forwardGeocode can try the named
+    // grave-node search before settling for the cemetery centroid; centroid
+    // fallbacks are flagged approximate so the pin shows the drag-to-correct hint.
     const resolved = [];
     for (const story of stories) {
       if (story.gps) {
         resolved.push(story);
       } else if (story.location) {
-        const coords = await forwardGeocode(story.location);
+        const searchName = story.graveData?.primary_name || story.name || null;
+        const coords = await forwardGeocode(story.location, searchName, story.dates);
         if (coords) {
-          resolved.push({ ...story, gps: coords });
+          resolved.push({
+            ...story,
+            gps: { lat: coords.lat, lng: coords.lng },
+            _lowConfidence: story._lowConfidence || coords.lowConfidence || coords.approximate === true || undefined,
+          });
         }
       }
     }
 
-    setMappedStories(resolved);
+    setMappedStories(spreadOverlappingPins(resolved));
     setGeocoding(false);
 
     if (resolved.length === 0) return;

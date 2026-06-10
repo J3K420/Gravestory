@@ -802,7 +802,10 @@ async function forwardGeocode(locationStr, personName, dates) {
 
   // Step 3 — fall back to cemetery center coords. Deliberately NOT cached: fallback
   // results aren't verified and would lock in a "good enough" answer if cached.
-  return { ...cemeteryCoords, isCemetery: true, lowConfidence };
+  // approximate: true — this is the cemetery's centroid, not the grave's position;
+  // every GPS-less stone in the same cemetery lands on this exact coordinate, so
+  // callers must surface it as an approximate pin.
+  return { ...cemeteryCoords, isCemetery: true, lowConfidence, approximate: true };
 }
 // ── IMAGE UPLOAD ─────────────────────────────────────────────────
 async function handleImageUpload(input, isLiveCamera = false) {

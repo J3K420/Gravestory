@@ -232,7 +232,7 @@ export async function searchForPerson(graveData, location) {
             results.push({
               title: r.title,
               url: r.url,
-              content: r.content?.slice(0, 3000),
+              content: r.content?.slice(0, 6000),
               source_type:
                 u.includes('billiongraves.com')          ? 'verified_transcription' :
                 u.includes('findagrave.com')             ? 'memorial' :

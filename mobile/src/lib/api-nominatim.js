@@ -217,7 +217,10 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
   }
 
   // ── Step 3: fall back to cemetery center ─────────────────────────
-  return { lat: cemeteryCoords.lat, lng: cemeteryCoords.lng, isCemetery: true, lowConfidence };
+  // approximate: true — this is NOT the grave's position, just the cemetery's
+  // centroid. Every GPS-less stone in the same cemetery lands on this exact
+  // coordinate, so callers must surface it as an approximate pin.
+  return { lat: cemeteryCoords.lat, lng: cemeteryCoords.lng, isCemetery: true, lowConfidence, approximate: true };
 }
 
 // Reverse-geocode a GPS coordinate to a human-readable "City, State" string.

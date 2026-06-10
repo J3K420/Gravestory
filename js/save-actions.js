@@ -39,15 +39,8 @@ async function saveStory() {
     return;
   }
 
-  // Freemium save limit check
-  const saveCheck = checkWebSaveLimit();
-  if (saveCheck.atLimit) {
-    const msg = saveCheck.isGuest
-      ? `You've reached the ${saveCheck.limit}-story limit for guests. Sign in to save up to ${WEB_SAVE_LIMIT_USER} stories.`
-      : `You've reached your ${saveCheck.limit}-story save limit.`;
-    alert(msg);
-    return;
-  }
+  // Saved-story limits have been removed — saving is free. The scan limit
+  // (checkWebScanLimit, gating startAnalysis) remains the cost control.
 
   // Apply default visibility from user prefs (signed-in users only)
   if (currentUser) {

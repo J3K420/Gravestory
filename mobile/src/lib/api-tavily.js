@@ -221,7 +221,7 @@ export async function searchForPerson(graveData, location) {
       const res = await fetch(`${PROXY_BASE}/tavily`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
-        body: JSON.stringify({ query, search_depth: 'basic', max_results: 2, include_answer: false }),
+        body: JSON.stringify({ query, search_depth: 'advanced', max_results: 2, include_answer: false }),
       });
       const data = await res.json();
       if (data.results) {
@@ -232,7 +232,7 @@ export async function searchForPerson(graveData, location) {
             results.push({
               title: r.title,
               url: r.url,
-              content: r.content?.slice(0, 1000),
+              content: r.content?.slice(0, 3000),
               source_type:
                 u.includes('billiongraves.com')          ? 'verified_transcription' :
                 u.includes('findagrave.com')             ? 'memorial' :

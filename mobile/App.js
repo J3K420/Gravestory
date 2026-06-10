@@ -17,8 +17,8 @@ import {
   HankenGrotesk_600SemiBold,
 } from '@expo-google-fonts/hanken-grotesk';
 import { supabase } from './src/lib/supabase';
-// RevenueCat import intentionally disabled until production API key is configured
-// import Purchases, { LOG_LEVEL } from 'react-native-purchases';
+import Purchases, { LOG_LEVEL } from 'react-native-purchases';
+import { REVENUECAT_API_KEY } from './src/lib/config';
 
 import HomeScreen from './src/screens/HomeScreen';
 import AuthScreen from './src/screens/AuthScreen';
@@ -77,6 +77,44 @@ export default function App() {
 
 
   useEffect(() => {
+    // Guard: a release build with no real key must NOT initialize RevenueCat —
+    // configuring with an empty or test key crashes the SDK on release. When the
+    // key is missing, skip RC entirely; the paywall shows its "not available"
+    // state instead of taking down the whole app.
+    const rcEnabled = !!REVENUECAT_API_KEY;
+    if (rcEnabled) {
+      if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+      Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    } else {
+      console.warn('RevenueCat API key missing — purchases disabled for this session.');
+    }
+
+    // Tie RevenueCat's app_user_id to the Supabase user UUID so the
+    // purchase webhook credits the correct account. Without this, purchases
+    // fire with RevenueCat's anonymous ID and scan_credits is never updated.
+    async function syncRevenueCatIdentity(userId) {
+      if (!rcEnabled) return;
+      try {
+        if (userId) {
+          await Purchases.logIn(userId);
+        } else {
+          await Purchases.logOut();
+        }
+      } catch (e) {
+        console.warn('RevenueCat identity sync failed:', e.message);
+      }
+    }
+
+    // Log in immediately if a session already exists (returning user).
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      syncRevenueCatIdentity(session?.user?.id ?? null);
+    });
+
+    // Keep RevenueCat identity in sync with auth state changes.
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      syncRevenueCatIdentity(session?.user?.id ?? null);
+    });
+
     Linking.getInitialURL().then(url => {
       if (url?.includes('login-callback') && url.includes('code=')) {
         const params = new URLSearchParams(url.split('?')[1] ?? '');
@@ -84,6 +122,10 @@ export default function App() {
         if (code) supabase.auth.exchangeCodeForSession(code);
       }
     });
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+    };
   }, []);
 
   if (!fontsLoaded) return null;

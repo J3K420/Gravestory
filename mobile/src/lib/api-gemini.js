@@ -14,6 +14,14 @@ function fetchWithTimeout(url, init) {
   ]);
 }
 
+// Handles both Gemini error objects ({ message, code, status }) and
+// Worker string errors ({ error: 'Forbidden' }) so callers always get a string.
+function extractErrMsg(dataError) {
+  if (!dataError) return '';
+  if (typeof dataError === 'string') return dataError;
+  return dataError.message || dataError.status || dataError.detail || JSON.stringify(dataError);
+}
+
 async function geminiCallWithFallback(payload) {
   const init = {
     method: 'POST',
@@ -23,12 +31,15 @@ async function geminiCallWithFallback(payload) {
 
   const shouldFallback = (res, data) => {
     if (res && (res.status === 503 || res.status === 429)) return true;
-    if (data?.error) {
+    // Only inspect nested Gemini error objects — Worker string errors never trigger fallback
+    if (data?.error && typeof data.error === 'object') {
       const msg = (data.error.message || '').toLowerCase();
       const code = data.error.code;
-      if (code === 503 || code === 429) return true;
+      // 404 = model not found on Gemini → try fallback model
+      if (code === 503 || code === 429 || code === 404) return true;
       if (msg.includes('overload') || msg.includes('unavailable') ||
-          msg.includes('high demand') || msg.includes('try again later')) return true;
+          msg.includes('high demand') || msg.includes('try again later') ||
+          msg.includes('not found')) return true;
     }
     return false;
   };
@@ -82,7 +93,7 @@ Return only JSON.`;
   });
 
   if (data.error) {
-    console.warn('Gravestone verification failed — proceeding anyway:', data.error.message);
+    console.warn('verifyIsGravestone error — proceeding anyway. Response:', JSON.stringify(data));
     return;
   }
 
@@ -136,22 +147,29 @@ Return ONLY a valid JSON object with these exact fields:
   "family_name": "the deceased's surname ONLY IF it is clearly theirs (e.g. shown as a standalone surname banner, or in a family plot context). Leave empty/null if the only surname on the stone appears inside a relational phrase about someone else.",
   "name_confidence": "high if the name is clearly legible, medium if partially weathered or ambiguous, low if significantly uncertain",
   "alternate_names": ["if name_confidence is medium or low, list 1-2 plausible alternate readings of primary_name due to weathering or OCR ambiguity — otherwise empty array"],
-  "multiple_subjects": "true if this photo clearly shows multiple SEPARATE, DISTINCT gravestones or memorial markers in the same frame (not a single shared family stone) — false otherwise",
+  "multiple_subjects": "true ONLY when the camera frame physically contains two or more completely separate, freestanding gravestones or grave markers at distinct locations — for example, two separate upright headstones for different people placed at different graves. A SINGLE unified monument, slab, or plaque that honours multiple people buried together at the same grave (even if it lists each person's individual birth/death dates, such as a grandmother and granddaughter interred together) is NOT multiple_subjects — return false. If you are not certain that the markers are physically separate objects at separate graves, return false.",
+  "subjects": [{"name": "full name of every deceased person visible anywhere in this photo (from any stone or plaque in the frame)", "birth_date": "their birth date/year exactly as shown beside their own name, else empty", "death_date": "their death date/year exactly as shown beside their own name, else empty"}],
   "notes": "any other text, observations, or ambiguity flags"
 }
 
-If multiple deceased people share the stone, use the names array and pick the most prominent as primary_name. Return only JSON.`;
+SUBJECTS ARRAY — IMPORTANT:
+Populate "subjects" with one entry for EVERY DECEASED person visible anywhere in the photo frame — regardless of whether multiple_subjects is true or false. If multiple_subjects is true (separate physical stones visible), still include every deceased person from every stone visible. A single shared family stone often commemorates more than one deceased person (e.g. a grandmother AND a granddaughter, each with separate dates) — list each as a separate entry with their individual dates. Exclude living relatives who are named only inside relational phrases ("beloved wife of", "devoted family", lists of survivors) — those are not the deceased. List each deceased person only ONCE: if a single deceased person is known by more than one name or an alias (e.g. a birth name and a stage/pen name), merge them into a single entry using their most recognised name — do NOT create separate entries for the same person. For a stone with one deceased person, return a single entry. This per-person date breakdown matters: top-level birth_date/death_date may reflect only one person, but each subject's own dates must be captured here.
+
+If multiple deceased people share the stone, use the names array and pick the most prominent as primary_name, and list every deceased person with their own dates in subjects. Return only JSON.`;
 
   const { data } = await geminiCallWithFallback({
     contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }] }],
     generationConfig: { temperature: 0.1 },
   });
-  if (data.error) throw new Error(data.error.message);
+  if (data.error) {
+    console.warn('readGravestone API error. Full response:', JSON.stringify(data));
+    throw new Error(extractErrMsg(data.error) || 'Gemini API error');
+  }
 
   const text = data.candidates[0].content.parts[0].text;
   return safeParseJSON(text, {
     names: [], primary_name: 'Unknown', birth_date: '', death_date: '',
     inscription: '', symbols: [], family_name: '', notes: '',
-    name_confidence: 'high', alternate_names: [], multiple_subjects: false,
+    name_confidence: 'high', alternate_names: [], multiple_subjects: false, subjects: [],
   });
 }

@@ -1,17 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Linking, Share, Image, Alert, FlatList, Dimensions,
+  Linking, Share, Image, Alert, FlatList, Dimensions, Modal, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
-import { cloudUpdateStory, cloudDeleteStory } from '../lib/sync';
+import { cloudSaveStory, cloudUpdateStory, cloudDeleteStory, findOrCreateGrave } from '../lib/sync';
+import { uploadGravestoneImage } from '../lib/api-r2';
 import { getTributes, setTribute } from '../lib/api-tributes';
 import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { MapStack, ShareIcon, Globe } from '../components/Icons';
+import { MARKER_STYLES, getMarker, GraveMarkerSvg } from '../components/GraveMarkers';
+import { SYMBOL_CONTEXT } from '../lib/biography';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -19,12 +22,16 @@ export default function ResultScreen({ navigation, route }) {
   const [story, setStory]               = useState(route.params?.story);
   const [user, setUser]                 = useState(null);
   const [sharing, setSharing]           = useState(false);
+  const [saving, setSaving]             = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [tributes, setTributes]         = useState({ candles: 0, flowers: 0, userTribute: null });
   const [tributeLoading, setTributeLoading] = useState(false);
   const [gravePhotos, setGravePhotos]   = useState([]);
   const [livePortraits, setLivePortraits] = useState([]);
+  const [symbolModal, setSymbolModal]   = useState(null); // { name, text }
+  const [markerModal, setMarkerModal]   = useState(false);
+  const [savingMarker, setSavingMarker] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -86,13 +93,18 @@ export default function ResultScreen({ navigation, route }) {
   const paragraphs = (biography || '').split('\n\n').filter(Boolean);
 
   // Global map bios: show all community photos of this stone when available.
-  // Own stories: show only the user's own gravestone photo.
+  // Own stories: show only the user's own gravestone photo. For a freshly
+  // scanned (still _unsaved) story there's no R2 image_url yet — the photo
+  // only lives in memory as _base64 until the user taps Save — so fall back
+  // to a data URI so the gravestone still appears in the carousel immediately.
+  const localGraveUri = story.image_url
+    || (story._base64 ? `data:image/jpeg;base64,${story._base64}` : null);
   const graveSlots = (story._isGlobal && gravePhotos.length > 0)
     ? gravePhotos.map((uri, i) => ({
         uri,
         label: gravePhotos.length > 1 ? `Photo ${i + 1} of ${gravePhotos.length}` : 'Gravestone',
       }))
-    : (story.image_url ? [{ uri: story.image_url, label: 'Gravestone' }] : []);
+    : (localGraveUri ? [{ uri: localGraveUri, label: 'Gravestone' }] : []);
 
   const portraitUris = normalizePortraits(portraits).length > 0
     ? normalizePortraits(portraits)
@@ -102,6 +114,69 @@ export default function ResultScreen({ navigation, route }) {
     ...graveSlots,
     ...portraitUris.map(uri => ({ uri, label: 'Portrait' })),
   ].filter(Boolean);
+
+  async function handleSave() {
+    if (saving || !story._unsaved) return;
+    setSaving(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const sessionUser = session?.user ?? null;
+      const uid = sessionUser?.id ?? null;
+      const base64 = story._base64;
+      const primaryName = story._primaryName || story.name || '';
+
+      // Resolve the canonical grave at save time. On a find_grave cache hit the
+      // grave_id is already set; otherwise dedup via find_or_create (~20m name match).
+      let graveId = story.grave_id || null;
+      if (!graveId && sessionUser && story.gps && primaryName) {
+        graveId = await findOrCreateGrave(primaryName, story.gps.lat, story.gps.lng, story.is_public);
+      }
+
+      // Strip transient pipeline-only fields before persisting.
+      const { _unsaved, _base64, _primaryName, ...clean } = story;
+      let saved = { ...clean, grave_id: graveId };
+
+      // Local save first so the story is always available offline.
+      const existing = await loadStories(uid);
+      await saveStories([saved, ...existing], uid);
+
+      // Cloud save + R2 image upload if signed in.
+      if (sessionUser) {
+        saved = await cloudSaveStory(saved, sessionUser);
+        if (base64) {
+          const imageUrl = await uploadGravestoneImage(base64);
+          if (imageUrl) {
+            saved = await cloudUpdateStory({ ...saved, image_url: imageUrl }, sessionUser);
+            // Contribute to the grave's community photo pool (non-blocking).
+            if (saved.grave_id) {
+              (async () => {
+                try {
+                  await supabase.from('grave_photos').insert({
+                    grave_id: saved.grave_id,
+                    user_id: sessionUser.id,
+                    image_url: imageUrl,
+                  });
+                } catch (e) {
+                  console.warn('grave_photos insert failed (non-fatal):', e.message);
+                }
+              })();
+            }
+            // Persist image_url locally too so the saved story shows the photo offline.
+            const all = await loadStories(uid);
+            const idx = all.findIndex(s => s.timestamp === saved.timestamp);
+            if (idx >= 0) { all[idx] = saved; await saveStories(all, uid); }
+          }
+        }
+      }
+
+      setStory(saved);
+    } catch (err) {
+      console.warn('Save failed:', err?.message);
+      Alert.alert('Save Failed', 'Could not save this story. Please check your connection and try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function handleDelete() {
     if (story._isGlobal) return;
@@ -145,6 +220,21 @@ export default function ResultScreen({ navigation, route }) {
     setTogglingPublic(false);
   }
 
+  async function handlePickMarker(styleId) {
+    if (savingMarker) return;
+    setMarkerModal(false);
+    if ((story.marker_style || 'book') === styleId) return;
+    setSavingMarker(true);
+    const updated = { ...story, marker_style: styleId };
+    const uid = user?.id ?? null;
+    const all = await loadStories(uid);
+    const idx = all.findIndex(s => s.timestamp === story.timestamp);
+    if (idx >= 0) { all[idx] = updated; await saveStories(all, uid); }
+    setStory(updated);
+    if (updated.id && user) setStory(await cloudUpdateStory(updated, user));
+    setSavingMarker(false);
+  }
+
   async function handleTribute(type) {
     if (!user || !story.grave_id || tributeLoading) return;
     setTributeLoading(true);
@@ -156,12 +246,32 @@ export default function ResultScreen({ navigation, route }) {
     setTributeLoading(false);
   }
 
-  const showPublicToggle = user && !story._isGlobal;
+  const isUnsaved = !!story._unsaved;
+  const showPublicToggle = user && !story._isGlobal && !isUnsaved;
+  // Marker style applies to the user's own My-Cemetery pin — only meaningful for
+  // a saved, own (non-global) story that has a location to map.
+  const showMarkerChip = !story._isGlobal && !isUnsaved && (story.gps || story.location);
+  const currentMarker = getMarker(story.marker_style);
   const isPublic = story.is_public;
+
+  function handleBack() {
+    if (isUnsaved && !saving) {
+      Alert.alert(
+        'Discard this story?',
+        'You haven\'t saved this story yet. Leaving now will discard it.',
+        [
+          { text: 'Keep editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
+        ]
+      );
+      return;
+    }
+    navigation.goBack();
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+      <TouchableOpacity onPress={handleBack} style={styles.back}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 
@@ -231,11 +341,24 @@ export default function ResultScreen({ navigation, route }) {
         {/* Symbols */}
         {graveData?.symbols?.length > 0 && (
           <View style={styles.tagsRow}>
-            {graveData.symbols.map((s, i) => (
-              <View key={i} style={styles.tag}>
-                <Text style={styles.tagText}>{s}</Text>
-              </View>
-            ))}
+            {graveData.symbols.map((s, i) => {
+              const lower = s.toLowerCase();
+              const contextText = Object.entries(SYMBOL_CONTEXT).find(([k]) => lower.includes(k))?.[1] ?? null;
+              return contextText ? (
+                <TouchableOpacity
+                  key={i}
+                  style={[styles.tag, styles.tagTappable]}
+                  onPress={() => setSymbolModal({ name: s, text: contextText })}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.tagText, styles.tagTextTappable]}>{s} ›</Text>
+                </TouchableOpacity>
+              ) : (
+                <View key={i} style={styles.tag}>
+                  <Text style={styles.tagText}>{s}</Text>
+                </View>
+              );
+            })}
           </View>
         )}
 
@@ -254,7 +377,7 @@ export default function ResultScreen({ navigation, route }) {
         )}
 
         {/* Tributes */}
-        {story.grave_id && (
+        {story.grave_id && !isUnsaved && (
           <View style={styles.tributeSection}>
             <Text style={styles.tributeLabel}>Tributes at this grave</Text>
             <View style={styles.tributeCounts}>
@@ -291,6 +414,17 @@ export default function ResultScreen({ navigation, route }) {
           </View>
         )}
 
+        {/* Save (unsaved stories only) — primary action */}
+        {isUnsaved && (
+          <TouchableOpacity
+            style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Story'}</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Action chips */}
         <View style={styles.chipsRow}>
           {(story.gps || story.location) && (
@@ -300,6 +434,16 @@ export default function ResultScreen({ navigation, route }) {
             >
               <MapStack size={18} color={colors.flame} />
               <Text style={styles.chipText}>Map</Text>
+            </TouchableOpacity>
+          )}
+          {showMarkerChip && (
+            <TouchableOpacity
+              style={styles.chip}
+              onPress={() => setMarkerModal(true)}
+              disabled={savingMarker}
+            >
+              <GraveMarkerSvg styleId={story.marker_style} size={18} />
+              <Text style={styles.chipText}>{savingMarker ? '…' : 'Marker'}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.chip} onPress={handleShare} disabled={sharing}>
@@ -325,13 +469,81 @@ export default function ResultScreen({ navigation, route }) {
           <Text style={styles.scanAgainText}>Scan Another Gravestone</Text>
         </TouchableOpacity>
 
-        {/* Delete */}
+        {/* Delete (saved) / Discard (unsaved) */}
         {!story._isGlobal && (
-          <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-            <Text style={styles.deleteBtnText}>Delete Story</Text>
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={isUnsaved ? () => navigation.navigate('Home') : handleDelete}
+          >
+            <Text style={styles.deleteBtnText}>{isUnsaved ? 'Discard' : 'Delete Story'}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Marker style picker */}
+      <Modal
+        visible={markerModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMarkerModal(false)}
+      >
+        <Pressable style={styles.symbolOverlay} onPress={() => setMarkerModal(false)}>
+          <Pressable style={styles.markerSheet} onPress={() => {}}>
+            <View style={styles.symbolSheetHandle} />
+            <Text style={styles.symbolSheetName}>Choose a marker</Text>
+            <Text style={styles.markerSheetHint}>
+              How this grave appears on your Cemetery map.
+            </Text>
+            <ScrollView
+              style={styles.markerGridScroll}
+              contentContainerStyle={styles.markerGrid}
+              showsVerticalScrollIndicator={false}
+            >
+              {MARKER_STYLES.map(m => {
+                const selected = currentMarker.id === m.id;
+                return (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={[styles.markerCell, selected && styles.markerCellSelected]}
+                    onPress={() => handlePickMarker(m.id)}
+                    activeOpacity={0.7}
+                  >
+                    <GraveMarkerSvg styleId={m.id} size={44} />
+                    <Text
+                      style={[styles.markerCellLabel, selected && styles.markerCellLabelSelected]}
+                      numberOfLines={1}
+                    >
+                      {m.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setMarkerModal(false)}>
+              <Text style={styles.symbolSheetCloseText}>Close</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Symbol info modal */}
+      <Modal
+        visible={!!symbolModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSymbolModal(null)}
+      >
+        <Pressable style={styles.symbolOverlay} onPress={() => setSymbolModal(null)}>
+          <Pressable style={styles.symbolSheet} onPress={() => {}}>
+            <View style={styles.symbolSheetHandle} />
+            <Text style={styles.symbolSheetName}>{symbolModal?.name}</Text>
+            <Text style={styles.symbolSheetText}>{symbolModal?.text}</Text>
+            <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setSymbolModal(null)}>
+              <Text style={styles.symbolSheetCloseText}>Close</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -411,6 +623,13 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: 'rgba(170,190,220,0.4)', backgroundColor: 'rgba(170,190,220,0.08)' },
   chipText: { color: colors.ash, fontSize: 11, fontFamily: fonts.body },
 
+  saveBtn: {
+    backgroundColor: colors.flame,
+    paddingVertical: 16, borderRadius: radius.sm, marginBottom: 16, alignItems: 'center',
+  },
+  saveBtnDisabled: { opacity: 0.6 },
+  saveBtnText: { color: colors.onFlame, fontFamily: fonts.sansBold, letterSpacing: 0.5, fontSize: 15 },
+
   scanAgainBtn: {
     borderWidth: 1, borderColor: colors.line, backgroundColor: colors.stone2,
     paddingVertical: 15, borderRadius: radius.sm, marginBottom: 10, alignItems: 'center',
@@ -450,4 +669,66 @@ const styles = StyleSheet.create({
   },
   tributeBtnText: { color: colors.ash, fontFamily: fonts.body, fontSize: 13, letterSpacing: 0.3 },
   tributeBtnTextActive: { color: colors.flame },
+
+  tagTappable: { borderColor: 'rgba(201,168,76,0.35)', backgroundColor: 'rgba(201,168,76,0.07)' },
+  tagTextTappable: { color: colors.flame },
+
+  symbolOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  symbolSheet: {
+    backgroundColor: colors.stone, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 24, paddingTop: 12, paddingBottom: 36,
+  },
+  symbolSheetHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: colors.line, alignSelf: 'center', marginBottom: 20,
+  },
+  symbolSheetName: {
+    color: colors.flame, fontSize: 18, fontFamily: fonts.name,
+    marginBottom: 12, textTransform: 'capitalize',
+  },
+  symbolSheetText: {
+    color: colors.parchment, fontSize: 14, fontFamily: fonts.serif,
+    lineHeight: 22,
+  },
+  symbolSheetClose: {
+    marginTop: 24, alignSelf: 'center',
+    paddingVertical: 12, paddingHorizontal: 32,
+    backgroundColor: colors.stone2, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  symbolSheetCloseText: { color: colors.ash, fontFamily: fonts.body, fontSize: 14 },
+
+  markerSheet: {
+    backgroundColor: colors.stone, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28,
+    maxHeight: '80%',
+  },
+  markerSheetHint: {
+    color: colors.ash, fontSize: 13, fontFamily: fonts.body,
+    marginBottom: 14, lineHeight: 18,
+  },
+  markerGridScroll: { flexGrow: 0 },
+  markerGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between',
+    gap: 0,
+  },
+  markerCell: {
+    width: '23%', aspectRatio: 0.82, marginBottom: 12,
+    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 8,
+    borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm,
+    backgroundColor: colors.stone2,
+  },
+  markerCellSelected: {
+    borderColor: colors.flame,
+    backgroundColor: 'rgba(201,168,76,0.1)',
+  },
+  markerCellLabel: {
+    color: colors.ashDim, fontSize: 9, fontFamily: fonts.body,
+    marginTop: 4, textAlign: 'center', letterSpacing: 0.2,
+  },
+  markerCellLabelSelected: { color: colors.flame },
 });

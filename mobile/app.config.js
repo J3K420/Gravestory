@@ -27,6 +27,7 @@ export default {
     },
     android: {
       package: 'com.gravestory.app',
+      versionCode: 5,
       adaptiveIcon: {
         backgroundColor: '#E6F4FE',
         foregroundImage: './assets/android-icon-foreground.png',
@@ -49,6 +50,11 @@ export default {
       eas: {
         projectId: 'f26f7a8b-2c63-4a68-bb44-903d7ed01b30',
       },
+      // RevenueCat Android (Google) SDK key. Injected from the EAS Secret
+      // REVENUECAT_API_KEY at build time; read back via expo-constants in
+      // src/lib/config.js. Empty in local dev unless the env var is set, in
+      // which case config.js falls back to the RevenueCat test key.
+      revenueCatApiKey: process.env.REVENUECAT_API_KEY ?? '',
     },
     plugins: [
       'expo-secure-store',
@@ -59,6 +65,20 @@ export default {
         {
           locationWhenInUsePermission:
             'Allow GraveStory to use your location to pin graves on the map.',
+        },
+      ],
+      [
+        // Android strips GPS EXIF from photos read through the system picker.
+        // expo-media-library's getAssetInfoAsync does the ACCESS_MEDIA_LOCATION +
+        // setRequireOriginal dance natively so library picks can recover the
+        // photo's location. granularPermissions limited to images only —
+        // READ_MEDIA_VIDEO/AUDIO would complicate Play Store review.
+        'expo-media-library',
+        {
+          photosPermission:
+            'Allow GraveStory to read photo location data so gravestone photos can be pinned on the map.',
+          isAccessMediaLocationEnabled: true,
+          granularPermissions: ['photo'],
         },
       ],
     ],

@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-// import Purchases from 'react-native-purchases'; // re-enable when production key is ready
+import Purchases from 'react-native-purchases';
 import { colors, fonts, radius } from '../lib/theme';
-import { FREE_LIMIT_GUEST, FREE_LIMIT_USER } from '../lib/save-limit';
 import { SCAN_LIMIT_GUEST, SCAN_LIMIT_USER } from '../lib/scan-limit';
 
 // Product IDs must match exactly what's created in Google Play Console + RevenueCat
@@ -16,37 +15,71 @@ const PACK_INFO = {
 };
 
 export default function PaywallScreen({ navigation, route }) {
-  const { count = 0, isGuest = false, type = 'save' } = route.params ?? {};
+  // The paywall is now only reached for the scan limit — saved-story limits were removed.
+  const { count = 0, isGuest = false } = route.params ?? {};
 
-  const isScan = type === 'scan';
-  const limit  = isScan
-    ? (isGuest ? SCAN_LIMIT_GUEST : SCAN_LIMIT_USER)
-    : (isGuest ? FREE_LIMIT_GUEST : FREE_LIMIT_USER);
+  const isScan = true;
+  const limit  = isGuest ? SCAN_LIMIT_GUEST : SCAN_LIMIT_USER;
 
   const [packages, setPackages]     = useState([]);
   const [loading, setLoading]       = useState(true);
+  const [loadError, setLoadError]   = useState(null);
   const [purchasing, setPurchasing] = useState(null);
 
+  async function loadOfferings() {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const offerings = await Purchases.getOfferings();
+      const pkgs = offerings.current?.availablePackages ?? [];
+      if (pkgs.length > 0) {
+        setPackages(pkgs);
+      } else {
+        setPackages([]);
+        // Offerings fetched OK but empty — RevenueCat dashboard offering is
+        // missing, has no packages, or the products aren't approved in Play Console.
+        setLoadError('Scan packs are not available right now. Please try again shortly.');
+      }
+    } catch (e) {
+      console.warn('RC getOfferings failed:', e.message);
+      setPackages([]);
+      setLoadError('Could not load scan packs. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    // RevenueCat disabled until production key is configured
-    setLoading(false);
+    loadOfferings();
   }, []);
 
   async function handlePurchase(pkg) {
-    Alert.alert('Coming soon', 'In-app purchases will be available at launch.');
+    setPurchasing(pkg.product.identifier);
+    try {
+      await Purchases.purchasePackage(pkg);
+      Alert.alert('Purchase complete', 'Your scans have been added to your account.');
+      navigation.goBack();
+    } catch (e) {
+      if (!e.userCancelled) {
+        Alert.alert('Purchase failed', e.message ?? 'Please try again.');
+      }
+    } finally {
+      setPurchasing(null);
+    }
   }
 
   async function handleRestore() {
-    Alert.alert('Coming soon', 'Purchase restore will be available at launch.');
+    try {
+      await Purchases.restorePurchases();
+      Alert.alert('Restored', 'Any previous purchases have been restored.');
+    } catch (e) {
+      Alert.alert('Restore failed', e.message ?? 'Please try again.');
+    }
   }
 
-  const title = isScan
-    ? (isGuest ? 'Scan Limit Reached' : 'Free Scans Used Up')
-    : (isGuest ? 'Story Limit Reached' : 'Collection Full');
+  const title = isGuest ? 'Scan Limit Reached' : 'Free Scans Used Up';
 
-  const countLabel = isScan
-    ? `${count} of ${limit} free scans used`
-    : `${count} of ${limit} stories saved`;
+  const countLabel = `${count} of ${limit} free scans used`;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -66,9 +99,7 @@ export default function PaywallScreen({ navigation, route }) {
         {isGuest ? (
           <>
             <Text style={styles.body}>
-              {isScan
-                ? `Guest accounts get ${SCAN_LIMIT_GUEST} free scans. Sign in for free to get ${SCAN_LIMIT_USER} scans.`
-                : `Guest accounts can save ${FREE_LIMIT_GUEST} stories. Sign in for free to save up to ${FREE_LIMIT_USER}.`}
+              {`Guest accounts get ${SCAN_LIMIT_GUEST} free scans. Sign in for free to get ${SCAN_LIMIT_USER} scans.`}
             </Text>
             <TouchableOpacity
               style={styles.primaryBtn}
@@ -115,19 +146,25 @@ export default function PaywallScreen({ navigation, route }) {
                 );
               })
             ) : (
-              // Fallback when RevenueCat offerings aren't configured yet
-              PRODUCT_IDS.map(id => {
-                const info = PACK_INFO[id];
-                return (
-                  <View key={id} style={[styles.packBtn, styles.packBtnDisabled]}>
-                    <View>
-                      <Text style={styles.packLabel}>{info.label}</Text>
-                      <Text style={styles.packScans}>{info.scans} scans</Text>
+              <>
+                {/* Preview of the packs — greyed out because they couldn't load */}
+                {PRODUCT_IDS.map(id => {
+                  const info = PACK_INFO[id];
+                  return (
+                    <View key={id} style={[styles.packBtn, styles.packBtnDisabled]}>
+                      <View>
+                        <Text style={styles.packLabel}>{info.label}</Text>
+                        <Text style={styles.packScans}>{info.scans} scans</Text>
+                      </View>
+                      <Text style={styles.packPrice}>{info.price}</Text>
                     </View>
-                    <Text style={styles.packPrice}>{info.price}</Text>
-                  </View>
-                );
-              })
+                  );
+                })}
+                {loadError && <Text style={styles.errorText}>{loadError}</Text>}
+                <TouchableOpacity onPress={loadOfferings} style={styles.retryBtn} activeOpacity={0.7}>
+                  <Text style={styles.retryText}>Tap to retry</Text>
+                </TouchableOpacity>
+              </>
             )}
 
             <TouchableOpacity onPress={handleRestore} style={styles.restoreBtn}>
@@ -141,9 +178,7 @@ export default function PaywallScreen({ navigation, route }) {
         )}
 
         <Text style={styles.hint}>
-          {isScan
-            ? 'Scan packs never expire — use them at your own pace.'
-            : 'You can delete old stories to make room.'}
+          Scan packs never expire — use them at your own pace.
         </Text>
 
         <TouchableOpacity
@@ -242,6 +277,24 @@ const styles = StyleSheet.create({
     color: colors.onFlame,
     fontSize: 16,
     fontFamily: fonts.sansBold,
+  },
+
+  errorText: {
+    color: colors.ember,
+    fontSize: 13,
+    fontFamily: fonts.body,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  retryBtn: { marginTop: 4, marginBottom: 8, paddingVertical: 8 },
+  retryText: {
+    color: colors.flame,
+    fontSize: 14,
+    fontFamily: fonts.bodyMedium,
+    textDecorationLine: 'underline',
+    textAlign: 'center',
   },
 
   restoreBtn: { marginTop: 4, marginBottom: 16 },

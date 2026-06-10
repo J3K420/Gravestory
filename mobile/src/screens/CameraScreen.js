@@ -18,12 +18,9 @@ import { queryWikidata } from '../lib/api-wikidata';
 import { searchChroniclingAmerica } from '../lib/api-chroniclingamerica';
 import { fetchWikipediaPortraits, fetchWikipediaArticleSummary } from '../lib/api-wikipedia';
 import { generateBiography } from '../lib/biography';
-import { saveStories, loadStories } from '../lib/storage';
-import { cloudSaveStory, cloudUpdateStory, findOrCreateGrave } from '../lib/sync';
-import { uploadGravestoneImage } from '../lib/api-r2';
 import { forwardGeocode, reverseGeocode } from '../lib/api-nominatim';
-import { checkSaveLimit } from '../lib/save-limit';
 import { checkScanLimit, incrementScanCount } from '../lib/scan-limit';
+import { getLibraryAssetGps } from '../lib/media-gps';
 
 const STEPS = [
   'Verifying gravestone…',
@@ -71,18 +68,15 @@ export default function CameraScreen({ navigation }) {
     setRejected(null);
     setPipelineError(null);
 
-    // Check both save and scan limits before opening the picker — no API credits burned.
-    // app_metadata.is_unlimited bypasses all limits (set via Supabase dashboard, read-only by clients).
+    // Check the scan limit before opening the picker — no API credits burned.
+    // Saved-story limits were removed; scans are the cost control (they drive all paid AI work).
+    // app_metadata.is_unlimited bypasses the limit (set via Supabase dashboard, read-only by clients).
     try {
       const { data: { session: initSession } } = await supabase.auth.getSession();
       const uid = initSession?.user?.id ?? null;
       const isUnlimited = initSession?.user?.app_metadata?.is_unlimited === true;
       if (!isUnlimited) {
-        const [saveCheck, scanCheck] = await Promise.all([checkSaveLimit(uid), checkScanLimit(uid, initSession?.user)]);
-        if (saveCheck.atLimit) {
-          navigation.navigate('Paywall', { count: saveCheck.count, limit: saveCheck.limit, type: 'save', isGuest: saveCheck.isGuest });
-          return;
-        }
+        const scanCheck = await checkScanLimit(uid, initSession?.user);
         if (scanCheck.atLimit) {
           if (scanCheck._checkFailed) {
             Alert.alert('Connection Error', 'Could not verify your scan limit. Please check your connection and try again.');
@@ -98,8 +92,11 @@ export default function CameraScreen({ navigation }) {
       return;
     }
 
-    // exif: true so we can read GPS coords before compression strips them
-    const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true };
+    // exif: true so we can read GPS coords before compression strips them.
+    // legacy: true (Android only, ignored on iOS) swaps the system Photo Picker
+    // for ACTION_GET_CONTENT — the modern picker returns no MediaStore assetId,
+    // which getLibraryAssetGps needs to recover the redacted GPS EXIF.
+    const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true, legacy: true };
 
     let result;
     if (fromCamera) {
@@ -118,6 +115,14 @@ export default function CameraScreen({ navigation }) {
     // Only fall back to device GPS for camera shots — for library photos the device
     // is not physically at the grave, so device location would be wrong.
     let gps = extractExifGps(asset.exif);
+
+    // Android redacts GPS tags from picker-read EXIF (asset.exif never has them).
+    // For library picks, recover the location via expo-media-library, which can
+    // read the unredacted original. No-op on iOS / camera shots / missing assetId.
+    if (!gps && !fromCamera) {
+      gps = await getLibraryAssetGps(asset.assetId);
+    }
+
     const needsDeviceGps = !gps && fromCamera;
 
     const [manipResult, deviceGps] = await Promise.all([
@@ -162,12 +167,26 @@ export default function CameraScreen({ navigation }) {
       setStepIndex(1);
       const graveData = await readGravestone(base64, locationHint);
 
-      // Inform the user if multiple distinct gravestones are visible — the bio
-      // focuses on the primary inscription; best results come from one stone per scan.
-      if (graveData.multiple_subjects === true) {
+      // Warn about separate physical stones only when subjects didn't capture all people.
+      // When subjects has multiple entries the pipeline already handles each person — no warning.
+      const _multiSubjectsInArray = Array.isArray(graveData.subjects) && graveData.subjects.filter(s => s && s.name).length > 1;
+      if (graveData.multiple_subjects === true && !_multiSubjectsInArray) {
         Alert.alert(
           'Multiple Gravestones Detected',
-          'This photo appears to show more than one separate gravestone. The biography will focus on the primary inscription. For best results, photograph each stone individually.',
+          'This photo appears to show more than one separate gravestone. For best results, photograph each stone individually.',
+          [{ text: 'OK' }]
+        );
+      }
+
+      // 3+ people on one stone: Tavily only has a dedicated research slot for the first
+      // two people, so the third person onward leans on the inscription + any Wikipedia
+      // article. Advise photographing each stone individually for a full per-person bio.
+      const _deceasedCount = (Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name).length : 0)
+        || (graveData.names?.length || 0);
+      if (_deceasedCount >= 3) {
+        Alert.alert(
+          'Several People on This Stone',
+          'This stone lists three or more people. Research depth is reduced for the third person and beyond — for a full biography of each, photograph each stone individually.',
           [{ text: 'OK' }]
         );
       }
@@ -233,14 +252,23 @@ export default function CameraScreen({ navigation }) {
         const datesStr = [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ');
         const effectiveDeath = graveData.death_date?.match(/\d{4}/)?.[0] || '';
         const deathYrNum = effectiveDeath ? parseInt(effectiveDeath, 10) : 0;
-        const wikiNames = (graveData.multiple_subjects && graveData.names?.length > 1)
-          ? graveData.names.slice(0, 3)
-          : [primaryOcrName];
+        // Per-person deceased subjects (with their OWN dates) drive the research fan-out.
+        // A shared family stone (grandmother + granddaughter) is not "multiple_subjects"
+        // by the OCR's narrow definition, so key off the subjects array too — otherwise a
+        // famous secondary subject (e.g. Amy Winehouse beside her grandmother) is never
+        // researched and gets no Wikipedia article. Each target carries its own dates so
+        // the Wikipedia lookup matches the right person, not the primary's dates.
+        const deceasedSubjects = Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name) : [];
+        const isMulti = deceasedSubjects.length > 1 || (graveData.multiple_subjects === true && graveData.names?.length > 1);
+        const researchTargets = deceasedSubjects.length > 1
+          ? deceasedSubjects.slice(0, 3).map(s => ({ name: s.name, dates: [s.birth_date, s.death_date].filter(Boolean).join(' ') }))
+          : (isMulti ? graveData.names.slice(0, 3) : [primaryOcrName]).map(n => ({ name: n, dates: datesStr }));
+        const wikiNames = researchTargets.map(t => t.name);
 
-        // For multi-person stones, search WikiTree for each of the first 2 people.
-        const wikiTreeTargets = (graveData.multiple_subjects && graveData.names?.length > 1)
-          ? graveData.names.slice(0, 2)
-          : [primaryOcrName];
+        // For multi-person stones, search WikiTree for each of the first 2 deceased people.
+        const wikiTreeTargets = deceasedSubjects.length > 1
+          ? deceasedSubjects.slice(0, 2).map(s => s.name)
+          : (isMulti ? graveData.names.slice(0, 2) : [primaryOcrName]);
 
         // Fetch portraits for every person on the stone (wikiNames), not just the
         // primary name — on multi-person stones the primary subject (e.g. Cynthia Levy)
@@ -256,8 +284,8 @@ export default function CameraScreen({ navigation }) {
           (effectiveDeath && deathYrNum <= 1924)
             ? searchChroniclingAmerica(primaryOcrName, effectiveDeath)
             : Promise.resolve([]),
-          ...wikiNames.map(n => fetchWikipediaPortraits(n, datesStr)),
-          ...wikiNames.map(n => fetchWikipediaArticleSummary(n, datesStr)),
+          ...researchTargets.map(t => fetchWikipediaPortraits(t.name, t.dates)),
+          ...researchTargets.map(t => fetchWikipediaArticleSummary(t.name, t.dates)),
         ]);
 
         let idx = 0;
@@ -318,17 +346,17 @@ export default function CameraScreen({ navigation }) {
       const { data: { session } } = await supabase.auth.getSession();
       const defaultPublic = session?.user?.user_metadata?.default_public ?? false;
 
-      // Biography resolved successfully — count this as a used scan
+      // Biography resolved successfully — count this as a used scan.
+      // (This is the cost gate — the paid AI work is done regardless of whether
+      // the user chooses to save, so the scan is counted at scan time, not save time.)
       await incrementScanCount(session?.user?.id ?? null);
 
-      // Link to canonical grave — on a cache hit the grave_id is already known;
-      // otherwise call find_or_create to dedup multiple scans of the same stone.
-      let graveId = cachedBio?.grave_id || null;
-      if (!graveId && session?.user && refinedGps && primaryName) {
-        graveId = await findOrCreateGrave(primaryName, refinedGps.lat, refinedGps.lng, defaultPublic);
-      }
-
-      let story = {
+      // Build the story but DO NOT persist it yet. Persistence (local save, cloud
+      // save, R2 upload, canonical-grave linking, grave_photos contribution) now
+      // happens only when the user taps "Save" on the Result screen. We carry the
+      // raw base64 and a few resolution hints so the save handler has what it needs.
+      // A cache-hit grave_id (read-only find_grave result) is safe to keep here.
+      const story = {
         ...bioResult,
         graveData,
         portraits: resolvedPortraits,
@@ -337,43 +365,17 @@ export default function CameraScreen({ navigation }) {
         timestamp: Date.now(),
         is_public: defaultPublic,
         source: fromCamera ? 'camera' : 'library',
-        grave_id: graveId,
+        grave_id: cachedBio?.grave_id || null,
+        _unsaved: true,        // ResultScreen shows the Save button for this
+        _base64: base64,       // needed for R2 upload at save time
+        _primaryName: primaryName,
       };
-
-      // Save locally first so the story is always accessible offline
-      const uid = session?.user?.id ?? null;
-      const existing = await loadStories(uid);
-      await saveStories([story, ...existing], uid);
-
-      // Attempt cloud save, then R2 image upload, if signed in
-      if (session?.user) {
-        story = await cloudSaveStory(story, session.user);
-
-        // Upload image to R2 non-blocking — failure is safe to ignore
-        const imageUrl = await uploadGravestoneImage(base64);
-        if (imageUrl) {
-          story = await cloudUpdateStory({ ...story, image_url: imageUrl }, session.user);
-          // Contribute to the grave's community photo pool (non-blocking)
-          if (story.grave_id) {
-            (async () => {
-              try {
-                await supabase.from('grave_photos').insert({
-                  grave_id: story.grave_id,
-                  user_id: session.user.id,
-                  image_url: imageUrl,
-                });
-              } catch (e) {
-                console.warn('grave_photos insert failed (non-fatal):', e.message);
-              }
-            })();
-          }
-        }
-      }
 
       setLoading(false);
       navigation.navigate('Result', { story });
     } catch (err) {
       setLoading(false);
+      console.warn('Pipeline error:', String(err), 'message:', err?.message, 'stack:', err?.stack);
       setPipelineError(err.message || 'Something went wrong. Please try again.');
     }
   }

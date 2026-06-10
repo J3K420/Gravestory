@@ -69,6 +69,7 @@
 <script src="js/persistence.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/api-tributes.js"></script>
+<script src="js/grave-markers.js"></script>
 <script src="js/render-result.js"></script>
 <script src="js/error-render.js"></script>
 <script src="js/photo-modal.js"></script>
@@ -148,6 +149,14 @@
     <button onclick="showScreen('home')" class="remembered-back">← Back</button>
     <h2 class="remembered-title">✦ Remembered Stories</h2>
     <p class="remembered-subtitle">every life deserves to be remembered</p>
+    <div class="sort-bar" id="saved-sort-bar">
+      <span class="sort-label">Sort by</span>
+      <div class="sort-pills">
+        <button class="sort-pill sort-pill-active" data-sort="recent" onclick="setSavedSort('recent')">Recent</button>
+        <button class="sort-pill" data-sort="name" onclick="setSavedSort('name')">Name</button>
+        <button class="sort-pill" data-sort="cemetery" onclick="setSavedSort('cemetery')">Cemetery</button>
+      </div>
+    </div>
     <div class="saved-list" id="saved-list">
       <p class="empty-saved">Your saved stories will appear here</p>
     </div>
@@ -952,12 +961,24 @@ async function startAnalysis() {
     // Count this scan now that OCR succeeded (verification already passed)
     await incrementWebScanCount();
 
-    // Inform the user if multiple distinct gravestones are in frame — the bio
-    // focuses on the primary inscription; best results come from one stone per scan.
-    if (graveData.multiple_subjects === true) {
+    // Warn about separate physical stones only when subjects didn't capture all people.
+    // When subjects has multiple entries the pipeline already handles each person.
+    const _multiSubjectsInArray = Array.isArray(graveData.subjects) && graveData.subjects.filter(s => s && s.name).length > 1;
+    if (graveData.multiple_subjects === true && !_multiSubjectsInArray) {
       const el = document.getElementById('loading-step');
-      if (el) el.textContent = 'Multiple gravestones detected — focusing on primary inscription…';
+      if (el) el.textContent = 'Multiple gravestones detected — for best results photograph each separately…';
       console.log('⚠️ Multiple gravestones detected in frame');
+    }
+
+    // 3+ people on one stone: Tavily only has a dedicated research slot for the first
+    // two people, so the third person onward leans on the inscription + any Wikipedia
+    // article. Advise photographing each stone individually for a full per-person bio.
+    const _deceasedCount = (Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name).length : 0)
+      || (graveData.names?.length || 0);
+    if (_deceasedCount >= 3) {
+      const el = document.getElementById('loading-step');
+      if (el) el.textContent = 'Several people on this stone — research depth is reduced beyond the first two. Photograph each individually for a full biography…';
+      console.log('⚠️ 3+ people detected — reduced research depth beyond first two');
     }
 
     // Primary OCR name — used for cache lookup and grave linking
@@ -1018,14 +1039,23 @@ async function startAnalysis() {
       const datesStr = [graveData.birth_date, graveData.death_date].filter(Boolean).join(' ');
       const effectiveDeath = graveData.death_date?.match(/\d{4}/)?.[0] || '';
       const deathYrNum = effectiveDeath ? parseInt(effectiveDeath, 10) : 0;
-      const wikiNames = (graveData.multiple_subjects && graveData.names?.length > 1)
-        ? graveData.names.slice(0, 3)
-        : [primaryOcrName];
+      // Per-person deceased subjects (with their OWN dates) drive the research fan-out.
+      // A shared family stone (grandmother + granddaughter) is not "multiple_subjects"
+      // by the OCR's narrow definition, so key off the subjects array too — otherwise a
+      // famous secondary subject (e.g. Amy Winehouse beside her grandmother) is never
+      // researched and gets no Wikipedia article. Each target carries its own dates so
+      // the Wikipedia lookup matches the right person, not the primary's dates.
+      const deceasedSubjects = Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name) : [];
+      const isMulti = deceasedSubjects.length > 1 || (graveData.multiple_subjects === true && graveData.names?.length > 1);
+      const researchTargets = deceasedSubjects.length > 1
+        ? deceasedSubjects.slice(0, 3).map(s => ({ name: s.name, dates: [s.birth_date, s.death_date].filter(Boolean).join(' ') }))
+        : (isMulti ? graveData.names.slice(0, 3) : [primaryOcrName]).map(n => ({ name: n, dates: datesStr }));
+      const wikiNames = researchTargets.map(t => t.name);
 
-      // For multi-person stones, search WikiTree for each of the first 2 people.
-      const wikiTreeTargets = (graveData.multiple_subjects && graveData.names?.length > 1)
-        ? graveData.names.slice(0, 2)
-        : [primaryOcrName];
+      // For multi-person stones, search WikiTree for each of the first 2 deceased people.
+      const wikiTreeTargets = deceasedSubjects.length > 1
+        ? deceasedSubjects.slice(0, 2).map(s => s.name)
+        : (isMulti ? graveData.names.slice(0, 2) : [primaryOcrName]);
 
       const allParallel = await Promise.all([
         searchForPerson(graveData, locationStr),
@@ -1038,7 +1068,7 @@ async function startAnalysis() {
         (effectiveDeath && deathYrNum <= 1924)
           ? searchChroniclingAmerica(primaryOcrName, effectiveDeath)
           : Promise.resolve([]),
-        ...wikiNames.map(n => fetchWikipediaArticleSummary(n, datesStr)),
+        ...researchTargets.map(t => fetchWikipediaArticleSummary(t.name, t.dates)),
       ]);
 
       let idx = 0;

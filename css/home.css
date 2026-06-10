@@ -225,6 +225,89 @@
     font-size: 0.9rem;
     color: var(--stone);
     text-align: center;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
     letter-spacing: 0.1em;
+  }
+
+  /* ── Sort bar (Remembered Stories) ── */
+  .sort-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .sort-label {
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(138,126,110,0.7);
+  }
+
+  .sort-pills { display: flex; gap: 0.4rem; }
+
+  .sort-pill {
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid rgba(201,168,76,0.2);
+    background: rgba(245,240,232,0.04);
+    color: var(--stone);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .sort-pill:hover { border-color: rgba(201,168,76,0.4); }
+
+  .sort-pill-active {
+    border-color: var(--gold);
+    background: rgba(201,168,76,0.12);
+    color: var(--gold);
+  }
+
+  /* ── Cemetery grouping ── */
+  .cemetery-group { margin-bottom: 1.25rem; }
+
+  .cemetery-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.25rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(201,168,76,0.15);
+  }
+
+  .cemetery-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.95rem;
+    color: var(--parchment);
+    letter-spacing: 0.03em;
+  }
+
+  .cemetery-badge {
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.7rem;
+    color: var(--stone);
+    background: rgba(245,240,232,0.06);
+    border: 1px solid rgba(201,168,76,0.15);
+    border-radius: 10px;
+    padding: 0.05rem 0.45rem;
+  }
+
+  .cemetery-chevron {
+    margin-left: auto;
+    color: var(--gold);
+    font-size: 0.9rem;
+  }
+
+  .saved-card-public {
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--silver, #aabedc);
+    flex-shrink: 0;
   }

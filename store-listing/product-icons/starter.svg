@@ -1,0 +1,40 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#2a2017"/>
+      <stop offset="100%" stop-color="#1a1410"/>
+    </radialGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a2e22"/>
+      <stop offset="100%" stop-color="#241b13"/>
+    </linearGradient>
+    <radialGradient id="flame" cx="50%" cy="65%" r="60%">
+      <stop offset="0%" stop-color="#fff4d6"/>
+      <stop offset="45%" stop-color="#f2b65c"/>
+      <stop offset="100%" stop-color="#cf7a3a"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f2b65c" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#f2b65c" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="0" fill="url(#bg)"/>
+
+  <!-- gravestone -->
+  <path d="M176 250 a80 80 0 0 1 160 0 V420 H176 Z" fill="url(#stone)" stroke="#4a3a2a" stroke-width="3"/>
+  <!-- engraved line -->
+  <line x1="256" y1="300" x2="256" y2="300" stroke="#c9a84c" stroke-width="0"/>
+  <path d="M214 332 h84 M214 360 h84" stroke="#5a4733" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- candle glow -->
+  <circle cx="256" cy="170" r="120" fill="url(#glow)"/>
+  <!-- candle body -->
+  <rect x="242" y="190" width="28" height="74" rx="6" fill="#e8d4a0"/>
+  <rect x="242" y="190" width="10" height="74" rx="5" fill="#fff4e0" opacity="0.5"/>
+  <!-- wick -->
+  <rect x="254" y="150" width="4" height="14" fill="#3a2e22"/>
+  <!-- flame -->
+  <path d="M256 110 C236 140 240 178 256 186 C272 178 276 140 256 110 Z" fill="url(#flame)"/>
+  <path d="M256 132 C247 150 249 172 256 178 C263 172 265 150 256 132 Z" fill="#fff4d6"/>
+</svg>

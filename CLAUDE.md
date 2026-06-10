@@ -81,7 +81,7 @@ js/
   loading-ui.js          — setLoadingStep: updates loading text during pipeline
   photo-modal.js         — Photo source modal (camera vs library)
   location-permission.js — Location permission modal + privacy info modal
-  home-screen.js         — renderSavedList, loadSaved, deleteSaved. Saved list now lives on the #remembered-stories screen; renderSavedList() is called by showScreen() when navigating there.
+  home-screen.js         — renderSavedList, setSavedSort, toggleCemeteryGroup, loadSavedByTs, deleteSavedByTs. Saved list lives on the #remembered-stories screen; renderSavedList() is called by showScreen() when navigating there. Sort bar (Recent / Name / Cemetery) mirrors the mobile RememberedStoriesScreen — Cemetery mode groups by first location segment with collapsible headers (>5 stories collapsed by default). Action handlers are keyed by story timestamp (not array index) since sorting/grouping diverges the rendered order from savedStories.
   home-screen.append.js  — updateHomeMapButton
   map-utils.js           — groupGravesByCemetery, getDistanceMeters
   scan-limit.js          — Web freemium limits: checkWebScanLimit (guest 3 / free-user 10 lifetime, fail-closed on Supabase error), incrementWebScanCount. checkWebSaveLimit is now a no-op (always atLimit:false) — saved-story limits were REMOVED; scans are the sole cost control. Loaded after auth.js; depends on supabaseClient + currentUser + savedStories.
@@ -172,7 +172,7 @@ One CSS file per screen/component. CSS custom properties in `base.css`. No prepr
 
 ### Mobile-first PWA
 
-Built for one-handed use in a cemetery. Service worker caches the app shell (`gravestory-v14`) and Leaflet map tiles separately. iOS users get a manual "Add to Home Screen" hint (Safari doesn't support `beforeinstallprompt`).
+Built for one-handed use in a cemetery. Service worker caches the app shell (`gravestory-v15`) and Leaflet map tiles separately. iOS users get a manual "Add to Home Screen" hint (Safari doesn't support `beforeinstallprompt`).
 
 ---
 

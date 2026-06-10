@@ -148,6 +148,14 @@
     <button onclick="showScreen('home')" class="remembered-back">← Back</button>
     <h2 class="remembered-title">✦ Remembered Stories</h2>
     <p class="remembered-subtitle">every life deserves to be remembered</p>
+    <div class="sort-bar" id="saved-sort-bar">
+      <span class="sort-label">Sort by</span>
+      <div class="sort-pills">
+        <button class="sort-pill sort-pill-active" data-sort="recent" onclick="setSavedSort('recent')">Recent</button>
+        <button class="sort-pill" data-sort="name" onclick="setSavedSort('name')">Name</button>
+        <button class="sort-pill" data-sort="cemetery" onclick="setSavedSort('cemetery')">Cemetery</button>
+      </div>
+    </div>
     <div class="saved-list" id="saved-list">
       <p class="empty-saved">Your saved stories will appear here</p>
     </div>

@@ -128,25 +128,25 @@ const ANCHOR_GLYPH = `${_BASE}
   <line x1="42" y1="48" x2="58" y2="48" stroke="${PARCH}" stroke-width="1.8"/>
   <path d="M38 60 Q42 70 50 70 Q58 70 62 60" stroke="${PARCH}" stroke-width="1.8" fill="none"/>`;
 
-// ── 16. Lamb (child's grave) — recumbent lamb on a plinth ─────────────────────
-const LAMB_GLYPH = `<rect x="26" y="76" width="48" height="10" stroke="${GOLD}" stroke-width="2" fill="${FILL}"/>
-  <path d="M40 74 Q34 74 33 67 Q27 65 30 58 Q28 51 35 51 Q37 44 45 47 Q50 42 57 47 Q65 46 65 54 Q70 58 65 64 Q67 72 60 74 Z" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}" stroke-linejoin="round"/>
-  <ellipse cx="30" cy="62" rx="6.5" ry="5" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}"/>
-  <path d="M24 60 Q21 60 22 63" stroke="${PARCH}" stroke-width="1.3" fill="none"/>
-  <circle cx="29" cy="61" r="1" fill="${PARCH}"/>
-  <line x1="44" y1="74" x2="44" y2="76" stroke="${PARCH}" stroke-width="1.6"/>
-  <line x1="56" y1="74" x2="56" y2="76" stroke="${PARCH}" stroke-width="1.6"/>`;
+// ── 16. Broken column (life cut short) — snapped classical column on a plinth ──
+const COLUMN_GLYPH = `<rect x="28" y="80" width="44" height="8" stroke="${GOLD}" stroke-width="2" fill="${FILL}"/>
+  <rect x="34" y="72" width="32" height="8" stroke="${GOLD}" stroke-width="2" fill="${FILL}"/>
+  <path d="M40 72 L40 40 L42 36 L58 32 L60 36 L60 72 Z" stroke="${PARCH}" stroke-width="1.8" fill="${PARCH_FILL}" stroke-linejoin="round"/>
+  <line x1="46" y1="44" x2="46" y2="70" stroke="${PARCH}" stroke-width="1.2"/>
+  <line x1="50" y1="42" x2="50" y2="70" stroke="${PARCH}" stroke-width="1.2"/>
+  <line x1="54" y1="40" x2="54" y2="70" stroke="${PARCH}" stroke-width="1.2"/>
+  <line x1="38" y1="70" x2="62" y2="70" stroke="${PARCH}" stroke-width="1.6"/>`;
 
-// ── 17. Draped funerary urn on plinth ─────────────────────────────────────────
-const URN_GLYPH = `<rect x="32" y="80" width="36" height="8" stroke="${GOLD}" stroke-width="2" fill="${FILL}"/>
-  <rect x="40" y="72" width="20" height="8" stroke="${GOLD}" stroke-width="2" fill="${FILL}"/>
-  <path d="M44 72 L42 66 L58 66 L56 72 Z" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}" stroke-linejoin="round"/>
-  <path d="M44 66 Q36 56 38 46 Q40 40 50 40 Q60 40 62 46 Q64 56 56 66 Z" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}" stroke-linejoin="round"/>
-  <line x1="40" y1="42" x2="60" y2="42" stroke="${PARCH}" stroke-width="1.6"/>
-  <path d="M41 42 Q41 34 50 34 Q59 34 59 42 Z" stroke="${PARCH}" stroke-width="1.5" fill="${PARCH_FILL}" stroke-linejoin="round"/>
-  <line x1="50" y1="34" x2="50" y2="30" stroke="${PARCH}" stroke-width="1.5"/>
-  <path d="M44 47 Q36 47 39 56" stroke="${PARCH}" stroke-width="1.4" fill="none"/>
-  <path d="M56 47 Q64 47 61 56" stroke="${PARCH}" stroke-width="1.4" fill="none"/>`;
+// ── 17. Classical funerary urn on a stepped plinth ────────────────────────────
+const URN_GLYPH = `<rect x="30" y="80" width="40" height="8" stroke="${GOLD}" stroke-width="2" fill="${FILL}"/>
+  <rect x="38" y="73" width="24" height="7" stroke="${GOLD}" stroke-width="2" fill="${FILL}"/>
+  <path d="M45 73 L43 68 L57 68 L55 73 Z" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}" stroke-linejoin="round"/>
+  <path d="M43 68 Q34 60 38 50 L62 50 Q66 60 57 68 Z" stroke="${PARCH}" stroke-width="1.8" fill="${PARCH_FILL}" stroke-linejoin="round"/>
+  <rect x="36" y="46" width="28" height="4" rx="1" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}"/>
+  <path d="M40 46 Q40 38 50 38 Q60 38 60 46 Z" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}" stroke-linejoin="round"/>
+  <circle cx="50" cy="35" r="2.4" stroke="${PARCH}" stroke-width="1.5" fill="${FILL}"/>
+  <path d="M40 53 Q31 53 35 62" stroke="${PARCH}" stroke-width="1.5" fill="none"/>
+  <path d="M60 53 Q69 53 65 62" stroke="${PARCH}" stroke-width="1.5" fill="none"/>`;
 
 // ── 18. Weeping willow ────────────────────────────────────────────────────────
 const WILLOW_GLYPH = `${_BASE}
@@ -184,7 +184,7 @@ const MARKER_STYLES = [
   { id: 'praying',   label: 'Praying Hands', glyph: PRAYING_HANDS_GLYPH },
   { id: 'dove',      label: 'Dove',          glyph: DOVE_GLYPH },
   { id: 'anchor',    label: 'Anchor',        glyph: ANCHOR_GLYPH },
-  { id: 'lamb',      label: 'Lamb',          glyph: LAMB_GLYPH },
+  { id: 'column',    label: 'Broken Column', glyph: COLUMN_GLYPH },
   { id: 'urn',       label: 'Urn',           glyph: URN_GLYPH },
   { id: 'willow',    label: 'Willow',        glyph: WILLOW_GLYPH },
   { id: 'star',      label: 'Star of David', glyph: STAR_GLYPH },

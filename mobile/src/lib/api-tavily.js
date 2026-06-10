@@ -78,7 +78,11 @@ const SYMBOL_QUERIES = {
   'cavalry':              ['cavalry soldier veteran obituary'],
 };
 
-export async function searchForPerson(graveData, location) {
+// `cemeteryName` (optional) is the name of the cemetery the user is standing in,
+// resolved from GPS via reverseGeocodeCemetery. FindAGrave memorial pages and
+// obituaries almost always name the cemetery, so it's a strong disambiguator for
+// common names — injected into the FindAGrave and obituary slots when present.
+export async function searchForPerson(graveData, location, cemeteryName) {
   const allNames = [];
   if (graveData.names?.length > 0) {
     graveData.names.forEach(n => { if (n && n !== 'Unknown') allNames.push(n); });
@@ -123,6 +127,9 @@ export async function searchForPerson(graveData, location) {
   const effectiveDeath = deathYear || ageInfo?.death_year || '';
 
   const loc = location ? location.split(',').slice(0, 2).map(s => s.trim()).join(' ') : '';
+  // Cemetery name — quoted for an exact phrase match on FindAGrave/obituary pages.
+  const cem = (cemeteryName || '').trim();
+  const cemPhrase = cem ? ` "${cem.replace(/"/g, '')}"` : '';
   const inscr = (graveData.inscription || '').trim();
   const primaryName = cleanNames[0] || '';
 
@@ -144,16 +151,19 @@ export async function searchForPerson(graveData, location) {
   const queries = [];
 
   if (primaryVar) {
-    // Slot 1: FindAGrave — merged into one query (was two separate FindAGrave slots before)
-    queries.push(`site:findagrave.com "${primaryVar}"${yr ? ' ' + yr : ''} buried`.trim());
+    // Slot 1: FindAGrave — merged into one query (was two separate FindAGrave slots before).
+    // Cemetery name appended when known — FindAGrave pages list the burial cemetery.
+    queries.push(`site:findagrave.com "${primaryVar}"${yr ? ' ' + yr : ''}${cemPhrase} buried`.trim());
 
     // Slot 2: BillionGraves
     queries.push(`site:billiongraves.com "${primaryVar}"`);
 
-    // Slot 3: General obituary + year + location (was at position ~6 — never fired before)
+    // Slot 3: General obituary + year + location (was at position ~6 — never fired before).
+    // Cemetery name disambiguates common names ("John Smith" + "Green-Wood Cemetery").
     const obitParts = [`"${primaryVar}" obituary`];
     if (yr) obitParts.push(yr);
-    if (loc) obitParts.push(loc);
+    if (cem) obitParts.push(`"${cem.replace(/"/g, '')}"`);
+    else if (loc) obitParts.push(loc);
     queries.push(obitParts.join(' '));
 
     // Slot 4: Symbol-guided (was appended to end — never fired before)
@@ -174,10 +184,12 @@ export async function searchForPerson(graveData, location) {
     }
 
     // Slot 5: Era-appropriate source.
-    // Pre-1924 Chronicling America is now queried directly via api-chroniclingamerica.js
-    // (better quality, zero Tavily credit). Use this freed slot for a general historical
-    // obituary search without a site restriction.
-    if (effectiveDeath && deathYrNum <= 1924) {
+    // Pre-1928 deaths are also queried directly against Chronicling America's OCR
+    // text via api-chroniclingamerica.js (better quality, zero Tavily credit), so
+    // here we add a general historical obituary search without a site restriction.
+    // Boundary is 1928 to match the CA cutoff — keep these in sync so a mid-1920s
+    // death doesn't fall into a gap where neither CA nor the modern slots fire.
+    if (effectiveDeath && deathYrNum <= 1928) {
       const histParts = [`"${primaryVar}" obituary`];
       if (effectiveDeath) histParts.push(effectiveDeath);
       queries.push(histParts.join(' ') + ' death');
@@ -185,8 +197,9 @@ export async function searchForPerson(graveData, location) {
       queries.push(`site:legacy.com "${primaryVar}" obituary${loc ? ' ' + loc : ''}`.trim());
     }
 
-    // Slot 6: Secondary fallback
-    if (effectiveDeath && deathYrNum <= 1922) {
+    // Slot 6: Secondary fallback — pre-1928 gets a Legacy.com pass too; modern
+    // deaths fall back to a family-name Newspapers.com search.
+    if (effectiveDeath && deathYrNum <= 1928) {
       queries.push(`site:legacy.com "${primaryVar}" obituary${loc ? ' ' + loc : ''}`.trim());
     } else if (graveData.family_name) {
       queries.push(`site:newspapers.com "${graveData.family_name}"${loc ? ' ' + loc : ''}${effectiveDeath ? ' ' + effectiveDeath : ''}`.trim());

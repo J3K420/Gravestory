@@ -223,6 +223,35 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
   return { lat: cemeteryCoords.lat, lng: cemeteryCoords.lng, isCemetery: true, lowConfidence, approximate: true };
 }
 
+// Resolve the name of the cemetery the GPS point sits inside, if any.
+// FindAGrave memorial pages and obituaries almost always name the cemetery, so
+// adding "Green-Wood Cemetery" to the Tavily queries is a powerful disambiguator
+// for common names. The user is physically standing in the cemetery, so a
+// high-zoom reverse lookup usually returns the enclosing burial-ground feature.
+// Returns the cemetery name string or null.
+export async function reverseGeocodeCemetery(lat, lng) {
+  try {
+    const url = `${NOMINATIM}/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&extratags=1&namedetails=1`;
+    const res = await fetch(url, { headers: HEADERS });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const a = data.address || {};
+    const looksLikeCemetery = (s) => /cemetery|graveyard|grave yard|memorial park|burial|mausoleum/i.test(s || '');
+    const candidate = a.cemetery || a.grave_yard || a.amenity || null;
+    if (candidate && looksLikeCemetery(candidate)) return candidate;
+    const cls = data.class, typ = data.type;
+    if ((cls === 'landuse' && typ === 'cemetery') || (cls === 'amenity' && typ === 'grave_yard')) {
+      const name = data.namedetails?.name || data.name || candidate;
+      if (name) return name; // a cemetery feature (named even if not obviously "...Cemetery")
+    }
+    if (candidate && looksLikeCemetery(candidate)) return candidate;
+    return null;
+  } catch (e) {
+    console.warn('reverseGeocodeCemetery failed:', e?.message);
+    return null;
+  }
+}
+
 // Reverse-geocode a GPS coordinate to a human-readable "City, State" string.
 // Used to enrich search context before Tavily/WikiTree queries fire.
 export async function reverseGeocode(lat, lng) {

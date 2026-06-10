@@ -98,6 +98,28 @@ async function searchWikiTree(graveData, location) {
   const birthYear = graveData.birth_date?.match(/\d{4}/)?.[0] || '';
   const deathYear = graveData.death_date?.match(/\d{4}/)?.[0] || '';
 
+  // Maiden name from the inscription ("née Brown") — genealogy records index
+  // married women under their birth surname, so an extra pass keyed on it
+  // dramatically improves the hit rate for the worst-served demographic.
+  const maidenName = (graveData.maiden_name || '').trim();
+  const maidenLast = maidenName ? maidenName.split(/\s+/).pop().toLowerCase() : '';
+
+  // Known relatives from the stone (spouse/parents) — used to score candidates
+  // against the Father/Mother/Spouses fields WikiTree already returns. A spouse
+  // or parent match is a strong disambiguator we'd otherwise be paying for and
+  // throwing away.
+  const knownRelatives = { spouse: [], parent: [] };
+  if (Array.isArray(graveData.relationships)) {
+    for (const rel of graveData.relationships) {
+      if (!rel || !rel.name) continue;
+      const rn = rel.name.toLowerCase().trim();
+      const rtype = (rel.relation || '').toLowerCase();
+      if (rtype === 'spouse' || rtype === 'wife' || rtype === 'husband') knownRelatives.spouse.push(rn);
+      else if (rtype === 'father' || rtype === 'mother' || rtype === 'parent') knownRelatives.parent.push(rn);
+    }
+  }
+  const hasKnownRelatives = knownRelatives.spouse.length > 0 || knownRelatives.parent.length > 0;
+
   // Build expanded first name for pass 3 (if abbreviated/informal)
   const formalFirstLower = _wtFormalFirst(firstName);
   const expandedFirstName = formalFirstLower !== firstName.toLowerCase()
@@ -123,10 +145,16 @@ async function searchWikiTree(graveData, location) {
     action: 'searchPerson',
     FirstName: firstName,
     LastName: lastName,
-    fields: 'Name,FirstName,LastNameAtBirth,LastNameCurrent,BirthDate,DeathDate,BirthLocation,DeathLocation,Father,Mother,Gender,Bio'
+    fields: 'Name,FirstName,LastNameAtBirth,LastNameCurrent,BirthDate,DeathDate,BirthLocation,DeathLocation,Father,Mother,Spouses,Gender,Bio'
   };
 
   const expandedQuery = expandedFirstName ? { ...baseQuery, FirstName: expandedFirstName } : null;
+
+  // Maiden-name query: search with the birth surname so married women indexed
+  // under it surface. Fires as an extra pass (pass 1.5) when a maiden name was read.
+  const maidenQuery = (maidenLast && maidenLast !== lastName.toLowerCase())
+    ? { ...baseQuery, LastName: maidenName.split(/\s+/).pop() }
+    : null;
 
   console.log('🌳 WIKITREE searching:', firstName, lastName, birthYear || '(no year)');
 
@@ -141,6 +169,17 @@ async function searchWikiTree(graveData, location) {
       } else {
         console.log('🌳 WIKITREE pass 1: no matches, retrying without year');
       }
+    }
+
+    // Pass 1.5: maiden-name search (married women are indexed under birth surname)
+    if (matches.length === 0 && maidenQuery) {
+      if (birthYear) {
+        matches = await wikiSearch({ ...maidenQuery, BirthDate: birthYear, DeathDate: deathYear || undefined });
+      }
+      if (matches.length === 0) {
+        matches = await wikiSearch(maidenQuery);
+      }
+      if (matches.length > 0) console.log('🌳 WIKITREE pass 1.5 (maiden name):', matches.length, 'matches');
     }
 
     // Pass 2: unfiltered with original name
@@ -180,11 +219,36 @@ async function searchWikiTree(graveData, location) {
 
       // — Name alignment (nickname/abbreviation-aware) —
       const mFirst = (m.FirstName || '').toLowerCase();
-      const mLast  = (m.LastNameAtBirth || m.LastNameCurrent || '').toLowerCase();
+      const mBirthLast   = (m.LastNameAtBirth || '').toLowerCase();
+      const mCurrentLast = (m.LastNameCurrent || '').toLowerCase();
+      const mLast  = mBirthLast || mCurrentLast;
       const firstMatch = mFirst && _wtFirstNamesMatch(queriedFirst, mFirst);
-      const lastMatch  = mLast  && (mLast === queriedLast);
+      // Accept a match on the married (current) surname, the birth surname, OR the
+      // maiden name read from the stone — married women appear under any of these.
+      const lastMatch = !!mLast && (
+        mBirthLast === queriedLast || mCurrentLast === queriedLast ||
+        (maidenLast && (mBirthLast === maidenLast || mCurrentLast === maidenLast))
+      );
       if (firstMatch) score += 20;
       if (lastMatch)  score += 20;
+
+      // — Relationship alignment (spouse / parents) —
+      // WikiTree returns Father/Mother (person keys) and Spouses; a stone that names
+      // the spouse or a parent is a strong disambiguator on common names.
+      if (hasKnownRelatives) {
+        const relText = [
+          m.Father, m.Mother,
+          ...(m.Spouses ? Object.values(m.Spouses).map(s => s && (s.LongName || s.Name || s.FirstName)) : [])
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (relText) {
+          const spouseHit = knownRelatives.spouse.some(rn =>
+            rn.split(/\s+/).filter(t => t.length > 2).some(tok => relText.includes(tok)));
+          const parentHit = knownRelatives.parent.some(rn =>
+            rn.split(/\s+/).filter(t => t.length > 2).some(tok => relText.includes(tok)));
+          if (spouseHit) score += 40;
+          if (parentHit) score += 25;
+        }
+      }
 
       // — Birth year alignment —
       const mBirthYear = parseInt((m.BirthDate || '').slice(0, 4), 10);

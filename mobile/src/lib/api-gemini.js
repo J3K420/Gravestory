@@ -135,6 +135,10 @@ EXAMPLE: A stone reading "GEORGE / Beloved Husband of / LIZZIE KNUVER / 1841-190
 
 If the only surname on the stone appears inside a relational phrase, assume it belongs to the relative unless other evidence (e.g. a family plot header, a separate surname banner above the inscription) clearly attaches it to the deceased.
 
+RELATIONSHIPS & MAIDEN NAMES — these are the best disambiguators on a stone, so capture them precisely:
+- When a relational phrase names a relative ("beloved wife of John Doe", "son of...", "daughter of..."), record it in the "relationships" array with the relation type and the relative's name.
+- When the inscription reveals a married woman's birth/maiden surname ("née Brown", "born Smith", "Mary (Brown) Jones"), put that surname in "maiden_name".
+
 Return ONLY a valid JSON object with these exact fields:
 {
   "names": ["every name visible on the stone, with role if relational, e.g. 'George (deceased)', 'Lizzie Knuver (wife)'"],
@@ -145,6 +149,8 @@ Return ONLY a valid JSON object with these exact fields:
   "inscription": "the full epitaph/quote/relational text VERBATIM — preserve all surnames that appear inside relational phrases",
   "symbols": ["list of symbols, emblems, or decorations — be specific: 'GAR Grand Army of the Republic emblem', 'Masonic square and compass', 'Odd Fellows three links', etc."],
   "family_name": "the deceased's surname ONLY IF it is clearly theirs (e.g. shown as a standalone surname banner, or in a family plot context). Leave empty/null if the only surname on the stone appears inside a relational phrase about someone else.",
+  "maiden_name": "the deceased's birth/maiden surname if the inscription reveals it — e.g. 'née Brown', 'born Smith', or a married woman shown as 'Mary Jones, daughter of the Brown family'. Genealogy records index married women under their maiden name, so capture it whenever shown. Empty/null if not indicated.",
+  "relationships": [{"relation": "spouse|father|mother|son|daughter|sibling", "name": "the related person's full name as written"}],
   "name_confidence": "high if the name is clearly legible, medium if partially weathered or ambiguous, low if significantly uncertain",
   "alternate_names": ["if name_confidence is medium or low, list 1-2 plausible alternate readings of primary_name due to weathering or OCR ambiguity — otherwise empty array"],
   "multiple_subjects": "true ONLY when the camera frame physically contains two or more completely separate, freestanding gravestones or grave markers at distinct locations — for example, two separate upright headstones for different people placed at different graves. A SINGLE unified monument, slab, or plaque that honours multiple people buried together at the same grave (even if it lists each person's individual birth/death dates, such as a grandmother and granddaughter interred together) is NOT multiple_subjects — return false. If you are not certain that the markers are physically separate objects at separate graves, return false.",
@@ -169,7 +175,7 @@ If multiple deceased people share the stone, use the names array and pick the mo
   const text = data.candidates[0].content.parts[0].text;
   return safeParseJSON(text, {
     names: [], primary_name: 'Unknown', birth_date: '', death_date: '',
-    inscription: '', symbols: [], family_name: '', notes: '',
+    inscription: '', symbols: [], family_name: '', maiden_name: '', relationships: [], notes: '',
     name_confidence: 'high', alternate_names: [], multiple_subjects: false, subjects: [],
   });
 }

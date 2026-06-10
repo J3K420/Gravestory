@@ -970,9 +970,15 @@ async function startAnalysis() {
     // 1. Get location — prefer EXIF from photo, fall back to device GPS
     setStep(1);
     let locationStr = null;
+    let cemeteryName = null;
     if (currentExifLocation) {
-      locationStr = await reverseGeocode(currentExifLocation.lat, currentExifLocation.lng);
-      console.log('📍 Reverse geocoded location:', locationStr);
+      // Resolve "City, State" and the enclosing cemetery name in parallel. The
+      // cemetery name (when the GPS sits inside one) disambiguates Tavily queries.
+      [locationStr, cemeteryName] = await Promise.all([
+        reverseGeocode(currentExifLocation.lat, currentExifLocation.lng),
+        reverseGeocodeCemetery(currentExifLocation.lat, currentExifLocation.lng),
+      ]);
+      console.log('📍 Reverse geocoded location:', locationStr, '| cemetery:', cemeteryName);
     } else {
       console.log('📍 No GPS coordinates available — skipping location');
     }
@@ -1081,14 +1087,15 @@ async function startAnalysis() {
         : (isMulti ? graveData.names.slice(0, 2) : [primaryOcrName]);
 
       const allParallel = await Promise.all([
-        searchForPerson(graveData, locationStr),
+        searchForPerson(graveData, locationStr, cemeteryName),
         ...wikiTreeTargets.map(name => searchWikiTree({ ...graveData, primary_name: name }, locationStr)),
         // Wikidata: only when OCR confidence is high to avoid false matches on uncertain names
         graveData.name_confidence === 'high'
           ? queryWikidata(primaryOcrName, effectiveDeath)
           : Promise.resolve(null),
-        // Chronicling America: direct API replaces the Tavily slot for pre-1924 deaths
-        (effectiveDeath && deathYrNum <= 1924)
+        // Chronicling America: direct OCR-text API for pre-1928 deaths (module
+        // guards the same cutoff internally; gate matches so 1925–1928 still fire)
+        (effectiveDeath && deathYrNum <= 1928)
           ? searchChroniclingAmerica(primaryOcrName, effectiveDeath)
           : Promise.resolve([]),
         ...researchTargets.map(t => fetchWikipediaArticleSummary(t.name, t.dates)),

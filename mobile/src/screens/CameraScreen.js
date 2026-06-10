@@ -18,7 +18,7 @@ import { queryWikidata } from '../lib/api-wikidata';
 import { searchChroniclingAmerica } from '../lib/api-chroniclingamerica';
 import { fetchWikipediaPortraits, fetchWikipediaArticleSummary } from '../lib/api-wikipedia';
 import { generateBiography } from '../lib/biography';
-import { forwardGeocode, reverseGeocode } from '../lib/api-nominatim';
+import { forwardGeocode, reverseGeocode, reverseGeocodeCemetery } from '../lib/api-nominatim';
 import { checkScanLimit, incrementScanCount } from '../lib/scan-limit';
 import { getLibraryAssetGps } from '../lib/media-gps';
 
@@ -168,8 +168,10 @@ export default function CameraScreen({ navigation }) {
 
     try {
       // Fire reverseGeocode in parallel with verify so we have a location hint
-      // ready before OCR and search queries execute.
+      // ready before OCR and search queries execute. Also resolve the enclosing
+      // cemetery name (if the GPS sits inside one) to disambiguate Tavily queries.
       const reverseGeoPromise = gps ? reverseGeocode(gps.lat, gps.lng) : Promise.resolve(null);
+      const cemeteryNamePromise = gps ? reverseGeocodeCemetery(gps.lat, gps.lng) : Promise.resolve(null);
 
       if (!skipVerify) {
         setStepIndex(0);
@@ -186,6 +188,7 @@ export default function CameraScreen({ navigation }) {
       }
 
       const locationHint = await reverseGeoPromise;
+      const cemeteryName = await cemeteryNamePromise;
 
       setStepIndex(1);
       const graveData = await readGravestone(base64, locationHint);
@@ -297,14 +300,15 @@ export default function CameraScreen({ navigation }) {
         // primary name — on multi-person stones the primary subject (e.g. Cynthia Levy)
         // may have no Wikipedia article while a second person (Amy Winehouse) does.
         const allParallel = await Promise.all([
-          searchForPerson(graveData, locationHint),
+          searchForPerson(graveData, locationHint, cemeteryName),
           ...wikiTreeTargets.map(name => searchWikiTree({ ...graveData, primary_name: name }, locationHint)),
           // Wikidata: only when OCR confidence is high to avoid false matches
           graveData.name_confidence === 'high'
             ? queryWikidata(primaryOcrName, effectiveDeath)
             : Promise.resolve(null),
-          // Chronicling America: direct API for pre-1924 deaths (frees a Tavily slot)
-          (effectiveDeath && deathYrNum <= 1924)
+          // Chronicling America: direct OCR-text API for pre-1928 deaths (module
+          // guards the same cutoff internally; gate matches so 1925–1928 still fire)
+          (effectiveDeath && deathYrNum <= 1928)
             ? searchChroniclingAmerica(primaryOcrName, effectiveDeath)
             : Promise.resolve([]),
           ...researchTargets.map(t => fetchWikipediaPortraits(t.name, t.dates)),

@@ -65,6 +65,55 @@ function openSettings() {
   });
   document.getElementById('settings-status').textContent = '';
   showScreen('settings');
+  _loadSettingsStats();
+}
+
+async function _loadSettingsStats() {
+  const statsEl = document.getElementById('settings-stats');
+  if (!statsEl || !currentUser) return;
+  statsEl.style.display = 'block';
+
+  const isUnlimited = currentUser?.app_metadata?.is_unlimited === true;
+
+  // Stories saved — count non-deleted local stories
+  const saveCount = (savedStories || []).filter(s => !s._deletedAt).length;
+  document.getElementById('settings-save-count').textContent =
+    saveCount + (saveCount === 1 ? ' story' : ' stories');
+
+  if (isUnlimited) {
+    document.getElementById('settings-scan-count').textContent = 'Unlimited';
+    document.getElementById('settings-scan-bar').style.width = '100%';
+    document.getElementById('settings-scan-bar').style.background = 'rgba(201,168,76,0.4)';
+    return;
+  }
+
+  // Scan count — fetch from Supabase
+  try {
+    const { count: usedCount, error: countErr } = await supabaseClient
+      .from('scan_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', currentUser.id);
+    if (countErr) throw countErr;
+
+    let purchased = 0;
+    const { data: credits } = await supabaseClient
+      .from('scan_credits')
+      .select('purchased')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if (credits) purchased = credits.purchased ?? 0;
+
+    const used = usedCount ?? 0;
+    const limit = 10 + purchased;
+    const pct = Math.min((used / limit) * 100, 100);
+    document.getElementById('settings-scan-count').textContent = used + ' of ' + limit;
+    document.getElementById('settings-scan-bar').style.width = pct + '%';
+    if (used >= limit) {
+      document.getElementById('settings-scan-bar').style.background = '#cf7a3a';
+    }
+  } catch (e) {
+    document.getElementById('settings-scan-count').textContent = '—';
+  }
 }
 
 async function submitSettings() {

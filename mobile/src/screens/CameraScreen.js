@@ -93,10 +93,15 @@ export default function CameraScreen({ navigation }) {
     }
 
     // exif: true so we can read GPS coords before compression strips them.
-    // legacy: true (Android only, ignored on iOS) swaps the system Photo Picker
-    // for ACTION_GET_CONTENT — the modern picker returns no MediaStore assetId,
-    // which getLibraryAssetGps needs to recover the redacted GPS EXIF.
-    const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true, legacy: true };
+    //
+    // IMPORTANT — do NOT set legacy: true on Android. The modern system Photo
+    // Picker (the default) returns a MediaStore-backed asset WITH an assetId,
+    // which getLibraryAssetGps needs to recover the OS-redacted GPS EXIF via
+    // expo-media-library. legacy: true routes through ACTION_GET_CONTENT (the
+    // file browser), and per the SDK 54 docs an Android asset picked "by
+    // directly browsing the file system" has a NULL assetId — so GPS recovery
+    // is impossible. (Earlier code had this inverted, which broke EXIF mapping.)
+    const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true };
 
     let result;
     if (fromCamera) {
@@ -114,13 +119,21 @@ export default function CameraScreen({ navigation }) {
     // Pull GPS from the photo's own EXIF before ImageManipulator strips it.
     // Only fall back to device GPS for camera shots — for library photos the device
     // is not physically at the grave, so device location would be wrong.
+    // mediaReason captures WHY expo-media-library recovery failed (if it did), so
+    // the silent EXIF-GPS failures can be diagnosed from a single test photo.
     let gps = extractExifGps(asset.exif);
+    let mediaReason = null;
 
     // Android redacts GPS tags from picker-read EXIF (asset.exif never has them).
     // For library picks, recover the location via expo-media-library, which can
     // read the unredacted original. No-op on iOS / camera shots / missing assetId.
     if (!gps && !fromCamera) {
-      gps = await getLibraryAssetGps(asset.assetId);
+      const media = await getLibraryAssetGps(asset.assetId);
+      if (media.gps) {
+        gps = media.gps;
+      } else {
+        mediaReason = media.reason;
+      }
     }
 
     const needsDeviceGps = !gps && fromCamera;
@@ -134,7 +147,17 @@ export default function CameraScreen({ navigation }) {
       needsDeviceGps ? getDeviceGps() : Promise.resolve(null),
     ]);
 
-    if (!gps) gps = deviceGps;
+    if (!gps && deviceGps) {
+      gps = deviceGps;
+    }
+
+    // Diagnostic: when a LIBRARY pick yields no location, tell the tester which
+    // failure mode fired (denied permission vs cloud-only photo vs picker URI
+    // with no recoverable asset) instead of degrading silently. Camera shots and
+    // successful recoveries say nothing. Remove once the root cause is confirmed.
+    if (!gps && !fromCamera) {
+      Alert.alert('No photo location', diagnosticForReason(mediaReason));
+    }
 
     await runPipeline(manipResult.base64, false, gps, fromCamera);
   }
@@ -565,6 +588,25 @@ function CandleFlicker() {
       🕯️
     </Animated.Text>
   );
+}
+
+// Maps a media-gps.js reason code to a tester-facing explanation. Temporary
+// diagnostic for the EXIF-GPS-not-mapping investigation — see getLibraryAssetGps.
+function diagnosticForReason(reason) {
+  switch (reason) {
+    case 'permission':
+      return "This photo's location couldn't be read because the photo-location permission was denied. The grave won't be auto-pinned — grant the permission and re-pick to map it.";
+    case 'no-location':
+      return "This photo has no saved location. Cloud-only Google Photos picks and screenshots often lose their GPS data — pick a photo taken on this device, or correct the pin on the map.";
+    case 'no-asset-id':
+      return "This photo came through a picker that hides its location data (e.g. a cloud share). Try picking from the device's own gallery, or correct the pin on the map.";
+    case 'module-missing':
+      return 'Location recovery is unavailable in this build. Update to the latest version to auto-pin library photos.';
+    case 'error':
+      return "Reading this photo's location failed. You can still correct the pin on the map.";
+    default:
+      return "This photo has no GPS location, so the grave wasn't auto-pinned. You can correct the pin on the map.";
+  }
 }
 
 function extractExifGps(exif) {

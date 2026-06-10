@@ -609,9 +609,11 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
     crossOrigin: true
   }).addTo(leafletMap);
 
-  // Custom grave marker icon — generator function so low-confidence pins can show a "?" badge
-  const makeGraveIcon = (lowConfidence) => L.divIcon({
-    html: `<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));line-height:0;position:relative;"><svg viewBox="0 0 100 100" fill="none" stroke-width="2" xmlns="http://www.w3.org/2000/svg" style="width:32px;height:32px;display:block;"><defs><linearGradient id="pinGrad${'$'}{Math.random().toString(36).slice(2,8)}" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f0dca8"/><stop offset="100%" stop-color="#8a6f3a"/></linearGradient></defs><rect x="22" y="84" width="56" height="6" stroke="#c9a84c" fill="rgba(20,15,8,0.85)"/><path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="#c9a84c" fill="rgba(20,15,8,0.85)"/><path d="M38 40 L38 56 Q44 54 49 56 L49 42 Q44 40 38 40 Z" stroke="#e8d4a0" stroke-width="2" fill="rgba(232,212,160,0.25)"/><path d="M51 42 Q56 40 62 40 L62 56 Q56 54 51 56 Z" stroke="#e8d4a0" stroke-width="2" fill="rgba(232,212,160,0.25)"/><line x1="50" y1="41" x2="50" y2="56" stroke="#e8d4a0" stroke-width="1.5"/><line x1="50" y1="63" x2="50" y2="76" stroke="#e8d4a0" stroke-width="1.5"/><line x1="44" y1="68" x2="56" y2="68" stroke="#e8d4a0" stroke-width="1.5"/></svg>${lowConfidence ? '<div style="position:absolute;top:-4px;right:-6px;width:14px;height:14px;border-radius:50%;background:rgba(60,40,20,0.95);border:1px solid #c9a84c;color:#e8d4a0;font-family:serif;font-size:10px;font-weight:bold;line-height:12px;text-align:center;">?</div>' : ''}</div>`,
+  // Custom grave marker icon — generator function so each grave can use its own
+  // chosen marker style (graveMarkerSvg from grave-markers.js) and low-confidence
+  // pins can show a "?" badge. styleId falls back to the default book glyph.
+  const makeGraveIcon = (lowConfidence, styleId) => L.divIcon({
+    html: `<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));line-height:0;position:relative;">${graveMarkerSvg(styleId, 32)}${lowConfidence ? '<div style="position:absolute;top:-4px;right:-6px;width:14px;height:14px;border-radius:50%;background:rgba(60,40,20,0.95);border:1px solid #c9a84c;color:#e8d4a0;font-family:serif;font-size:10px;font-weight:bold;line-height:12px;text-align:center;">?</div>' : ''}</div>`,
     className: '',
     iconSize: [24, 24],
     iconAnchor: [12, 24],
@@ -625,7 +627,7 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
   // Global-map markers stay non-draggable — users never edit others' pins.
   const canDrag = !!currentUser;
   graves.forEach(story => {
-    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGraveIcon(story._lowConfidence), draggable: canDrag, story: story })
+    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGraveIcon(story._lowConfidence, story.marker_style), draggable: canDrag, story: story })
       .addTo(leafletMap)
       .bindPopup(`
         <div style="font-family:'Playfair Display',serif;min-width:150px;max-width:300px;">

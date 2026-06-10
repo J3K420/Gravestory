@@ -173,6 +173,105 @@ function renderResult(story) {
 
   // Tribute counts + candle/flower buttons
   renderTributeSection(story);
+
+  // Map-pin marker style picker
+  renderMarkerSection(story, alreadySaved);
+}
+
+// Marker-style picker — lets the user choose what this grave's pin looks like on
+// their personal cemetery map. Mirrors the mobile ResultScreen "Marker" chip.
+// Shown only for the signed-in user's own SAVED, non-global story that has a
+// location (i.e. a pin actually exists for it). Global bios and unsaved stories
+// have no editable pin, so the section is hidden.
+function renderMarkerSection(story, alreadySaved) {
+  const existing = document.getElementById('marker-section');
+  if (existing) existing.remove();
+
+  if (!currentUser || !alreadySaved || story._isGlobal) return;
+  if (!story.gps && !story.location) return;
+
+  // Operate on the canonical saved row so the change persists (it has the id).
+  const savedRow = savedStories.find(s => s.timestamp === story.timestamp);
+  if (!savedRow) return;
+
+  const body = document.getElementById('result-body');
+  if (!body) return;
+
+  const currentStyle = savedRow.marker_style || DEFAULT_MARKER;
+  const wrap = document.createElement('div');
+  wrap.id = 'marker-section';
+  wrap.className = 'result-section';
+  wrap.style.cssText = 'border-top:1px solid rgba(201,168,76,0.2);padding-top:1rem;margin-top:1rem;';
+  wrap.innerHTML = `
+    <div style="font-family:'Crimson Pro',serif;color:var(--stone);font-size:0.8rem;font-style:italic;margin-bottom:0.5rem;letter-spacing:0.05em;text-transform:uppercase;">Map pin style</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+      <div style="display:flex;align-items:center;gap:0.75rem;">
+        <div style="width:40px;height:40px;line-height:0;">${graveMarkerSvg(currentStyle, 40)}</div>
+        <div style="font-family:'Playfair Display',serif;color:var(--ink);font-size:0.95rem;">${escapeHtml(getMarker(currentStyle).label)}</div>
+      </div>
+      <button id="marker-pick-btn" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.5);color:var(--ink);font-family:'Crimson Pro',serif;font-size:0.85rem;padding:0.5rem 0.9rem;cursor:pointer;border-radius:3px;white-space:nowrap;">
+        Change pin
+      </button>
+    </div>
+  `;
+  body.appendChild(wrap);
+
+  document.getElementById('marker-pick-btn').onclick = () => openMarkerPicker(savedRow);
+}
+
+// Slide-up modal grid of all 20 marker styles. Picking one persists immediately
+// (local + cloud) and re-renders the result screen so the new pin shows.
+function openMarkerPicker(savedRow) {
+  const existing = document.getElementById('marker-picker-overlay');
+  if (existing) existing.remove();
+
+  const currentStyle = savedRow.marker_style || DEFAULT_MARKER;
+  const overlay = document.createElement('div');
+  overlay.id = 'marker-picker-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,8,5,0.7);z-index:1000;display:flex;align-items:flex-end;justify-content:center;';
+
+  const grid = MARKER_STYLES.map(m => {
+    const active = m.id === currentStyle;
+    return `
+      <button class="marker-pick-cell" data-style="${m.id}" style="
+        background:${active ? 'rgba(201,168,76,0.18)' : 'rgba(255,255,255,0.03)'};
+        border:1px solid ${active ? 'rgba(201,168,76,0.8)' : 'rgba(201,168,76,0.2)'};
+        border-radius:6px;padding:0.5rem 0.25rem;cursor:pointer;display:flex;
+        flex-direction:column;align-items:center;gap:0.3rem;">
+        <div style="width:44px;height:44px;line-height:0;">${graveMarkerSvg(m.id, 44)}</div>
+        <span style="font-family:'Crimson Pro',serif;color:var(--cream,#e8d4a0);font-size:0.7rem;text-align:center;line-height:1.1;">${escapeHtml(m.label)}</span>
+      </button>
+    `;
+  }).join('');
+
+  overlay.innerHTML = `
+    <div style="background:#1a1410;border-top-left-radius:16px;border-top-right-radius:16px;border-top:1px solid rgba(201,168,76,0.3);width:100%;max-width:520px;max-height:80vh;overflow-y:auto;padding:1.2rem 1rem 1.6rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+        <div style="font-family:'Playfair Display',serif;color:var(--gold,#c9a84c);font-size:1.05rem;">Choose a map pin</div>
+        <button id="marker-picker-close" style="background:none;border:none;color:var(--cream,#e8d4a0);font-size:1.4rem;cursor:pointer;line-height:1;padding:0 0.25rem;">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:0.6rem;">${grid}</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  document.getElementById('marker-picker-close').onclick = close;
+
+  overlay.querySelectorAll('.marker-pick-cell').forEach(cell => {
+    cell.onclick = async () => {
+      const styleId = cell.getAttribute('data-style');
+      savedRow.marker_style = styleId;
+      if (currentStory && currentStory.timestamp === savedRow.timestamp) {
+        currentStory.marker_style = styleId;
+      }
+      close();
+      await persistUpdate(savedRow);
+      // Re-render so the marker section reflects the new choice
+      renderResult(currentStory || savedRow);
+    };
+  });
 }
 
 function renderVisibilityControls(story, alreadySaved) {

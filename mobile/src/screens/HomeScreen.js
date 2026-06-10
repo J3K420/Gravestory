@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   },
   userBtnText: { color: colors.flame, fontSize: 13, fontFamily: fonts.body },
 
-  logoArea: { marginTop: 80, marginBottom: 32, alignItems: 'center' },
+  logoArea: { marginTop: 20, marginBottom: 24, alignItems: 'center' },
   logoTitle: {
     fontSize: 42, color: colors.parchment, letterSpacing: 1, marginBottom: 8,
     fontFamily: fonts.title,

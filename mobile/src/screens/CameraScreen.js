@@ -93,10 +93,15 @@ export default function CameraScreen({ navigation }) {
     }
 
     // exif: true so we can read GPS coords before compression strips them.
-    // legacy: true (Android only, ignored on iOS) swaps the system Photo Picker
-    // for ACTION_GET_CONTENT — the modern picker returns no MediaStore assetId,
-    // which getLibraryAssetGps needs to recover the redacted GPS EXIF.
-    const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true, legacy: true };
+    //
+    // IMPORTANT — do NOT set legacy: true on Android. The modern system Photo
+    // Picker (the default) returns a MediaStore-backed asset WITH an assetId,
+    // which getLibraryAssetGps needs to recover the OS-redacted GPS EXIF via
+    // expo-media-library. legacy: true routes through ACTION_GET_CONTENT (the
+    // file browser), and per the SDK 54 docs an Android asset picked "by
+    // directly browsing the file system" has a NULL assetId — so GPS recovery
+    // is impossible. (Earlier code had this inverted, which broke EXIF mapping.)
+    const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true };
 
     let result;
     if (fromCamera) {

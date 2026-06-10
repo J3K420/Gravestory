@@ -7,9 +7,10 @@
 // ACCESS_MEDIA_LOCATION and calls MediaStore.setRequireOriginal natively,
 // which is the only sanctioned way to read the unredacted location.
 //
-// Requires the picker to be launched with legacy: true on Android — the modern
-// system Photo Picker returns URIs that carry no MediaStore assetId, and its
-// streams cannot be unredacted at all.
+// Requires the picker to be launched WITHOUT legacy: true on Android — the
+// modern system Photo Picker (the default) returns a MediaStore-backed asset
+// with a valid assetId. legacy: true routes through the ACTION_GET_CONTENT file
+// browser, whose assets have a null assetId, making location recovery impossible.
 //
 // expo-media-library is a NATIVE module: this file must keep the require()
 // lazy and guarded so an OTA update landing on an older binary (built before

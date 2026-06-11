@@ -101,46 +101,8 @@ export default function AuthScreen({ navigation }) {
           <TouchableOpacity style={styles.googleBtn} onPress={signInWithGoogle} disabled={loading} activeOpacity={0.85}>
             <Text style={styles.googleBtnText}>G  Continue with Google</Text>
           </TouchableOpacity>
-          <Text style={styles.testerHint}>
-            Testers: please use Continue with Google to sign in.
-          </Text>
 
-          {/* Divider */}
-          <View style={styles.orRow}>
-            <View style={styles.orLine} />
-            <Text style={styles.orText}>or</Text>
-            <View style={styles.orLine} />
-          </View>
-
-          {/* Email / password */}
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor={colors.ashDim}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            keyboardAppearance="dark"
-          />
-          <TextInput
-            style={[styles.input, { marginBottom: 0 }]}
-            placeholder="Password"
-            placeholderTextColor={colors.ashDim}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            keyboardAppearance="dark"
-          />
-
-          {/* Buttons */}
-          <TouchableOpacity onPress={signIn} disabled={loading} activeOpacity={0.88} style={styles.primaryBtn}>
-            <Text style={styles.primaryBtnText}>{loading ? '…' : 'Sign in'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.ghostBtn} onPress={signUp} disabled={loading}>
-            <Text style={styles.ghostBtnText}>Create account</Text>
-          </TouchableOpacity>
+          {/* Reserved space for additional sign-in providers (e.g. Apple on iOS) */}
 
           {!!status && (
             <Text style={[styles.statusText, status.includes('Check') && { color: colors.moss }]}>

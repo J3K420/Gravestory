@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
@@ -19,6 +20,7 @@ export default function AuthScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [status, setStatus]     = useState('');
   const [loading, setLoading]   = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const { refreshControl } = useRefresh(() => {
     setEmail('');
     setPassword('');
@@ -46,6 +48,9 @@ export default function AuthScreen({ navigation }) {
       if (error) throw error;
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type === 'success') {
+        // The browser has closed and this screen is visible again while the
+        // code-for-session exchange round-trips to Supabase — show progress.
+        setSigningIn(true);
         const params = new URLSearchParams(result.url.split('?')[1] ?? '');
         const code = params.get('code');
         if (!code) throw new Error('No code in callback URL');
@@ -57,6 +62,7 @@ export default function AuthScreen({ navigation }) {
       }
     } catch (err) {
       setStatus(err.message);
+      setSigningIn(false);
     }
     setLoading(false);
   }
@@ -98,9 +104,16 @@ export default function AuthScreen({ navigation }) {
           </View>
 
           {/* Google */}
-          <TouchableOpacity style={styles.googleBtn} onPress={signInWithGoogle} disabled={loading} activeOpacity={0.85}>
-            <Text style={styles.googleBtnText}>G  Continue with Google</Text>
-          </TouchableOpacity>
+          {signingIn ? (
+            <View style={styles.signingInRow}>
+              <ActivityIndicator size="small" color={colors.flame} />
+              <Text style={styles.signingInText}>Signing you in…</Text>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.googleBtn} onPress={signInWithGoogle} disabled={loading} activeOpacity={0.85}>
+              <Text style={styles.googleBtnText}>G  Continue with Google</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Reserved space for additional sign-in providers (e.g. Apple on iOS) */}
 
@@ -132,6 +145,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm, alignItems: 'center', marginBottom: 20,
   },
   googleBtnText: { color: '#2a2017', fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.3 },
+
+  signingInRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 15, marginBottom: 20, gap: 10,
+  },
+  signingInText: { color: colors.ash, fontSize: 15, fontFamily: fonts.bodyMedium, letterSpacing: 0.3 },
 
   testerHint: {
     color: colors.ash, fontFamily: fonts.bodyItalic, fontSize: 13,

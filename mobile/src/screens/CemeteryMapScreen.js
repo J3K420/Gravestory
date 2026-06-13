@@ -294,6 +294,8 @@ export default function CemeteryMapScreen({ navigation, route }) {
             <TouchableOpacity
               style={styles.calloutDismiss}
               onPress={() => { setSelectedStory(null); setBioExpanded(false); }}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+              activeOpacity={0.6}
             >
               <Text style={styles.calloutDismissText}>✕</Text>
             </TouchableOpacity>
@@ -421,9 +423,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: 14,
   },
-  calloutDismiss: { position: 'absolute', top: 10, right: 12 },
-  calloutDismissText: { color: colors.ashDim, fontSize: 16 },
-  calloutName: { color: PARCHMENT, fontSize: 16, fontFamily: fonts.name, marginBottom: 3, paddingRight: 24 },
+  calloutDismiss: {
+    position: 'absolute', top: 2, right: 4, zIndex: 2,
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  calloutDismissText: { color: colors.ash, fontSize: 18, lineHeight: 18 },
+  calloutName: { color: PARCHMENT, fontSize: 16, fontFamily: fonts.name, marginBottom: 3, paddingRight: 36 },
   calloutDates: { color: colors.ash, fontSize: 13, fontFamily: fonts.serifItalic, marginBottom: 2 },
   calloutLocation: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, marginBottom: 6 },
   calloutWarn: { color: colors.ember, fontSize: 11, fontFamily: fonts.body, marginBottom: 6 },

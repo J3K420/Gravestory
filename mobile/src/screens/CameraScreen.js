@@ -640,12 +640,14 @@ export default function CameraScreen({ navigation, route }) {
             onPress={() => { setShowPicker(false); pickAndAnalyze(true); }}
           >
             <Text style={styles.sheetOptionText}>✦ Take Photo</Text>
+            <Text style={styles.sheetOptionHint}>Best at the graveside — your location pins the grave on your map</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.sheetOption}
             onPress={() => { setShowPicker(false); pickAndAnalyze(false); }}
           >
             <Text style={styles.sheetOptionText}>Choose from Library</Text>
+            <Text style={styles.sheetOptionHint}>Use a gravestone photo you took earlier</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.sheetCancel}
@@ -666,6 +668,9 @@ export default function CameraScreen({ navigation, route }) {
       >
         <Text style={styles.title}>Photograph the Stone</Text>
         <Text style={styles.subtitle}>Frame the gravestone clearly for best results</Text>
+        <Text style={styles.tip}>
+          Tip: fill the frame with the inscription, and photograph at the cemetery when you can — the photo's location places the grave on your map.
+        </Text>
 
         <TouchableOpacity style={styles.stoneZone} onPress={() => setShowPicker(true)} activeOpacity={0.85}>
           <Animated.View style={{ opacity: stoneOpacity }}>
@@ -801,6 +806,10 @@ const styles = StyleSheet.create({
     color: colors.ash, fontFamily: fonts.bodyItalic, textAlign: 'center',
     lineHeight: 22, marginBottom: 8, fontSize: 14,
   },
+  tip: {
+    color: colors.ashDim, fontFamily: fonts.bodyItalic, textAlign: 'center',
+    fontSize: 12, lineHeight: 18, maxWidth: 300,
+  },
   stoneZone: {
     width: 375, height: 410,
     alignSelf: 'center',
@@ -843,6 +852,10 @@ const styles = StyleSheet.create({
   sheetOptionText: {
     color: colors.flame, fontSize: 16, letterSpacing: 1,
     textAlign: 'center', fontFamily: fonts.body,
+  },
+  sheetOptionHint: {
+    color: colors.ashDim, fontSize: 12, fontFamily: fonts.bodyItalic,
+    textAlign: 'center', marginTop: 4, lineHeight: 17,
   },
   sheetCancel: { paddingVertical: 14, marginTop: 4 },
   sheetCancelText: {

@@ -100,6 +100,10 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
+        <Text style={styles.mapHint}>
+          My Map gathers the graves you've scanned. The Community Map shows stories shared by explorers everywhere.
+        </Text>
+
         {/* Remembered stories nav button */}
         <TouchableOpacity
           style={styles.savedBtn}
@@ -153,6 +157,10 @@ const styles = StyleSheet.create({
   },
 
   mapRow: { flexDirection: 'row', gap: 10, marginTop: 16, width: '100%' },
+  mapHint: {
+    color: colors.ashDim, fontFamily: fonts.bodyItalic, fontSize: 12,
+    textAlign: 'center', marginTop: 10, lineHeight: 18, maxWidth: 300,
+  },
   mapBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     borderWidth: 1, borderColor: colors.line,

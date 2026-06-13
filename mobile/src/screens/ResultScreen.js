@@ -338,6 +338,10 @@ export default function ResultScreen({ navigation, route }) {
   const showMarkerChip = !story._isGlobal && !isUnsaved && (story.gps || story.location);
   const currentMarker = getMarker(story.marker_style);
   const isPublic = story.is_public;
+  const hasTappableSymbol = (graveData?.symbols || []).some(s => {
+    const lower = s.toLowerCase();
+    return Object.keys(SYMBOL_CONTEXT).some(k => lower.includes(k));
+  });
 
   function handleBack() {
     if (isUnsaved && !saving) {
@@ -425,6 +429,12 @@ export default function ResultScreen({ navigation, route }) {
 
         {/* Symbols */}
         {graveData?.symbols?.length > 0 && (
+          <Text style={styles.symbolsLabel}>Symbols on the stone</Text>
+        )}
+        {hasTappableSymbol && (
+          <Text style={styles.symbolsHint}>Tap a gold symbol to learn its traditional meaning.</Text>
+        )}
+        {graveData?.symbols?.length > 0 && (
           <View style={styles.tagsRow}>
             {graveData.symbols.map((s, i) => {
               const lower = s.toLowerCase();
@@ -501,13 +511,18 @@ export default function ResultScreen({ navigation, route }) {
 
         {/* Save (unsaved stories only) — primary action */}
         {isUnsaved && (
-          <TouchableOpacity
-            style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Story'}</Text>
-          </TouchableOpacity>
+          <>
+            <Text style={styles.unsavedHint}>
+              This story isn't saved yet — saving keeps it in Remembered Stories and pins it on your map.
+            </Text>
+            <TouchableOpacity
+              style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Story'}</Text>
+            </TouchableOpacity>
+          </>
         )}
 
         {/* Action chips */}
@@ -548,6 +563,12 @@ export default function ResultScreen({ navigation, route }) {
             </TouchableOpacity>
           )}
         </View>
+
+        {showPublicToggle && !isPublic && (
+          <Text style={styles.chipsHint}>
+            Tap Private to make this story Public — it joins the Community Map for other visitors to discover.
+          </Text>
+        )}
 
         {/* Scan another */}
         <TouchableOpacity style={styles.scanAgainBtn} onPress={() => navigation.navigate('Camera')}>
@@ -683,6 +704,14 @@ const styles = StyleSheet.create({
   },
   inscriptionText: { color: colors.parchment, fontFamily: fonts.serifItalic, lineHeight: 22, fontSize: 14 },
 
+  symbolsLabel: {
+    color: colors.ashDim, fontSize: 10, letterSpacing: 3,
+    textTransform: 'uppercase', fontFamily: fonts.body, marginBottom: 6,
+  },
+  symbolsHint: {
+    color: colors.ashDim, fontSize: 12, fontFamily: fonts.bodyItalic,
+    marginBottom: 10, lineHeight: 17,
+  },
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
   tag: {
     borderWidth: 1, borderColor: colors.line, backgroundColor: colors.stone2,
@@ -699,6 +728,10 @@ const styles = StyleSheet.create({
   sourceLink: { color: colors.flame, textDecorationLine: 'underline' },
 
   chipsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  chipsHint: {
+    color: colors.ashDim, fontSize: 12, fontFamily: fonts.bodyItalic,
+    textAlign: 'center', marginTop: -6, marginBottom: 16, lineHeight: 17,
+  },
   chip: {
     flex: 1, flexDirection: 'column', alignItems: 'center', gap: 5,
     paddingVertical: 12, paddingHorizontal: 4,
@@ -708,6 +741,10 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: 'rgba(170,190,220,0.4)', backgroundColor: 'rgba(170,190,220,0.08)' },
   chipText: { color: colors.ash, fontSize: 11, fontFamily: fonts.body },
 
+  unsavedHint: {
+    color: colors.ash, fontSize: 12, fontFamily: fonts.bodyItalic,
+    textAlign: 'center', marginBottom: 10, lineHeight: 17,
+  },
   saveBtn: {
     backgroundColor: colors.flame,
     paddingVertical: 16, borderRadius: radius.sm, marginBottom: 16, alignItems: 'center',

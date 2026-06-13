@@ -17,7 +17,7 @@ export default function SettingsScreen({ navigation }) {
   const [saving, setSaving]             = useState(false);
   const [saveCount, setSaveCount]       = useState(null);
   const [scanCount, setScanCount]       = useState(null);
-  const [scanLimit, setScanLimit]       = useState(10);
+  const [scanLimit, setScanLimit]       = useState(5);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

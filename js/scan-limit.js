@@ -3,7 +3,7 @@
 // Depends on: supabaseClient (auth.js), currentUser (auth.js), savedStories (index.html).
 
 const WEB_SCAN_LIMIT_GUEST  = 3;
-const WEB_SCAN_LIMIT_USER   = 10;
+const WEB_SCAN_LIMIT_USER   = 5;
 const WEB_GUEST_SCAN_KEY    = 'gs_web_scan_count';
 
 async function checkWebScanLimit() {

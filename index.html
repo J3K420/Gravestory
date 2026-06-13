@@ -940,7 +940,7 @@ async function findOrCreateGrave(name, lat, lng, isPublic) {
 async function startAnalysis() {
   if (!currentImageBase64) return;
 
-  // Freemium scan limit check (guest: 3 lifetime; signed-in free: 10 lifetime)
+  // Freemium scan limit check (guest: 3 lifetime; signed-in free: 5 lifetime)
   const scanCheck = await checkWebScanLimit();
   if (scanCheck.atLimit) {
     const msg = scanCheck._checkFailed

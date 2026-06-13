@@ -90,6 +90,9 @@ async function handleMarkerDragEnd(marker, story) {
   if (idx >= 0) {
     savedStories[idx].gps = { lat: newLat, lng: newLng };
     savedStories[idx].userCorrected = true;
+    // A user-placed pin is exact — clear the approximate flag so the "?" badge
+    // and "approximate location" warning disappear (local + global map).
+    savedStories[idx]._lowConfidence = false;
     await persistUpdate(savedStories[idx]);
   }
   // 2. Write to the verified-grave cache with max score so it beats future Overpass results
@@ -653,7 +656,9 @@ async function renderLeafletMap(centerLat, centerLng, zoom, graves) {
   // Global-map markers stay non-draggable — users never edit others' pins.
   const canDrag = !!currentUser;
   graves.forEach(story => {
-    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGraveIcon(story._lowConfidence, story.marker_style), draggable: canDrag, story: story })
+    // A corrected pin is confident — drop the "?" badge (popup already does).
+    const lowConf = story._lowConfidence && !story.userCorrected;
+    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGraveIcon(lowConf, story.marker_style), draggable: canDrag, story: story })
       .addTo(leafletMap)
       .bindPopup(`
         <div style="font-family:'Playfair Display',serif;min-width:150px;max-width:300px;">

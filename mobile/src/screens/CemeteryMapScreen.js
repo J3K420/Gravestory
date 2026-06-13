@@ -32,7 +32,8 @@ function GraveMarker({ story, onPress, onDragEnd }) {
       onPress={onPress}
     >
       <View onLayout={() => setTracksViewChanges(false)}>
-        <GravestoneMarker styleId={story.marker_style} lowConfidence={story._lowConfidence} />
+        {/* A corrected pin is exact — no "?" badge regardless of the original flag. */}
+        <GravestoneMarker styleId={story.marker_style} lowConfidence={story._lowConfidence && !story.userCorrected} />
       </View>
     </Marker>
   );
@@ -218,7 +219,9 @@ export default function CemeteryMapScreen({ navigation, route }) {
         {
           text: 'Save',
           onPress: async () => {
-            const updated = { ...story, gps: newGps, userCorrected: true };
+            // A user-placed pin is exact — clear the approximate flag so the "?"
+            // badge and "approximate location" warning disappear (local + global).
+            const updated = { ...story, gps: newGps, userCorrected: true, _lowConfidence: false };
             setMappedStories(prev =>
               prev.map(s => s.timestamp === story.timestamp ? updated : s)
             );
@@ -227,7 +230,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
             const allStories = await loadStories(uid);
             const idx = allStories.findIndex(s => s.timestamp === story.timestamp);
             if (idx >= 0) {
-              allStories[idx] = { ...allStories[idx], gps: newGps, userCorrected: true };
+              allStories[idx] = { ...allStories[idx], gps: newGps, userCorrected: true, _lowConfidence: false };
               await saveStories(allStories, uid);
             }
             if (session?.user) {
@@ -302,9 +305,11 @@ export default function CemeteryMapScreen({ navigation, route }) {
             {!!selectedStory.location && (
               <Text style={styles.calloutLocation}>{selectedStory.location}</Text>
             )}
-            {selectedStory._lowConfidence && (
+            {selectedStory.userCorrected ? (
+              <Text style={styles.calloutCorrected}>✓ location corrected</Text>
+            ) : selectedStory._lowConfidence ? (
               <Text style={styles.calloutWarn}>⚠ approximate location</Text>
-            )}
+            ) : null}
 
             <Text style={styles.calloutHint}>✦ Pin in the wrong spot? Press and hold the marker, then drag it to the correct grave.</Text>
 
@@ -422,6 +427,7 @@ const styles = StyleSheet.create({
   calloutDates: { color: colors.ash, fontSize: 13, fontFamily: fonts.serifItalic, marginBottom: 2 },
   calloutLocation: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, marginBottom: 6 },
   calloutWarn: { color: colors.ember, fontSize: 11, fontFamily: fonts.body, marginBottom: 6 },
+  calloutCorrected: { color: colors.moss, fontSize: 11, fontFamily: fonts.body, marginBottom: 6 },
   calloutHint: {
     color: colors.flame, fontSize: 11, fontFamily: fonts.body, lineHeight: 16,
     marginBottom: 8, fontStyle: 'italic',

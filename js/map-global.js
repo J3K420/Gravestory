@@ -200,7 +200,10 @@ async function initGlobalMap() {
   });
 
   withGps.forEach(story => {
-    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGlobalIcon(story._lowConfidence, story.marker_style), draggable: false, story: story })
+    // A grave someone has corrected is confident — no "?" badge regardless of
+    // the original approximate flag.
+    const lowConf = story._lowConfidence && !story.userCorrected;
+    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGlobalIcon(lowConf, story.marker_style), draggable: false, story: story })
       .addTo(globalLeafletMap)
       .bindPopup(buildGlobalPopup(story), { maxWidth: 320 });
     globalMapMarkers.push(marker);
@@ -236,7 +239,7 @@ function buildGlobalPopup(story) {
       <em style="font-size:0.85rem;color:#666">${escapeHtml(story.dates || '')}</em><br>
       <small style="color:#888">${escapeHtml(story.location || '')}</small><br>
       <small style="color:#7a8a9a;font-size:0.72rem;font-style:italic">Shared by ${safeContrib}</small>
-      ${story._lowConfidence ? '<br><span style="font-size:0.75rem;color:#a87a2a">⚠ approximate location</span>' : ''}
+      ${(story._lowConfidence && !story.userCorrected) ? '<br><span style="font-size:0.75rem;color:#a87a2a">⚠ approximate location</span>' : ''}
       <div style="margin-top:0.5rem;display:flex;gap:0.4rem;flex-wrap:wrap;">
         <button onclick="guardGuestAction(function(){var c=document.getElementById('${bioId}');if(c.style.display==='none'){c.style.display='block';this.textContent='▲ Hide bio';}else{c.style.display='none';this.textContent='▼ Read bio';}}.bind(this))"
           style="background:none;border:1px solid rgba(120,140,180,0.5);color:#3d5a85;font-family:'Crimson Pro',serif;font-size:0.8rem;padding:0.25rem 0.6rem;cursor:pointer;border-radius:3px;">

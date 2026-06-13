@@ -22,6 +22,8 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 // marker_style so a re-staked grave re-snapshots.
 function GlobalGraveMarker({ story, onPress }) {
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  // A grave anyone has corrected is exact — no "?" badge regardless of the flag.
+  const lowConf = story._lowConfidence && !story.userCorrected;
   return (
     <Marker
       coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}
@@ -30,10 +32,10 @@ function GlobalGraveMarker({ story, onPress }) {
     >
       <View
         onLayout={() => setTracksViewChanges(false)}
-        style={[styles.markerShadow, story._lowConfidence && styles.markerLowConf]}
+        style={[styles.markerShadow, lowConf && styles.markerLowConf]}
       >
         <GraveMarkerSvg styleId={story.marker_style} size={32} />
-        {story._lowConfidence && (
+        {lowConf && (
           <View style={styles.markerBadge}><Text style={styles.markerBadgeText}>?</Text></View>
         )}
       </View>
@@ -215,7 +217,7 @@ export default function GlobalMapScreen({ navigation }) {
               <Text style={styles.calloutLocation}>{selectedStory.location}</Text>
             )}
             <Text style={styles.calloutContrib}>Shared by {selectedStory._contributor}</Text>
-            {selectedStory._lowConfidence && (
+            {(selectedStory._lowConfidence && !selectedStory.userCorrected) && (
               <Text style={styles.calloutWarn}>⚠ approximate location</Text>
             )}
 

@@ -1,3 +1,10 @@
+-- ⚠️ CONFIRMED NO-OP (2026-06-13) — DO NOT NEED TO RUN.
+-- A role_table_grants check showed `anon` ALREADY has INSERT (in fact full CRUD)
+-- on analytics_events on this project, so guest telemetry was never blocked. This
+-- file is kept only as a harmless, idempotent safety net / documentation. The
+-- original concern (below) was based on a wrong assumption about this project's
+-- default grants. See memory: reference-rls-load-bearing.
+--
 -- Fix: allow GUEST (signed-out) telemetry into analytics_events.
 --
 -- Migration 008 added an RLS INSERT policy that permits user_id IS NULL (guest

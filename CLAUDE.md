@@ -54,7 +54,7 @@ js/
   user-prefs.js          — Display name + default visibility (user_metadata)
   persistence.js         — storyToRow/rowToStory (grave_id, source, marker_style), cloud upsert/delete
   sync.js                — Incremental delta sync (updated_at watermark) + pushLocalOnly
-  scan-limit.js          — checkWebScanLimit (guest 3 / free 5 lifetime, fail-closed); save limits are no-ops
+  scan-limit.js          — checkWebScanLimit (guest 3 / free 10 lifetime, fail-closed); save limits are no-ops
   api-tributes.js        — getTributes/setTribute (candle/flower per grave)
   save-actions.js        — saveStory, shareStory, exportCemeteryData
   render-result.js       — Result screen renderer + renderTributeSection + marker-style picker
@@ -214,7 +214,7 @@ mobile/
 
 ## Freemium / monetization
 
-- **Scans are the sole cost control** (Tavily/Gemini cost): guest 3, free signed-in 5 lifetime, + purchased credits. Save limits were removed entirely (no-ops kept for API compat). Limits fail closed on Supabase errors.
+- **Scans are the sole cost control** (Tavily/Gemini cost): guest 3, free signed-in 10 lifetime, + purchased credits. Save limits were removed entirely (no-ops kept for API compat). Limits fail closed on Supabase errors. (Tavily degrades gracefully when its ~4000-credit pool is exhausted — slots return empty and bios thin out, but Gemini still writes from the stone + free sources; no outage.)
 - Credits-only model (no subscriptions): `gravestory_5_scans` $0.99 · `gravestory_20_scans` $2.99 · `gravestory_60_scans` $6.99; never expire. RevenueCat SDK live (production `goog_` key via EAS Secret, Sensitive visibility); `Purchases.logIn(userId)` after auth; purchases land as credits via the Worker webhook.
 - Tester bypass: `is_unlimited: true` in `app_metadata` via SQL editor: `UPDATE auth.users SET raw_app_meta_data = raw_app_meta_data || '{"is_unlimited": true}'::jsonb WHERE id = '<user-id>';` (current: j3k420@gmail.com, james.edmonds26@gmail.com).
 

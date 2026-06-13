@@ -5,6 +5,21 @@
     min-height: 100vh;
   }
 
+  /* First-run example banner (read-only sample story) */
+  .sample-banner {
+    background: rgba(138,111,58,0.1);
+    border: 1px solid rgba(138,111,58,0.35);
+    border-radius: 5px;
+    padding: 0.6rem 0.9rem;
+    margin-bottom: 1.1rem;
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: #6b5526;
+    text-align: center;
+  }
+
   .result-header {
     background: var(--ink);
     padding: 1.5rem 1.5rem 2rem;

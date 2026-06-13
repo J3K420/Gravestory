@@ -12,6 +12,7 @@ import { getTributes, setTribute } from '../lib/api-tributes';
 import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
 import { useRefresh } from '../lib/use-refresh';
 import { deletePendingPhoto } from '../lib/pending';
+import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
 import { MapStack, ShareIcon, Globe } from '../components/Icons';
 import { MARKER_STYLES, getMarker, GraveMarkerSvg } from '../components/GraveMarkers';
@@ -255,6 +256,7 @@ export default function ResultScreen({ navigation, route }) {
       }
 
       setStory(saved);
+      logEvent(EVENTS.STORY_SAVED, { signedIn: !!sessionUser, hasGrave: !!graveId });
     } catch (err) {
       console.warn('Save failed:', err?.message);
       Alert.alert('Save Failed', 'Could not save this story. Please check your connection and try again.');
@@ -302,6 +304,7 @@ export default function ResultScreen({ navigation, route }) {
     if (idx >= 0) { all[idx] = updated; await saveStories(all, user?.id ?? null); }
     setStory(updated);
     if (updated.id) setStory(await cloudUpdateStory(updated, user));
+    if (updated.is_public) logEvent(EVENTS.MADE_PUBLIC, {});
     setTogglingPublic(false);
   }
 
@@ -332,10 +335,13 @@ export default function ResultScreen({ navigation, route }) {
   }
 
   const isUnsaved = !!story._unsaved;
-  const showPublicToggle = user && !story._isGlobal && !isUnsaved;
+  // The canned first-run example: read-only, never persisted, no ownership/sharing
+  // affordances. Suppresses save/delete/public/marker/tributes entirely.
+  const isSample = !!story._isSample;
+  const showPublicToggle = user && !story._isGlobal && !isUnsaved && !isSample;
   // Marker style applies to the user's own My-Cemetery pin — only meaningful for
   // a saved, own (non-global) story that has a location to map.
-  const showMarkerChip = !story._isGlobal && !isUnsaved && (story.gps || story.location);
+  const showMarkerChip = !story._isGlobal && !isUnsaved && !isSample && (story.gps || story.location);
   const currentMarker = getMarker(story.marker_style);
   const isPublic = story.is_public;
   const hasTappableSymbol = (graveData?.symbols || []).some(s => {
@@ -397,6 +403,15 @@ export default function ResultScreen({ navigation, route }) {
                 ))}
               </View>
             )}
+          </View>
+        )}
+
+        {/* Example banner — makes it unmistakable this is a demo, not a real scan */}
+        {isSample && (
+          <View style={styles.sampleBanner}>
+            <Text style={styles.sampleBannerText}>
+              ✦ Example story — this is what GraveStory creates from a single photo
+            </Text>
           </View>
         )}
 
@@ -570,13 +585,18 @@ export default function ResultScreen({ navigation, route }) {
           </Text>
         )}
 
-        {/* Scan another */}
-        <TouchableOpacity style={styles.scanAgainBtn} onPress={() => navigation.navigate('Camera')}>
-          <Text style={styles.scanAgainText}>Scan Another Gravestone</Text>
+        {/* Scan another (sample shows it as the primary next step) */}
+        <TouchableOpacity
+          style={isSample ? styles.saveBtn : styles.scanAgainBtn}
+          onPress={() => navigation.navigate('Camera')}
+        >
+          <Text style={isSample ? styles.saveBtnText : styles.scanAgainText}>
+            {isSample ? 'Scan Your First Gravestone' : 'Scan Another Gravestone'}
+          </Text>
         </TouchableOpacity>
 
-        {/* Delete (saved) / Discard (unsaved) */}
-        {!story._isGlobal && (
+        {/* Delete (saved) / Discard (unsaved) — never for the read-only sample */}
+        {!story._isGlobal && !isSample && (
           <TouchableOpacity
             style={styles.deleteBtn}
             onPress={isUnsaved ? () => navigation.navigate('Home') : handleDelete}
@@ -675,6 +695,17 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.line },
   dotActive: { backgroundColor: colors.flame },
+
+  sampleBanner: {
+    backgroundColor: 'rgba(242,182,92,0.1)',
+    borderWidth: 1, borderColor: 'rgba(242,182,92,0.3)',
+    borderRadius: radius.sm, paddingVertical: 10, paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  sampleBannerText: {
+    color: colors.flame, fontFamily: fonts.bodyItalic, fontSize: 12,
+    lineHeight: 17, textAlign: 'center',
+  },
 
   name: {
     color: colors.parchment, fontSize: 30, fontFamily: fonts.title,

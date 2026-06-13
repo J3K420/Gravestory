@@ -24,6 +24,29 @@ import { checkScanLimit, incrementScanCount } from '../lib/scan-limit';
 import { getLibraryAssetGps } from '../lib/media-gps';
 import { loadStories, saveStories } from '../lib/storage';
 import { savePendingPhoto, readPendingPhoto, deletePendingPhoto } from '../lib/pending';
+import { logEvent, EVENTS } from '../lib/analytics';
+
+// Overall ceiling for the parallel research fan-out. The individual research
+// legs (Tavily, WikiTree, Wikidata, Chronicling America, Internet Archive,
+// Wikipedia) have NO per-request timeout of their own, so one hung leg would
+// otherwise block the whole Promise.all and freeze the user on "Searching
+// records…" forever. We wrap the block in Promise.race against this cap; on
+// timeout the pipeline proceeds with whatever the stone + free sources yield
+// (a thinner bio) instead of hanging.
+const RESEARCH_TIMEOUT_MS = 30000;
+
+// Sentinel returned by the race when the research fan-out exceeds the cap, so
+// the caller can tell "timed out" apart from a legitimately empty result.
+const RESEARCH_TIMEOUT = Symbol('research-timeout');
+
+// Resolves to RESEARCH_TIMEOUT if `promise` hasn't settled within ms. Never
+// rejects — research is best-effort, so a timeout degrades gracefully.
+function raceResearchTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(() => resolve(RESEARCH_TIMEOUT), ms)),
+  ]);
+}
 
 const STEPS = [
   'Verifying gravestone…',
@@ -112,6 +135,7 @@ export default function CameraScreen({ navigation, route }) {
               offerOfflineScan(fromCamera);
               return;
             }
+            logEvent(EVENTS.SCAN_LIMIT_HIT, { count: scanCheck.count, limit: scanCheck.limit, isGuest: scanCheck.isGuest });
             navigation.navigate('Paywall', { count: scanCheck.count, limit: scanCheck.limit, type: 'scan', isGuest: scanCheck.isGuest });
             return;
           }
@@ -150,21 +174,16 @@ export default function CameraScreen({ navigation, route }) {
     // Pull GPS from the photo's own EXIF before ImageManipulator strips it.
     // Only fall back to device GPS for camera shots — for library photos the device
     // is not physically at the grave, so device location would be wrong.
-    // mediaReason captures WHY expo-media-library recovery failed (if it did), so
-    // the silent EXIF-GPS failures can be diagnosed from a single test photo.
     let gps = extractExifGps(asset.exif);
-    let mediaReason = null;
 
     // Android redacts GPS tags from picker-read EXIF (asset.exif never has them).
     // For library picks, recover the location via expo-media-library, which can
     // read the unredacted original. No-op on iOS / camera shots / missing assetId.
+    // A miss here is non-fatal (getLibraryAssetGps logs the reason); the user can
+    // correct the pin on the map.
     if (!gps && !fromCamera) {
       const media = await getLibraryAssetGps(asset.assetId);
-      if (media.gps) {
-        gps = media.gps;
-      } else {
-        mediaReason = media.reason;
-      }
+      if (media.gps) gps = media.gps;
     }
 
     const needsDeviceGps = !gps && fromCamera;
@@ -182,14 +201,11 @@ export default function CameraScreen({ navigation, route }) {
       gps = deviceGps;
     }
 
-    // Diagnostic: when a LIBRARY pick yields no location, tell the tester which
-    // failure mode fired (denied permission vs cloud-only photo vs picker URI
-    // with no recoverable asset) instead of degrading silently. Camera shots and
-    // successful recoveries say nothing. Remove once the root cause is confirmed.
-    if (!gps && !fromCamera) {
-      Alert.alert('No photo location', diagnosticForReason(mediaReason));
-    }
-
+    // A library pick with no recoverable GPS is expected for cloud-only photos,
+    // screenshots, and denied photo-location permission — degrade silently and let
+    // the user correct the pin on the map. (The legacy:true/assetId root cause that
+    // once broke this for ALL library photos was fixed; getLibraryAssetGps still
+    // logs the failure reason to the console, but it's no longer surfaced as an Alert.)
     if (offline) {
       await createPendingStory(manipResult.base64, gps, fromCamera);
       return;
@@ -276,18 +292,23 @@ export default function CameraScreen({ navigation, route }) {
       const reverseGeoPromise = gps ? reverseGeocode(gps.lat, gps.lng) : Promise.resolve(null);
       const cemeteryNamePromise = gps ? reverseGeocodeCemetery(gps.lat, gps.lng) : Promise.resolve(null);
 
+      logEvent(EVENTS.SCAN_STARTED, { fromCamera, hasGps: !!gps, resumed: !!pending });
+
       if (!skipVerify) {
         setStepIndex(0);
         try {
           await verifyIsGravestone(base64);
         } catch (err) {
           if (err.__verificationRejection) {
+            logEvent(EVENTS.VERIFICATION_REJECTED, { reason: err.reason });
             setRejected({ reason: err.reason, base64, gps, fromCamera, pending });
             setLoading(false);
             return;
           }
           throw err;
         }
+      } else {
+        logEvent(EVENTS.VERIFICATION_BYPASSED, {});
       }
 
       const locationHint = await reverseGeoPromise;
@@ -295,6 +316,10 @@ export default function CameraScreen({ navigation, route }) {
 
       setStepIndex(1);
       const graveData = await readGravestone(base64, locationHint);
+      logEvent(EVENTS.OCR_DONE, {
+        confidence: graveData.name_confidence,
+        subjects: Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name).length : 0,
+      });
 
       // Warn about separate physical stones only when subjects didn't capture all people.
       // When subjects has multiple entries the pipeline already handles each person — no warning.
@@ -352,6 +377,7 @@ export default function CameraScreen({ navigation, route }) {
               cachedBio = row;
               setStepIndex(3); // jump to near-done visually
               console.warn('🏛️ Biography cache hit for', primaryOcrName);
+              logEvent(EVENTS.BIO_CACHE_HIT, {});
             }
           }
         } catch (e) {
@@ -402,7 +428,12 @@ export default function CameraScreen({ navigation, route }) {
         // Fetch portraits for every person on the stone (wikiNames), not just the
         // primary name — on multi-person stones the primary subject (e.g. Cynthia Levy)
         // may have no Wikipedia article while a second person (Amy Winehouse) does.
-        const allParallel = await Promise.all([
+        //
+        // Each leg is paired with a fallback value of its natural "empty" shape so
+        // that if the whole fan-out times out (raceResearchTimeout below), the
+        // index de-structuring still lines up and the pipeline degrades to a
+        // stone-only / free-source bio instead of hanging.
+        const legs = [
           searchForPerson(graveData, locationHint, cemeteryName),
           ...wikiTreeTargets.map(name => searchWikiTree({ ...graveData, primary_name: name }, locationHint)),
           // Wikidata: high confidence always; medium confidence only when a death
@@ -427,7 +458,25 @@ export default function CameraScreen({ navigation, route }) {
             : Promise.resolve([]),
           ...researchTargets.map(t => fetchWikipediaPortraits(t.name, t.dates)),
           ...researchTargets.map(t => fetchWikipediaArticleSummary(t.name, t.dates)),
-        ]);
+        ];
+        // Per-leg empty shapes, in the same order: searchForPerson []→, wikiTree null×N,
+        // wikidata null, chron [], archive [], portraits []×N, summaries null×N.
+        const legFallbacks = [
+          [],
+          ...wikiTreeTargets.map(() => null),
+          null,
+          [],
+          [],
+          ...researchTargets.map(() => []),
+          ...researchTargets.map(() => null),
+        ];
+
+        const raced = await raceResearchTimeout(Promise.all(legs), RESEARCH_TIMEOUT_MS);
+        const allParallel = raced === RESEARCH_TIMEOUT ? legFallbacks : raced;
+        if (raced === RESEARCH_TIMEOUT) {
+          console.warn('Research fan-out timed out — degrading to stone + free sources');
+          logEvent(EVENTS.PIPELINE_ERROR, { stage: 'research', reason: 'timeout' });
+        }
 
         let idx = 0;
         const searchResults      = allParallel[idx++];
@@ -535,10 +584,17 @@ export default function CameraScreen({ navigation, route }) {
         deletePendingPhoto(pending.photoUri);
       }
 
+      logEvent(EVENTS.BIO_SHOWN, {
+        cached: !!cachedBio,
+        hasGps: !!refinedGps,
+        sources: Array.isArray(bioResult.sources) ? bioResult.sources.length : 0,
+      });
+
       setLoading(false);
       navigation.navigate('Result', { story });
     } catch (err) {
       setLoading(false);
+      logEvent(EVENTS.PIPELINE_ERROR, { stage: 'pipeline', message: err?.message });
       console.warn('Pipeline error:', String(err), 'message:', err?.message, 'stack:', err?.stack);
       // For fresh scans, offer to queue the photo for later — the common cause
       // here is the signal dropping mid-pipeline. Resumed pending scans are
@@ -751,25 +807,6 @@ function CandleFlicker() {
       🕯️
     </Animated.Text>
   );
-}
-
-// Maps a media-gps.js reason code to a tester-facing explanation. Temporary
-// diagnostic for the EXIF-GPS-not-mapping investigation — see getLibraryAssetGps.
-function diagnosticForReason(reason) {
-  switch (reason) {
-    case 'permission':
-      return "This photo's location couldn't be read because the photo-location permission was denied. The grave won't be auto-pinned — grant the permission and re-pick to map it.";
-    case 'no-location':
-      return "This photo has no saved location. Cloud-only Google Photos picks and screenshots often lose their GPS data — pick a photo taken on this device, or correct the pin on the map.";
-    case 'no-asset-id':
-      return "This photo came through a picker that hides its location data (e.g. a cloud share). Try picking from the device's own gallery, or correct the pin on the map.";
-    case 'module-missing':
-      return 'Location recovery is unavailable in this build. Update to the latest version to auto-pin library photos.';
-    case 'error':
-      return "Reading this photo's location failed. You can still correct the pin on the map.";
-    default:
-      return "This photo has no GPS location, so the grave wasn't auto-pinned. You can correct the pin on the map.";
-  }
 }
 
 function extractExifGps(exif) {

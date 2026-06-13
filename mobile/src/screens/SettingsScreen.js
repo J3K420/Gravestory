@@ -8,7 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { checkSaveLimit } from '../lib/save-limit';
-import { checkScanLimit } from '../lib/scan-limit';
+import { checkScanLimit, SCAN_LIMIT_FREE_USER } from '../lib/scan-limit';
 
 export default function SettingsScreen({ navigation }) {
   const [user, setUser]                 = useState(null);
@@ -17,7 +17,7 @@ export default function SettingsScreen({ navigation }) {
   const [saving, setSaving]             = useState(false);
   const [saveCount, setSaveCount]       = useState(null);
   const [scanCount, setScanCount]       = useState(null);
-  const [scanLimit, setScanLimit]       = useState(10);
+  const [scanLimit, setScanLimit]       = useState(SCAN_LIMIT_FREE_USER);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

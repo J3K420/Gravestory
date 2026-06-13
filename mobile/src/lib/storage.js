@@ -19,6 +19,24 @@ export async function saveStories(stories, userId = null) {
   }
 }
 
+// Device-global first-run flag (not user-scoped) — gates the one-time Home tip
+// card + auto-shown sample story. Returns true once the user has seen onboarding.
+const FIRST_RUN_KEY = 'gs_onboarded';
+
+export async function hasOnboarded() {
+  try {
+    return (await AsyncStorage.getItem(FIRST_RUN_KEY)) === 'true';
+  } catch {
+    return true; // fail "seen" so we never nag on a storage error
+  }
+}
+
+export async function setOnboarded() {
+  try {
+    await AsyncStorage.setItem(FIRST_RUN_KEY, 'true');
+  } catch {}
+}
+
 export async function getLastSync(userId) {
   try {
     return await AsyncStorage.getItem(`gs_last_sync_${userId}`);

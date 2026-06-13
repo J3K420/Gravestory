@@ -51,6 +51,7 @@
 
 <!-- ── App scripts (Stage 2: leaf modules) ── -->
 <script src="js/config.js"></script>
+<script src="js/analytics.js"></script>
 <script src="js/util-json.js"></script>
 <script src="js/grave-cache.js"></script>
 <script src="js/util-image.js"></script>
@@ -72,6 +73,7 @@
 <script src="js/api-tributes.js"></script>
 <script src="js/grave-markers.js"></script>
 <script src="js/render-result.js"></script>
+<script src="js/sample-story.js"></script>
 <script src="js/error-render.js"></script>
 <script src="js/photo-modal.js"></script>
 <script src="js/pwa.js"></script>
@@ -101,12 +103,31 @@
 
   <div class="divider"></div>
 
+  <!-- First-run tip card — shown once (gated by gs_onboarded). Sets the
+       photo-quality expectation and surfaces the example story. -->
+  <div id="home-tip-card" class="home-tip-card" style="display:none;">
+    <div class="home-tip-title">Welcome — here's how it works</div>
+    <p class="home-tip-body">
+      Photograph a gravestone with the inscription filling the frame, and GraveStory
+      uncovers the life behind it. Taking the photo at the cemetery pins the grave on
+      your map.
+    </p>
+    <div class="home-tip-btn-row">
+      <button class="home-tip-primary" onclick="openSampleStory()">See an Example</button>
+      <button class="home-tip-dismiss" onclick="dismissHomeTip()">Got it</button>
+    </div>
+  </div>
+
   <button class="scan-btn" onclick="showScreen('camera')">
     ✦ Scan a Gravestone ✦
   </button>
 
   <p class="home-desc">
     Photograph a gravestone. We'll uncover the story of the life it marks.
+  </p>
+
+  <p style="text-align:center;margin-top:0.5rem;">
+    <a href="#" onclick="openSampleStory();return false;" style="font-family:'Crimson Pro',serif;font-style:italic;font-size:0.9rem;color:#c9a84c;text-decoration:none;opacity:0.85;">See an example story ›</a>
   </p>
 
   <p style="text-align:center;font-family:'Crimson Pro',serif;font-style:italic;font-size:0.9rem;color:rgba(201,168,76,0.45);margin-top:0.75rem;padding:0 1.5rem;">
@@ -940,9 +961,12 @@ async function findOrCreateGrave(name, lat, lng, isPublic) {
 async function startAnalysis() {
   if (!currentImageBase64) return;
 
+  logEvent(ANALYTICS_EVENTS.SCAN_STARTED, { hasGps: !!currentExifLocation });
+
   // Freemium scan limit check (guest: 3 lifetime; signed-in free: 10 lifetime)
   const scanCheck = await checkWebScanLimit();
   if (scanCheck.atLimit) {
+    logEvent(ANALYTICS_EVENTS.SCAN_LIMIT_HIT, { count: scanCheck.count, limit: scanCheck.limit, isGuest: scanCheck.isGuest });
     const msg = scanCheck._checkFailed
       ? 'Could not verify your scan limit right now. Please check your connection and try again.'
       : scanCheck.isGuest
@@ -955,6 +979,7 @@ async function startAnalysis() {
   // Consume the one-shot bypass flag set by "Use it anyway".
   const skipVerification = _bypassVerification;
   _bypassVerification = false;
+  if (skipVerification) logEvent(ANALYTICS_EVENTS.VERIFICATION_BYPASSED, {});
 
   showScreen('loading');
   const stepInterval = cycleSteps();
@@ -988,6 +1013,10 @@ async function startAnalysis() {
     // 2. Read gravestone with Gemini Vision
     setStep(2);
     const graveData = await readGravestone(currentImageBase64, locationStr);
+    logEvent(ANALYTICS_EVENTS.OCR_DONE, {
+      confidence: graveData.name_confidence,
+      subjects: Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name).length : 0,
+    });
     // Count this scan now that OCR succeeded (verification already passed)
     await incrementWebScanCount();
 
@@ -1044,6 +1073,7 @@ async function startAnalysis() {
             const el = document.getElementById('loading-step');
             if (el) el.textContent = 'Found a previous biography for this grave…';
             console.log('🏛️ Biography cache hit for', primaryOcrName);
+            logEvent(ANALYTICS_EVENTS.BIO_CACHE_HIT, {});
           }
         }
       } catch (e) {
@@ -1248,6 +1278,10 @@ async function startAnalysis() {
     };
     renderResult(currentStory);
     showScreen('result');
+    logEvent(ANALYTICS_EVENTS.BIO_SHOWN, {
+      hasGps: !!currentStory.gps,
+      sources: Array.isArray(currentStory.sources) ? currentStory.sources.length : 0,
+    });
 
   } catch (err) {
     clearInterval(stepInterval);
@@ -1256,9 +1290,12 @@ async function startAnalysis() {
     // Verification rejection — render the dedicated "this isn't a gravestone"
     // screen with "Use it anyway" escape hatch, not the generic error box.
     if (err && err.__verificationRejection) {
+      logEvent(ANALYTICS_EVENTS.VERIFICATION_REJECTED, { reason: err.reason });
       showVerificationRejection(err.reason);
       return;
     }
+
+    logEvent(ANALYTICS_EVENTS.PIPELINE_ERROR, { stage: 'pipeline', message: err && err.message });
 
     const errBox = document.getElementById('error-box');
     const message = 'Something went wrong: ' + (err.message || 'Please try again.');
@@ -1308,10 +1345,31 @@ window.showScreen = function(id) {
   _origShow(id);
 };
 
+// ── FIRST-RUN TIP CARD ───────────────────────────────────────────
+// Shown once (device-global localStorage flag) to a user with no saved
+// stories yet — sets photo-quality expectations and surfaces the example.
+function maybeShowHomeTip() {
+  try {
+    const seen = localStorage.getItem('gs_onboarded') === 'true';
+    const hasStories = Array.isArray(savedStories) && savedStories.length > 0;
+    if (!seen && !hasStories) {
+      const card = document.getElementById('home-tip-card');
+      if (card) card.style.display = 'block';
+    }
+  } catch (e) { /* non-fatal */ }
+}
+
+function dismissHomeTip() {
+  const card = document.getElementById('home-tip-card');
+  if (card) card.style.display = 'none';
+  try { localStorage.setItem('gs_onboarded', 'true'); } catch (e) {}
+}
+
 // ── INIT ─────────────────────────────────────────────────────────
 renderSavedList();
 updateHomeMapButton();
 checkIOSInstallHint();
+maybeShowHomeTip();
 
 </script>
 </body>

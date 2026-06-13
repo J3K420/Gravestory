@@ -50,6 +50,14 @@ function renderResult(story) {
   const body = document.getElementById('result-body');
   body.innerHTML = '';
 
+  // Example banner — first thing in the body for the read-only sample story.
+  if (story._isSample) {
+    const banner = document.createElement('div');
+    banner.className = 'sample-banner';
+    banner.textContent = '✦ Example story — this is what GraveStory creates from a single photo';
+    body.appendChild(banner);
+  }
+
   // Location tag — show ? indicator when location is approximate/uncertain
   if (story.location) {
     const isUncertain = !story.gps && (
@@ -157,25 +165,32 @@ function renderResult(story) {
     }
   }
 
+  // The canned first-run example is read-only: no save / sharing / tributes /
+  // marker, and a banner makes clear it's a demo, not a real scan.
+  const isSample = !!story._isSample;
+
   // Set save button based on whether this story is already saved
   const saveBtn = document.getElementById('save-btn');
   const alreadySaved = story.timestamp && savedStories.some(s => s.timestamp === story.timestamp);
-  if (alreadySaved) {
-    saveBtn.textContent = '✓ Saved';
-    saveBtn.className = 'action-btn action-save saved';
+  if (isSample) {
+    saveBtn.style.display = 'none';
   } else {
-    saveBtn.textContent = '💾 Save';
-    saveBtn.className = 'action-btn action-save';
+    saveBtn.style.display = '';
+    if (alreadySaved) {
+      saveBtn.textContent = '✓ Saved';
+      saveBtn.className = 'action-btn action-save saved';
+    } else {
+      saveBtn.textContent = '💾 Save';
+      saveBtn.className = 'action-btn action-save';
+    }
   }
 
-  // Public/private toggle — only for signed-in users viewing their own saved story
-  renderVisibilityControls(story, alreadySaved);
-
-  // Tribute counts + candle/flower buttons
-  renderTributeSection(story);
-
-  // Map-pin marker style picker
-  renderMarkerSection(story, alreadySaved);
+  // Public/private toggle, tributes, marker picker — all suppressed for the sample.
+  if (!isSample) {
+    renderVisibilityControls(story, alreadySaved);
+    renderTributeSection(story);
+    renderMarkerSection(story, alreadySaved);
+  }
 }
 
 // Marker-style picker — lets the user choose what this grave's pin looks like on
@@ -321,6 +336,7 @@ function renderVisibilityControls(story, alreadySaved) {
     if (currentStory && currentStory.timestamp === savedRow.timestamp) {
       currentStory.is_public = savedRow.is_public;
     }
+    if (savedRow.is_public) logEvent(ANALYTICS_EVENTS.MADE_PUBLIC, {});
     await persistUpdate(savedRow);
     renderVisibilityControls(currentStory || savedRow, true);
   };

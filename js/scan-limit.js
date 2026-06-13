@@ -6,6 +6,10 @@ const WEB_SCAN_LIMIT_GUEST  = 3;
 const WEB_SCAN_LIMIT_USER   = 10;
 const WEB_GUEST_SCAN_KEY    = 'gs_web_scan_count';
 
+// Expose on window so other classic scripts (e.g. user-prefs.js) can read the
+// free-scan limit from this single source of truth regardless of load order.
+window.WEB_SCAN_LIMIT_USER = WEB_SCAN_LIMIT_USER;
+
 async function checkWebScanLimit() {
   const isGuest = !currentUser;
 

@@ -84,6 +84,7 @@ async function saveStory() {
   savedStories.unshift(currentStory);
   if (savedStories.length > 500) savedStories = savedStories.slice(0, 500);
   updateHomeMapButton();
+  logEvent(ANALYTICS_EVENTS.STORY_SAVED, { signedIn: !!currentUser, hasGrave: !!currentStory.grave_id });
 
   btn.textContent = '✓ Saved';
   btn.className = 'action-btn action-save saved';

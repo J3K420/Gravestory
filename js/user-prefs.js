@@ -104,7 +104,9 @@ async function _loadSettingsStats() {
     if (credits) purchased = credits.purchased ?? 0;
 
     const used = usedCount ?? 0;
-    const limit = 10 + purchased;
+    // Single source of truth: WEB_SCAN_LIMIT_USER (js/scan-limit.js, exposed on
+    // window). Fallback to 10 only if that script hasn't loaded.
+    const limit = (window.WEB_SCAN_LIMIT_USER ?? 10) + purchased;
     const pct = Math.min((used / limit) * 100, 100);
     document.getElementById('settings-scan-count').textContent = used + ' of ' + limit;
     document.getElementById('settings-scan-bar').style.width = pct + '%';

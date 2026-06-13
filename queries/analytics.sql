@@ -20,8 +20,17 @@ select policyname, cmd
 from pg_policies
 where tablename = 'analytics_events';
 
+-- CRITICAL: does the anon role have table-level INSERT? Without it, GUEST events
+-- are silently rejected (the RLS policy permits NULL user_id, but the anon role
+-- needs the table grant first). Expect BOTH 'anon | INSERT' and
+-- 'authenticated | INSERT'. If 'anon' is missing, run migration 009.
+select grantee, privilege_type
+from information_schema.role_table_grants
+where table_name = 'analytics_events'
+  and grantee in ('anon', 'authenticated');
+
 -- ─────────────────────────────────────────────────────────────────────
--- SANITY: ARE EVENTS LANDING?
+-- SANITY: ARE EVENTS LANDING (both signed-in AND guest)?
 -- ─────────────────────────────────────────────────────────────────────
 
 -- Most recent events (after a scan or tapping "See an example")
@@ -29,6 +38,16 @@ select event, platform, created_at, props
 from analytics_events
 order by created_at desc
 limit 20;
+
+-- Both auth paths producing events? Do one signed-in action and one signed-out
+-- (guest) action, then expect TWO rows here, both with count > 0. If 'guest' is
+-- missing or zero, the anon INSERT grant (migration 009) is the likely cause.
+select
+  case when user_id is not null then 'signed_in' else 'guest' end as auth_path,
+  count(*) as event_count
+from analytics_events
+group by user_id is not null
+order by user_id is not null;
 
 -- Event volume by type, last 7 days
 select event, count(*) as n

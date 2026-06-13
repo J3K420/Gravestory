@@ -277,32 +277,39 @@ function closeSymbolSheet() {
   if (existing) existing.remove();
 }
 
-// Marker-style picker — lets the user choose what this grave's pin looks like on
-// their personal cemetery map. Mirrors the mobile ResultScreen "Marker" chip.
-// Shown only for the signed-in user's own SAVED, non-global story that has a
-// location (i.e. a pin actually exists for it). Global bios and unsaved stories
-// have no editable pin, so the section is hidden.
+// Marker-style picker — lets the user choose this grave's pin: their personal
+// cemetery-map pin AND, for the first public scanner, the grave's permanent
+// global-map marker (first-wins). Mirrors the mobile ResultScreen "Marker" chip.
+// Shown for the signed-in user's own non-global story with a location — saved OR
+// unsaved (the grave is created during the pipeline, so a pre-save pick can stake
+// it immediately). Global bios are hidden (no editable pin).
 function renderMarkerSection(story, alreadySaved) {
   const existing = document.getElementById('marker-section');
   if (existing) existing.remove();
 
-  if (!currentUser || !alreadySaved || story._isGlobal) return;
+  if (!currentUser || story._isGlobal) return;
   if (!story.gps && !story.location) return;
 
-  // Operate on the canonical saved row so the change persists (it has the id).
-  const savedRow = savedStories.find(s => s.timestamp === story.timestamp);
-  if (!savedRow) return;
+  // Operate on the saved row when one exists (it has the id for cloud update);
+  // otherwise operate on the in-memory story so a pre-save pick carries into
+  // saveStory() AND stakes the already-created grave's global pin immediately.
+  const target = savedStories.find(s => s.timestamp === story.timestamp) || story;
 
   const body = document.getElementById('result-body');
   if (!body) return;
 
-  const currentStyle = savedRow.marker_style || DEFAULT_MARKER;
+  const currentStyle = target.marker_style || DEFAULT_MARKER;
+  // Before save the marker's headline meaning is the community global map
+  // (first-wins); after save it's also the user's own Cemetery-map pin.
+  const hint = alreadySaved
+    ? 'Map pin style'
+    : 'Your map pin — first to share wins it on the community map';
   const wrap = document.createElement('div');
   wrap.id = 'marker-section';
   wrap.className = 'result-section';
   wrap.style.cssText = 'border-top:1px solid rgba(201,168,76,0.2);padding-top:1rem;margin-top:1rem;';
   wrap.innerHTML = `
-    <div style="font-family:'Crimson Pro',serif;color:var(--stone);font-size:0.8rem;font-style:italic;margin-bottom:0.5rem;letter-spacing:0.05em;text-transform:uppercase;">Map pin style</div>
+    <div style="font-family:'Crimson Pro',serif;color:var(--stone);font-size:0.8rem;font-style:italic;margin-bottom:0.5rem;letter-spacing:0.05em;text-transform:uppercase;">${escapeHtml(hint)}</div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
       <div style="display:flex;align-items:center;gap:0.75rem;">
         <div style="width:40px;height:40px;line-height:0;">${graveMarkerSvg(currentStyle, 40)}</div>
@@ -315,11 +322,12 @@ function renderMarkerSection(story, alreadySaved) {
   `;
   body.appendChild(wrap);
 
-  document.getElementById('marker-pick-btn').onclick = () => openMarkerPicker(savedRow);
+  document.getElementById('marker-pick-btn').onclick = () => openMarkerPicker(target);
 }
 
 // Slide-up modal grid of all 20 marker styles. Picking one persists immediately
-// (local + cloud) and re-renders the result screen so the new pin shows.
+// (local + cloud when saved) and stakes the grave's global-map pin, then
+// re-renders the result screen so the new pin shows.
 function openMarkerPicker(savedRow) {
   const existing = document.getElementById('marker-picker-overlay');
   if (existing) existing.remove();
@@ -366,7 +374,24 @@ function openMarkerPicker(savedRow) {
         currentStory.marker_style = styleId;
       }
       close();
-      await persistUpdate(savedRow);
+      // Self-heal a missing grave link: if findOrCreateGrave failed during the
+      // pipeline (non-fatal) the story has no grave_id, so a pick would never
+      // stake. Create-and-stake in one shot and backfill grave_id.
+      if (!savedRow.grave_id && currentUser && savedRow.gps && savedRow.name) {
+        const gid = await findOrCreateGrave(savedRow.name, savedRow.gps.lat, savedRow.gps.lng, !!savedRow.is_public, styleId);
+        if (gid) {
+          savedRow.grave_id = gid;
+          if (currentStory && currentStory.timestamp === savedRow.timestamp) currentStory.grave_id = gid;
+        }
+      }
+      // Persist to the story row only when it's already saved (persistUpdate
+      // no-ops without an id). A pre-save pick just lives on the in-memory
+      // story and is written when the user taps Save.
+      if (savedRow.id) await persistUpdate(savedRow);
+      // Stake this grave's permanent global-map pin (first-wins, NULL-guarded
+      // server-side). The grave already exists from the pipeline, so this
+      // works even before the story row is saved. No-ops without a grave_id.
+      if (savedRow.grave_id) setGraveMarker(savedRow.grave_id, styleId);
       // Re-render so the marker section reflects the new choice
       renderResult(currentStory || savedRow);
     };

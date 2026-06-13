@@ -53,6 +53,11 @@ WHERE n.nspname = 'public'
 -- >>> BEGIN RECOVERED global_public_stories DEFINITION >>>
 -- Recovered live from Supabase 2026-06-13 (Session 41) via pg_get_functiondef.
 -- This is now the source-of-truth copy under version control.
+--
+-- ⚠️ SUPERSEDED: migration 011_grave_marker_style.sql now CREATE OR REPLACEs
+-- this function to LEFT JOIN graves and return grave_id + marker_style (for the
+-- first-person grave-marker feature). The body below is the PRE-marker original,
+-- kept for provenance. Once 011 is run, 011 is the live definition.
 
 CREATE OR REPLACE FUNCTION public.global_public_stories(p_limit integer DEFAULT 500)
  RETURNS TABLE(id uuid, name text, dates text, biography text, location text, inscription text, symbols text, family_name text, notes text, sources jsonb, source_urls jsonb, latitude double precision, longitude double precision, user_corrected boolean, low_confidence boolean, client_timestamp bigint, image_url text, portrait_left_url text, portrait_right_url text, created_at timestamp with time zone, updated_at timestamp with time zone, contributor_name text)

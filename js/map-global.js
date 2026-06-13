@@ -106,6 +106,7 @@ async function fetchGlobalStories() {
       portrait_left_url: row.portrait_left_url || null,
       portrait_right_url: row.portrait_right_url || null,
       grave_id: row.grave_id || null,
+      marker_style: row.marker_style || null,
       source: row.source || 'library',
       _contributor: row.contributor_name || 'Anonymous',
       _isGlobal: true
@@ -186,9 +187,12 @@ async function initGlobalMap() {
     return;
   }
 
-  // Silver pin icon — visually distinct from the gold personal pins
-  const makeGlobalIcon = (lowConfidence) => L.divIcon({
-    html: `<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));line-height:0;position:relative;${lowConfidence ? 'opacity:0.75;' : ''}"><svg viewBox="0 0 100 100" fill="none" stroke-width="2" xmlns="http://www.w3.org/2000/svg" style="width:32px;height:32px;display:block;"><rect x="22" y="84" width="56" height="6" stroke="#aabedc" fill="rgba(30,40,55,0.85)"/><path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="#aabedc" fill="rgba(30,40,55,0.85)"/><path d="M38 40 L38 56 Q44 54 49 56 L49 42 Q44 40 38 40 Z" stroke="#cfddf2" stroke-width="2" fill="rgba(207,221,242,0.25)"/><path d="M51 42 Q56 40 62 40 L62 56 Q56 54 51 56 Z" stroke="#cfddf2" stroke-width="2" fill="rgba(207,221,242,0.25)"/><line x1="50" y1="41" x2="50" y2="56" stroke="#cfddf2" stroke-width="1.5"/><line x1="50" y1="63" x2="50" y2="76" stroke="#cfddf2" stroke-width="1.5"/><line x1="44" y1="68" x2="56" y2="68" stroke="#cfddf2" stroke-width="1.5"/></svg>${lowConfidence ? '<div style="position:absolute;top:-4px;right:-6px;width:14px;height:14px;border-radius:50%;background:rgba(30,40,55,0.95);border:1px solid #aabedc;color:#cfddf2;font-family:serif;font-size:10px;font-weight:bold;line-height:12px;text-align:center;">?</div>' : ''}</div>`,
+  // Global pins render the grave's first-wins chosen marker (the same 20 gold
+  // glyphs as the cemetery map). An unstaked grave (marker_style null) falls
+  // back to the default 'book' glyph via graveMarkerSvg(). Low-confidence pins
+  // keep the faded look + "?" badge.
+  const makeGlobalIcon = (lowConfidence, styleId) => L.divIcon({
+    html: `<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));line-height:0;position:relative;width:32px;height:32px;${lowConfidence ? 'opacity:0.75;' : ''}">${graveMarkerSvg(styleId, 32)}${lowConfidence ? '<div style="position:absolute;top:-4px;right:-6px;width:14px;height:14px;border-radius:50%;background:rgba(30,40,55,0.95);border:1px solid #aabedc;color:#cfddf2;font-family:serif;font-size:10px;font-weight:bold;line-height:12px;text-align:center;">?</div>' : ''}</div>`,
     className: '',
     iconSize: [24, 24],
     iconAnchor: [12, 24],
@@ -196,7 +200,7 @@ async function initGlobalMap() {
   });
 
   withGps.forEach(story => {
-    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGlobalIcon(story._lowConfidence), draggable: false, story: story })
+    const marker = L.marker([story.gps.lat, story.gps.lng], { icon: makeGlobalIcon(story._lowConfidence, story.marker_style), draggable: false, story: story })
       .addTo(globalLeafletMap)
       .bindPopup(buildGlobalPopup(story), { maxWidth: 320 });
     globalMapMarkers.push(marker);

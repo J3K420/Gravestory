@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Linking, Share, Image, Alert, FlatList, Dimensions, Modal, Pressable,
@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
-import { cloudSaveStory, cloudUpdateStory, cloudDeleteStory, findOrCreateGrave } from '../lib/sync';
+import { cloudSaveStory, cloudUpdateStory, cloudDeleteStory, findOrCreateGrave, setGraveMarker } from '../lib/sync';
 import { uploadGravestoneImage } from '../lib/api-r2';
 import { getTributes, setTribute } from '../lib/api-tributes';
 import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
@@ -34,6 +34,10 @@ export default function ResultScreen({ navigation, route }) {
   const [symbolModal, setSymbolModal]   = useState(null); // { name, text }
   const [markerModal, setMarkerModal]   = useState(false);
   const [savingMarker, setSavingMarker] = useState(false);
+  // Mirrors the chosen marker synchronously so handleSave reads the latest pick
+  // even if the user taps Save before the setStory re-render lands (a pre-save
+  // pick must reach findOrCreateGrave to stake the grave). Refs update instantly.
+  const markerStyleRef = useRef(undefined);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -227,17 +231,25 @@ export default function ResultScreen({ navigation, route }) {
       const uid = sessionUser?.id ?? null;
       const base64 = story._base64;
       const primaryName = story._primaryName || story.name || '';
+      // Freshest chosen marker: the ref beats the story closure when the user
+      // picked then tapped Save before the re-render landed. Undefined ref means
+      // no pre-save pick → keep whatever the story already had.
+      const markerStyle = markerStyleRef.current ?? story.marker_style ?? null;
 
       // Resolve the canonical grave at save time. On a find_grave cache hit the
       // grave_id is already set; otherwise dedup via find_or_create (~20m name match).
       let graveId = story.grave_id || null;
       if (!graveId && sessionUser && story.gps && primaryName) {
-        graveId = await findOrCreateGrave(primaryName, story.gps.lat, story.gps.lng, story.is_public);
+        // Stake the grave's permanent global-map pin with the user's chosen
+        // marker on creation (first-wins; the user can pick before saving).
+        graveId = await findOrCreateGrave(
+          primaryName, story.gps.lat, story.gps.lng, story.is_public, markerStyle,
+        );
       }
 
       // Strip transient pipeline-only fields before persisting.
       const { _unsaved, _base64, _primaryName, ...clean } = story;
-      let saved = { ...clean, grave_id: graveId };
+      let saved = { ...clean, grave_id: graveId, marker_style: markerStyle };
 
       // Local save first so the story is always available offline.
       const existing = await loadStories(uid);
@@ -329,14 +341,32 @@ export default function ResultScreen({ navigation, route }) {
     if (savingMarker) return;
     setMarkerModal(false);
     if ((story.marker_style || 'book') === styleId) return;
+    // Record the pick synchronously so a pre-save Save tap sees it (see ref note).
+    markerStyleRef.current = styleId;
     setSavingMarker(true);
     const updated = { ...story, marker_style: styleId };
+    // Self-heal a missing grave link: if find_or_create_grave failed at save
+    // time (non-fatal) the saved story has no grave_id, so an explicit pick
+    // would silently never stake. Create-and-stake in one shot here and
+    // backfill grave_id so the pin (and tributes/photos) recover.
+    if (!updated._unsaved && !updated.grave_id && user && updated.gps) {
+      const primaryName = updated._primaryName || updated.name || '';
+      if (primaryName) {
+        const gid = await findOrCreateGrave(
+          primaryName, updated.gps.lat, updated.gps.lng, updated.is_public, styleId,
+        );
+        if (gid) updated.grave_id = gid;
+      }
+    }
     const uid = user?.id ?? null;
     const all = await loadStories(uid);
     const idx = all.findIndex(s => s.timestamp === story.timestamp);
     if (idx >= 0) { all[idx] = updated; await saveStories(all, uid); }
     setStory(updated);
     if (updated.id && user) setStory(await cloudUpdateStory(updated, user));
+    // Stake this grave's permanent global-map pin (first-wins, NULL-guarded
+    // server-side). No-ops if already staked or the story has no grave_id.
+    if (updated.grave_id && user) setGraveMarker(updated.grave_id, styleId);
     setSavingMarker(false);
   }
 
@@ -356,9 +386,13 @@ export default function ResultScreen({ navigation, route }) {
   // affordances. Suppresses save/delete/public/marker/tributes entirely.
   const isSample = !!story._isSample;
   const showPublicToggle = user && !story._isGlobal && !isUnsaved && !isSample;
-  // Marker style applies to the user's own My-Cemetery pin — only meaningful for
-  // a saved, own (non-global) story that has a location to map.
-  const showMarkerChip = !story._isGlobal && !isUnsaved && !isSample && (story.gps || story.location);
+  // Marker style: the pin on the user's My-Cemetery map AND, for the first
+  // public scanner of a grave, that grave's permanent global-map marker. Shown
+  // BEFORE save too (with GPS) so the choice can stake the grave on creation
+  // (find_or_create_grave INSERT branch). While unsaved the pick is local-only;
+  // handleSave persists it. Needs a location to be meaningful.
+  const showMarkerChip = !story._isGlobal && !isSample
+    && (isUnsaved ? !!story.gps : (story.gps || story.location));
   const currentMarker = getMarker(story.marker_style);
   const isPublic = story.is_public;
   const hasTappableSymbol = symbols.some(s => symbolMeaning(s) !== null);
@@ -631,7 +665,9 @@ export default function ResultScreen({ navigation, route }) {
             <View style={styles.symbolSheetHandle} />
             <Text style={styles.symbolSheetName}>Choose a marker</Text>
             <Text style={styles.markerSheetHint}>
-              How this grave appears on your Cemetery map.
+              {isUnsaved
+                ? 'Your pin for this grave. If you’re the first to share it, this marker stays on the community map for good.'
+                : 'How this grave appears on your Cemetery map.'}
             </Text>
             <ScrollView
               style={styles.markerGridScroll}

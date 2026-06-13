@@ -9,9 +9,37 @@ import { rowToStory } from '../lib/sync';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { Globe } from '../components/Icons';
+import { GraveMarkerSvg } from '../components/GraveMarkers';
 
 const DEFAULT_REGION = { latitude: 30, longitude: -20, latitudeDelta: 110, longitudeDelta: 130 };
 const CACHE_TTL_MS = 5 * 60 * 1000;
+
+// Renders a grave's first-wins chosen marker on the global map (the same 20
+// gold glyphs as the cemetery map). Not draggable. tracksViewChanges starts
+// true so the SVG is captured, then flips false after first layout — an
+// unconditional false would snapshot before the SVG paints and the marker
+// would vanish (react-native-maps gotcha). The key (in the map below) includes
+// marker_style so a re-staked grave re-snapshots.
+function GlobalGraveMarker({ story, onPress }) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  return (
+    <Marker
+      coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}
+      tracksViewChanges={tracksViewChanges}
+      onPress={onPress}
+    >
+      <View
+        onLayout={() => setTracksViewChanges(false)}
+        style={[styles.markerShadow, story._lowConfidence && styles.markerLowConf]}
+      >
+        <GraveMarkerSvg styleId={story.marker_style} size={32} />
+        {story._lowConfidence && (
+          <View style={styles.markerBadge}><Text style={styles.markerBadgeText}>?</Text></View>
+        )}
+      </View>
+    </Marker>
+  );
+}
 
 let _cache = null;
 let _cacheTime = 0;
@@ -154,17 +182,11 @@ export default function GlobalMapScreen({ navigation }) {
           onPress={() => { setSelectedStory(null); setBioExpanded(false); }}
         >
           {stories.filter(s => s.gps).map((story, i) => (
-            <Marker
-              key={story.id ?? i}
-              coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}
+            <GlobalGraveMarker
+              key={`${story.id ?? i}-${story.marker_style || 'book'}`}
+              story={story}
               onPress={() => { setSelectedStory(story); setBioExpanded(false); }}
-            >
-              <View style={styles.markerOuter}>
-                <View style={[styles.markerInner, story._lowConfidence && styles.markerLowConf]}>
-                  <Text style={styles.markerCross}>✝</Text>
-                </View>
-              </View>
-            </Marker>
+            />
           ))}
         </MapView>
 
@@ -297,14 +319,17 @@ const styles = StyleSheet.create({
   },
   loadingText: { color: colors.parchment, fontSize: 12, fontFamily: fonts.body, letterSpacing: 0.5 },
 
-  markerOuter: { alignItems: 'center' },
-  markerInner: {
-    backgroundColor: 'rgba(30,40,55,0.92)',
-    borderWidth: 1.5, borderColor: colors.silver,
-    borderRadius: 4, paddingHorizontal: 7, paddingVertical: 4,
+  markerShadow: {
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.6, shadowRadius: 2, elevation: 4,
   },
-  markerLowConf: { borderColor: '#7a8a9a', opacity: 0.75 },
-  markerCross: { color: colors.silver, fontSize: 15 },
+  markerLowConf: { opacity: 0.75 },
+  markerBadge: {
+    position: 'absolute', top: -3, right: -3, width: 14, height: 14, borderRadius: 7,
+    backgroundColor: 'rgba(60,40,20,0.95)', borderWidth: 1, borderColor: '#c9a84c',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  markerBadgeText: { color: '#e8d4a0', fontSize: 9, fontWeight: 'bold', lineHeight: 12 },
 
   floatingCallout: {
     position: 'absolute', top: 12, left: 12, right: 12,

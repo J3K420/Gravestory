@@ -248,7 +248,10 @@ export async function syncDelta(user) {
 
 // Atomically finds or creates a canonical grave record.
 // Returns the grave UUID, or null on failure (non-fatal).
-export async function findOrCreateGrave(name, lat, lng, isPublic = false) {
+// markerStyle (optional) stakes the grave's global-map pin on the INSERT
+// branch only (first-wins forever). Mobile picks the marker on the result
+// screen before saving, so it passes story.marker_style here at create time.
+export async function findOrCreateGrave(name, lat, lng, isPublic = false, markerStyle = null) {
   if (!name || lat == null || lng == null) return null;
   try {
     const { data, error } = await supabase.rpc('find_or_create_grave', {
@@ -256,12 +259,31 @@ export async function findOrCreateGrave(name, lat, lng, isPublic = false) {
       p_lat: lat,
       p_lng: lng,
       p_is_public: isPublic,
+      p_marker_style: markerStyle || null,
     });
     if (error) throw error;
     return data;
   } catch (e) {
     console.warn('findOrCreateGrave failed:', e.message);
     return null;
+  }
+}
+
+// Stakes a grave's permanent global-map marker, first-wins. The RPC only
+// writes when graves.marker_style is still NULL, so the first user to pick
+// wins forever; later pickers and location corrections no-op. Non-fatal.
+// Used when the marker is changed AFTER the grave already exists (the user
+// re-picks on a saved story).
+export async function setGraveMarker(graveId, styleId) {
+  if (!graveId || !styleId) return;
+  try {
+    const { error } = await supabase.rpc('set_grave_marker', {
+      p_grave_id: graveId,
+      p_marker_style: styleId,
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.warn('setGraveMarker failed:', e.message);
   }
 }
 

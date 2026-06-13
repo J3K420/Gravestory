@@ -940,7 +940,10 @@ async function handleImageUpload(input, isLiveCamera = false) {
 
 // Atomically finds or creates a canonical grave record via the Supabase RPC.
 // Returns the grave UUID string, or null on failure (non-fatal).
-async function findOrCreateGrave(name, lat, lng, isPublic) {
+// markerStyle (optional) stakes the grave's global-map pin on the INSERT
+// branch only (first-wins forever). Web creates the grave before the user
+// can pick, so it passes null here and stakes later via setGraveMarker().
+async function findOrCreateGrave(name, lat, lng, isPublic, markerStyle = null) {
   if (!name || lat == null || lng == null) return null;
   try {
     const { data, error } = await supabaseClient.rpc('find_or_create_grave', {
@@ -948,12 +951,29 @@ async function findOrCreateGrave(name, lat, lng, isPublic) {
       p_lat: lat,
       p_lng: lng,
       p_is_public: !!isPublic,
+      p_marker_style: markerStyle || null,
     });
     if (error) throw error;
     return data;
   } catch (e) {
     console.warn('findOrCreateGrave failed (non-fatal):', e.message);
     return null;
+  }
+}
+
+// Stakes a grave's permanent global-map marker, first-wins. The RPC only
+// writes when graves.marker_style is still NULL, so the first user to pick
+// wins forever; later pickers and location corrections no-op. Non-fatal.
+async function setGraveMarker(graveId, styleId) {
+  if (!graveId || !styleId) return;
+  try {
+    const { error } = await supabaseClient.rpc('set_grave_marker', {
+      p_grave_id: graveId,
+      p_marker_style: styleId,
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.warn('setGraveMarker failed (non-fatal):', e.message);
   }
 }
 

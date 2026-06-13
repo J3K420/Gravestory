@@ -175,7 +175,24 @@ export default function ResultScreen({ navigation, route }) {
     );
   }
 
-  const { name, dates, biography, sources = [], source_urls = [], location, portraits, graveData } = story;
+  const { name, dates, biography, sources = [], source_urls = [], location, portraits, graveData, symbol_meanings } = story;
+  // Symbols round-trip as a top-level column (set at scan time, mirrors web);
+  // fall back to graveData for any older in-memory story that predates that.
+  const symbols = Array.isArray(story.symbols) && story.symbols.length
+    ? story.symbols
+    : (Array.isArray(graveData?.symbols) ? graveData.symbols : []);
+  // Resolve a symbol's displayable meaning: static SYMBOL_CONTEXT table first
+  // (fast, trusted), then the per-story AI-resolved meanings (filled at scan time
+  // for symbols the table missed). Returns null when unknown → chip stays grey.
+  // Guards non-string OCR output, and trims to match the resolver's stored key.
+  const symbolMeaning = (s) => {
+    if (typeof s !== 'string' || !s.trim()) return null;
+    const lower = s.toLowerCase();
+    const fromTable = Object.entries(SYMBOL_CONTEXT).find(([k]) => lower.includes(k))?.[1];
+    if (fromTable) return fromTable;
+    const fromAi = symbol_meanings && typeof symbol_meanings === 'object' ? symbol_meanings[s.trim()] : null;
+    return (fromAi && typeof fromAi === 'string' && fromAi.trim()) ? fromAi.trim() : null;
+  };
   const paragraphs = (biography || '').split('\n\n').filter(Boolean);
 
   // Global map bios: show all community photos of this stone when available.
@@ -344,10 +361,7 @@ export default function ResultScreen({ navigation, route }) {
   const showMarkerChip = !story._isGlobal && !isUnsaved && !isSample && (story.gps || story.location);
   const currentMarker = getMarker(story.marker_style);
   const isPublic = story.is_public;
-  const hasTappableSymbol = (graveData?.symbols || []).some(s => {
-    const lower = s.toLowerCase();
-    return Object.keys(SYMBOL_CONTEXT).some(k => lower.includes(k));
-  });
+  const hasTappableSymbol = symbols.some(s => symbolMeaning(s) !== null);
 
   function handleBack() {
     if (isUnsaved && !saving) {
@@ -443,17 +457,16 @@ export default function ResultScreen({ navigation, route }) {
         )}
 
         {/* Symbols */}
-        {graveData?.symbols?.length > 0 && (
+        {symbols.length > 0 && (
           <Text style={styles.symbolsLabel}>Symbols on the stone</Text>
         )}
         {hasTappableSymbol && (
           <Text style={styles.symbolsHint}>Tap a gold symbol to learn its traditional meaning.</Text>
         )}
-        {graveData?.symbols?.length > 0 && (
+        {symbols.length > 0 && (
           <View style={styles.tagsRow}>
-            {graveData.symbols.map((s, i) => {
-              const lower = s.toLowerCase();
-              const contextText = Object.entries(SYMBOL_CONTEXT).find(([k]) => lower.includes(k))?.[1] ?? null;
+            {symbols.map((s, i) => {
+              const contextText = symbolMeaning(s);
               return contextText ? (
                 <TouchableOpacity
                   key={i}

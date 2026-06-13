@@ -11,7 +11,7 @@ import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
-import { verifyIsGravestone, readGravestone } from '../lib/api-gemini';
+import { verifyIsGravestone, readGravestone, resolveSymbolMeanings } from '../lib/api-gemini';
 import { searchForPerson, extractFindAGraveDetail } from '../lib/api-tavily';
 import { searchWikiTree } from '../lib/api-wikitree';
 import { queryWikidata } from '../lib/api-wikidata';
@@ -365,7 +365,7 @@ export default function CameraScreen({ navigation, route }) {
             const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
             const { data: row } = await supabase
               .from('stories')
-              .select('name,dates,biography,location,inscription,symbols,sources,source_urls,portrait_left_url,portrait_right_url,portraits,grave_id')
+              .select('name,dates,biography,location,inscription,symbols,symbol_meanings,sources,source_urls,portrait_left_url,portrait_right_url,portraits,grave_id')
               .eq('grave_id', cachedGraveId)
               .eq('is_public', true)
               .is('deleted_at', null)
@@ -387,6 +387,9 @@ export default function CameraScreen({ navigation, route }) {
 
       let bioResult;
       let resolvedPortraits;
+      // AI-resolved meanings for symbols the static SYMBOL_CONTEXT table can't
+      // explain; reused from a cached story when available, else resolved below.
+      let symbolMeanings = cachedBio?.symbol_meanings || null;
       if (cachedBio) {
         bioResult = {
           name: cachedBio.name,
@@ -530,6 +533,19 @@ export default function CameraScreen({ navigation, route }) {
         }
       }
 
+      // Resolve meanings for symbols the static SYMBOL_CONTEXT table can't explain,
+      // so every recognised symbol on the Result screen is a tappable chip. One small
+      // Gemini call, only when uncovered symbols exist (often a no-op). Merged onto any
+      // meanings a cached story already carried. Non-fatal — never blocks the scan.
+      try {
+        const aiMeanings = await resolveSymbolMeanings(graveData.symbols);
+        if (aiMeanings && Object.keys(aiMeanings).length > 0) {
+          symbolMeanings = { ...(symbolMeanings || {}), ...aiMeanings };
+        }
+      } catch (e) {
+        console.warn('Symbol-meaning resolution failed (non-fatal):', e?.message || e);
+      }
+
       setStepIndex(4);
 
       // forwardGeocode resolves the cemetery and, if the grave is tagged in OSM,
@@ -578,6 +594,11 @@ export default function CameraScreen({ navigation, route }) {
       const story = {
         ...bioResult,
         graveData,
+        // Promote symbols to the top level so they round-trip to the cloud
+        // (storyToRow writes story.symbols) and survive sync to other devices /
+        // global bios — graveData itself is not a persisted column. Mirrors web.
+        symbols: Array.isArray(graveData.symbols) && graveData.symbols.length ? graveData.symbols : null,
+        symbol_meanings: symbolMeanings || null,
         portraits: resolvedPortraits,
         gps: refinedGps,
         _lowConfidence: lowConfidence,

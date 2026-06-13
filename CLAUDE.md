@@ -83,7 +83,7 @@ js/
 - `tributes` — one candle or flower per user per grave (`UNIQUE(grave_id, user_id)`).
 - `grave_photos` — one row per photo per story; powers the global-map photo gallery.
 - `scan_events` — immutable lifetime scan counter (INSERT/SELECT only via RLS); `scan_credits` — purchased credits, service-role write only.
-- Migrations live in `supabase-migrations/` (001–007, all run as of 2026-06-09). New migrations must be run manually in the Supabase SQL editor.
+- Migrations live in `supabase-migrations/` (001–010, all run; 008 on 2026-06-13, 010 `symbol_meanings` jsonb on 2026-06-13; 009 was a confirmed no-op). New migrations must be run manually in the Supabase SQL editor.
 
 ---
 
@@ -110,7 +110,7 @@ js/
 - **Evidence ladder**: 1 weak source → 1-2 para; 2 sources → 2-4 para; 3+ → up to 1500 words; confirmed historical figure → up to 2500 words.
 - **Historical-figure exception** (evaluated PER PERSON against that subject's OWN dates from `subjects`): requires (1) stone dates within ±5 yr of the figure's, (2) a [Wikipedia] article confirming the person in the numbered sources, (3) every claim carries [N]. On pass, the model is explicitly AUTHORISED to use its knowledge with the Wikipedia article as citation anchor (not limited to the extract text). On fail, "memory is not a source" applies. Prevents "John Adams d.1931" inheriting the Founding Father's biography.
 - **Multi-subject**: `isMultiSubject = subjects.length > 1` (OR legacy `multiple_subjects`), so shared family stones qualify. Wikipedia article — not source count — determines who is "well-documented"; the famous subject is written first with the full allowance, others get a respectful paragraph. Single-subject `name` field uses `primary_name` (or best-known alias), never an " & "-joined alias string.
-- **SYMBOL_CONTEXT** (~70 entries, exported) injects conventional symbol meanings into the prompt; web result screen shows tappable gold symbol chips with a bottom-sheet explanation.
+- **SYMBOL_CONTEXT** (~142 entries, exported, web+mobile byte-identical) injects conventional symbol meanings into the prompt; both result screens show tappable gold symbol chips with a bottom-sheet explanation. Symbols the table misses are resolved at scan time by one batched `resolveSymbolMeanings` (`api-gemini.js`) Gemini call (null-for-unknown guard, drops nulls, non-fatal, NOT scan-limit-gated) and stored on `story.symbol_meanings` (jsonb column, migration 010). Chip lookup is table-first then the per-story AI map (`lookupSymbolMeaning` web / `symbolMeaning` mobile); `symbols` is promoted to the story top-level so it round-trips/syncs (mobile previously read `graveData.symbols`, which didn't persist).
 - Back-compat: all `subjects` reads guard with `Array.isArray` so old cached graveData behaves as before.
 
 **Bio cache**: after OCR, signed-in users with GPS call `find_grave` → reuse the most recent public story on that grave within 90 days, skipping all search + Gemini steps. Guests and GPS-less scans always run the full pipeline.

@@ -1060,7 +1060,7 @@ async function startAnalysis() {
           const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
           const { data: row } = await supabaseClient
             .from('stories')
-            .select('name,dates,biography,location,inscription,symbols,sources,source_urls,portrait_left_url,portrait_right_url,grave_id')
+            .select('name,dates,biography,location,inscription,symbols,symbol_meanings,sources,source_urls,portrait_left_url,portrait_right_url,grave_id')
             .eq('grave_id', cachedGraveId)
             .eq('is_public', true)
             .is('deleted_at', null)
@@ -1090,6 +1090,7 @@ async function startAnalysis() {
         location: cachedBio.location,
         inscription: cachedBio.inscription,
         symbols: cachedBio.symbols,
+        symbol_meanings: cachedBio.symbol_meanings || null,
         sources: cachedBio.sources,
         source_urls: cachedBio.source_urls,
       };
@@ -1175,6 +1176,19 @@ async function startAnalysis() {
       // 5. Generate full biography with Gemini
       setStep(5);
       story = await generateBiography(graveData, mergedSearchResults, wikiData, locationStr, wikipediaSummary, wikidataResult);
+    }
+
+    // 5.25 — Resolve meanings for symbols the static SYMBOL_CONTEXT table can't
+    // explain, so every recognised symbol on the result screen is a tappable chip.
+    // One small Gemini call, only when uncovered symbols exist (often a no-op).
+    // Merged onto any meanings the cached story already carried; non-fatal.
+    try {
+      const aiMeanings = await resolveSymbolMeanings(graveData.symbols);
+      if (aiMeanings && Object.keys(aiMeanings).length > 0) {
+        story.symbol_meanings = { ...(story.symbol_meanings || {}), ...aiMeanings };
+      }
+    } catch (e) {
+      console.log('Symbol-meaning resolution failed (non-fatal):', e?.message || e);
     }
 
     // 5.5 — Fetch Wikipedia portraits (best-effort, doesn't block on failure).
@@ -1263,6 +1277,13 @@ async function startAnalysis() {
 
     currentStory = {
       ...story,
+      // OCR symbols power the tappable result-screen chips. generateBiography()
+      // doesn't echo them back, so source from graveData (falling back to a
+      // cached story's symbols on a cache hit where graveData may be sparse).
+      symbols: (Array.isArray(graveData.symbols) && graveData.symbols.length)
+        ? graveData.symbols
+        : (story.symbols || null),
+      symbol_meanings: story.symbol_meanings || null,
       image: currentImage,       // Kept for in-session preview only; stripped before save
       _pendingImageBase64: currentImageBase64,  // Used by saveStory to upload to R2
       image_url: null,           // Will be populated after upload

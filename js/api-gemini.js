@@ -194,3 +194,74 @@ If multiple deceased people share the stone (e.g. a couple both buried here with
   console.log('GRAVESTONE RAW:', text);
   return safeParseJSON(text, {names:[], primary_name:'Unknown', birth_date:'', death_date:'', inscription:'', symbols:[], family_name:'', maiden_name:'', relationships:[], notes:'', name_confidence:'high', alternate_names:[], multiple_subjects:false, subjects:[]});
 }
+
+// ── GEMINI: RESOLVE UNKNOWN SYMBOL MEANINGS ──────────────────────
+// For symbols the static SYMBOL_CONTEXT table does NOT cover, ask Gemini once
+// (a single batched call) for each symbol's conventional funerary/cultural
+// meaning, so the result screen can show a tappable explanation chip for it.
+//
+// Trust discipline (matches the bio pipeline's "memory is not a source"): the
+// model is told to return null for any symbol with no established meaning rather
+// than guess — those stay non-tappable. Returns a { "<symbol>": "<meaning>" }
+// map containing ONLY confidently-explained symbols (omits nulls). Non-fatal:
+// any error/empty returns {} so the scan is never blocked or failed by this.
+//
+// Does NOT touch the scan-limit gate — it's part of the bio, not a billable scan.
+// Reuses lookupSymbolMeaning() (biography.js) to decide which symbols the table
+// already covers; resolved at call-time, after all scripts have loaded.
+async function resolveSymbolMeanings(symbols) {
+  if (!Array.isArray(symbols) || symbols.length === 0) return {};
+
+  // Keep only symbols the static table can't already explain. Dedupe (case-insensitive)
+  // while preserving the original OCR string as the canonical key.
+  const seen = new Set();
+  const unknown = [];
+  for (const s of symbols) {
+    if (typeof s !== 'string' || !s.trim()) continue;
+    const key = s.trim();
+    const norm = key.toLowerCase();
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    if (lookupSymbolMeaning(key, null) === null) unknown.push(key);
+  }
+  if (unknown.length === 0) return {};
+
+  const prompt = `You are an expert in gravestone iconography and funerary symbolism. For each symbol below — detected on a real gravestone — give its conventional funerary, religious, fraternal, or cultural meaning in 1-2 plain sentences a cemetery visitor would find illuminating.
+
+CRITICAL RULES:
+- Only explain symbols that have an ESTABLISHED, recognised meaning in gravestone/funerary, religious, fraternal, military, or occupational tradition.
+- If a symbol has NO established conventional meaning, or you are not confident, or the description is too vague to identify a specific symbol, return null for it. DO NOT guess or invent a meaning. An honest null is better than a plausible-sounding fabrication.
+- Do not repeat the symbol's name back as its meaning. Explain what it traditionally signifies.
+- Keep each meaning self-contained and free of citation markers.
+
+Return ONLY a JSON object whose keys are the EXACT symbol strings given below and whose values are the meaning string, or null. Example shape:
+{ "sheaf of wheat": "A long life brought to fruition...", "scribble of unclear marks": null }
+
+Symbols:
+${unknown.map(s => `- ${s}`).join('\n')}
+
+Return only JSON.`;
+
+  try {
+    const { data } = await geminiCallWithFallback({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+    });
+    if (!data || data.error || !data.candidates?.[0]?.content?.parts?.[0]?.text) return {};
+    const parsed = safeParseJSON(data.candidates[0].content.parts[0].text, {});
+    if (!parsed || typeof parsed !== 'object') return {};
+
+    // Keep only string meanings keyed to a symbol we actually asked about.
+    const out = {};
+    const askedNorm = new Map(unknown.map(s => [s.toLowerCase(), s]));
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v !== 'string' || !v.trim()) continue;       // drop null / empty
+      const canonical = askedNorm.get(String(k).toLowerCase());  // tolerate case drift in keys
+      if (canonical) out[canonical] = v.trim();
+    }
+    return out;
+  } catch (e) {
+    console.warn('resolveSymbolMeanings failed (non-fatal):', e?.message || e);
+    return {};
+  }
+}

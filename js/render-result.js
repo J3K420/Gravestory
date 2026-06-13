@@ -155,6 +155,10 @@ function renderResult(story) {
     body.appendChild(srcSection);
   }
 
+  // Symbols on the stone — tappable gold chips for any symbol with a known
+  // meaning (static table OR per-story AI-resolved); plain chips otherwise.
+  renderSymbolSection(story);
+
   // Show map button if GPS or text location available
   const mapBtn = document.getElementById('result-map-btn');
   if (mapBtn) {
@@ -191,6 +195,86 @@ function renderResult(story) {
     renderTributeSection(story);
     renderMarkerSection(story, alreadySaved);
   }
+}
+
+// ── SYMBOLS ON THE STONE ─────────────────────────────────────────
+// Render the OCR-detected symbols as chips beneath the bio. A symbol whose
+// meaning is known — from the static SYMBOL_CONTEXT table OR this story's
+// AI-resolved symbol_meanings map — becomes a tappable gold chip that opens a
+// bottom-sheet with its conventional meaning. Unknown symbols render as plain,
+// non-tappable chips. Mirrors the mobile ResultScreen symbol chips.
+//
+// Meaning lookup goes through lookupSymbolMeaning() (biography.js, on window via
+// the classic-script convention). Per CLAUDE.md we never embed data in onclick:
+// each tappable chip stores its meaning in a module-level map keyed by an id and
+// a named handler (openSymbolSheet) reads from it.
+let _symbolSheetLookup = {};
+
+function renderSymbolSection(story) {
+  // Remove any prior render (re-render on save/toggle re-runs renderResult).
+  const existing = document.getElementById('symbol-section');
+  if (existing) existing.remove();
+  _symbolSheetLookup = {};
+
+  const symbols = Array.isArray(story.symbols) ? story.symbols.filter(s => s && s.trim()) : [];
+  if (symbols.length === 0) return;
+
+  const body = document.getElementById('result-body');
+  if (!body) return;
+
+  const meanings = (story.symbol_meanings && typeof story.symbol_meanings === 'object')
+    ? story.symbol_meanings : null;
+
+  const chips = symbols.map((s, i) => {
+    const meaning = (typeof lookupSymbolMeaning === 'function')
+      ? lookupSymbolMeaning(s, meanings)
+      : null;
+    if (meaning) {
+      const id = 'sym-' + i;
+      _symbolSheetLookup[id] = { name: s, text: meaning };
+      return `<button type="button" class="symbol-chip symbol-chip-tappable" data-sym="${id}" onclick="openSymbolSheet(this.getAttribute('data-sym'))">${escapeHtml(s)} <span class="symbol-chip-caret">›</span></button>`;
+    }
+    return `<span class="symbol-chip">${escapeHtml(s)}</span>`;
+  }).join('');
+
+  const hasTappable = Object.keys(_symbolSheetLookup).length > 0;
+
+  const section = document.createElement('div');
+  section.id = 'symbol-section';
+  section.className = 'result-section';
+  section.innerHTML = `
+    <div class="section-label">Symbols on the Stone</div>
+    ${hasTappable ? '<div class="symbol-hint">Tap a gold symbol to learn its traditional meaning.</div>' : ''}
+    <div class="symbol-chips">${chips}</div>
+  `;
+  body.appendChild(section);
+}
+
+// Open the bottom-sheet for a tapped symbol chip. id keys into the module-level
+// lookup populated by renderSymbolSection (never trusts data passed via onclick).
+function openSymbolSheet(id) {
+  const entry = _symbolSheetLookup[id];
+  if (!entry) return;
+  closeSymbolSheet();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'symbol-sheet-overlay';
+  overlay.className = 'symbol-sheet-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) closeSymbolSheet(); };
+  overlay.innerHTML = `
+    <div class="symbol-sheet" role="dialog" aria-modal="true">
+      <div class="symbol-sheet-handle"></div>
+      <div class="symbol-sheet-name">${escapeHtml(entry.name)}</div>
+      <div class="symbol-sheet-text">${escapeHtml(entry.text)}</div>
+      <button type="button" class="symbol-sheet-close" onclick="closeSymbolSheet()">Close</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function closeSymbolSheet() {
+  const existing = document.getElementById('symbol-sheet-overlay');
+  if (existing) existing.remove();
 }
 
 // Marker-style picker — lets the user choose what this grave's pin looks like on

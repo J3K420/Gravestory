@@ -326,3 +326,123 @@
     max-width: 360px;
     text-align: center;
   }
+
+  /* Symbols on the stone — tappable meaning chips */
+  .symbol-hint {
+    font-size: 0.8rem;
+    color: var(--stone);
+    font-style: italic;
+    margin-bottom: 0.6rem;
+  }
+
+  .symbol-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .symbol-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.85rem;
+    line-height: 1.2;
+    color: var(--ink);
+    background: rgba(138,126,110,0.08);
+    border: 1px solid rgba(138,126,110,0.3);
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    margin: 0;
+  }
+
+  button.symbol-chip-tappable {
+    cursor: pointer;
+    color: #8a6f2e;
+    background: rgba(201,168,76,0.1);
+    border-color: rgba(201,168,76,0.5);
+    font-weight: 600;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  button.symbol-chip-tappable:hover {
+    background: rgba(201,168,76,0.2);
+    border-color: var(--gold);
+  }
+
+  .symbol-chip-caret {
+    color: var(--gold);
+    font-weight: 700;
+  }
+
+  /* Symbol meaning bottom-sheet */
+  .symbol-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(26,20,16,0.55);
+    z-index: 3000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    animation: symbol-sheet-fade 0.2s ease;
+  }
+
+  @keyframes symbol-sheet-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .symbol-sheet {
+    width: 100%;
+    max-width: 480px;
+    background: var(--parchment);
+    border-top-left-radius: 18px;
+    border-top-right-radius: 18px;
+    padding: 0.75rem 1.5rem 2rem;
+    box-shadow: 0 -8px 30px rgba(0,0,0,0.35);
+    animation: symbol-sheet-slide 0.25s ease;
+  }
+
+  @keyframes symbol-sheet-slide {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .symbol-sheet-handle {
+    width: 38px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(138,126,110,0.4);
+    margin: 0 auto 1rem;
+  }
+
+  .symbol-sheet-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.15rem;
+    color: #8a6f2e;
+    text-transform: capitalize;
+    margin-bottom: 0.75rem;
+  }
+
+  .symbol-sheet-text {
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--ink);
+    margin-bottom: 1.5rem;
+  }
+
+  .symbol-sheet-close {
+    width: 100%;
+    padding: 0.8rem;
+    font-family: 'Playfair Display', serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--ink);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .symbol-sheet-close:hover { background: rgba(26,20,16,0.08); }

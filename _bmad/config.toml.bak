@@ -19,6 +19,7 @@ output_folder = "_bmad-output"
 planning_artifacts = "{project-root}/_bmad-output/planning-artifacts"
 implementation_artifacts = "{project-root}/_bmad-output/implementation-artifacts"
 project_knowledge = "{project-root}/docs"
+project_name = "GraveStory"
 
 [agents.bmad-agent-analyst]
 module = "bmm"

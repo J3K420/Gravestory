@@ -51,21 +51,65 @@ WHERE n.nspname = 'public'
 -- ================================================================
 
 -- >>> BEGIN RECOVERED global_public_stories DEFINITION >>>
+-- Recovered live from Supabase 2026-06-13 (Session 41) via pg_get_functiondef.
+-- This is now the source-of-truth copy under version control.
 
--- (paste the `definition` text from STEP 1 here)
+CREATE OR REPLACE FUNCTION public.global_public_stories(p_limit integer DEFAULT 500)
+ RETURNS TABLE(id uuid, name text, dates text, biography text, location text, inscription text, symbols text, family_name text, notes text, sources jsonb, source_urls jsonb, latitude double precision, longitude double precision, user_corrected boolean, low_confidence boolean, client_timestamp bigint, image_url text, portrait_left_url text, portrait_right_url text, created_at timestamp with time zone, updated_at timestamp with time zone, contributor_name text)
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select
+    s.id, s.name, s.dates, s.biography, s.location, s.inscription, s.symbols,
+    s.family_name, s.notes, s.sources, s.source_urls, s.latitude, s.longitude,
+    s.user_corrected, s.low_confidence, s.client_timestamp, s.image_url,
+    s.portrait_left_url, s.portrait_right_url,
+    s.created_at, s.updated_at,
+    coalesce(up.display_name, 'Anonymous') as contributor_name
+  from public.stories s
+  left join public.user_prefs up on up.user_id = s.user_id
+  where s.is_public = true
+    and s.deleted_at is null
+    and s.latitude is not null
+    and s.longitude is not null
+  order by s.created_at desc
+  limit greatest(1, least(p_limit, 500));
+$function$;
 
 -- <<< END RECOVERED global_public_stories DEFINITION <<<
 
 
 -- ================================================================
--- STEP 3 — Once pasted, confirm these four facts (they decide the
--- pin-scaling and marker-packs plans — see the project memory):
---   1. ORDER BY column — is the surviving set really "most recent",
---      and by which column (created_at / client_timestamp /
---      updated_at)?
---   2. Where p_limit is applied (and the default value).
---   3. Whether any dedup / DISTINCT / GROUP BY happens INSIDE the
---      function, or only client-side in map-global.js.
---   4. The exact RETURN columns (so a future marker_style join and
---      any bbox/viewport params slot in cleanly).
+-- STEP 3 — FOUR FACTS, CONFIRMED 2026-06-13 from the body above:
+--   1. ORDER BY: `s.created_at desc` — YES, the surviving set is the
+--      most-recently-CREATED public stories. (Note: created_at, NOT
+--      client_timestamp and NOT updated_at — so editing an old story
+--      does NOT bring it back into the top-N; only original creation
+--      time decides who survives the cap.)
+--   2. p_limit: applied as `limit greatest(1, least(p_limit, 500))`.
+--      The 500 is a HARD SERVER CEILING — passing p_limit > 500 is
+--      silently clamped to 500. So the client's `currentUser ? 500 : 50`
+--      can never exceed 500 even if raised. Default 500.
+--   3. Dedup: NONE inside the function — it returns raw STORIES (one
+--      row per public story), no DISTINCT/GROUP BY on grave_id. ALL
+--      grave dedup is client-side in map-global.js (by grave_id then
+--      ~20m cell), AFTER the 500-row cap. => the cap counts STORIES,
+--      so the number of distinct GRAVES shown is <= 500 and often less.
+--   4. RETURN columns: listed in the RETURNS TABLE(...) above. NOTE for
+--      marker-packs: it returns story columns + a user_prefs join, but
+--      does NOT currently return grave_id NOR any graves.* column. To
+--      put a first-wins marker on the global map, this function must add
+--      a join to public.graves and return graves.marker_style (and
+--      likely grave_id too, so the client dedup can keep using it).
+-- ================================================================
+--
+-- IMPLICATIONS captured in memory [[project-global-map-scaling]] +
+-- [[project-marker-packs]]:
+--  * The 500 cliff is real, hard, and silent, ordered by created_at desc.
+--  * Marker-packs A1 step 3 = add `left join public.graves g on g.id =
+--    s.grave_id` and return `g.marker_style`. Confirm stories.grave_id
+--    exists (migration 001 added it) — it does.
+--  * Any future bbox/viewport param (Tier 3) slots into the WHERE clause
+--    here (add lat/lng BETWEEN bounds) — clean insertion point.
 -- ================================================================

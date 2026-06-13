@@ -89,7 +89,7 @@
 
   <header>
     <h1>GraveStory</h1>
-    <p>Privacy Policy &mdash; Effective June 5, 2025</p>
+    <p>Privacy Policy &mdash; Effective June 13, 2026</p>
   </header>
 
   <div class="intro">
@@ -130,10 +130,24 @@
   <h2>4. Public Stories and Community Map</h2>
   <p>If you mark a story as public, the biography text, gravestone photo, name, dates, and approximate GPS location become visible to all GraveStory users on the community map. Your display name (if set) appears as the contributor. You can make a story private or delete it at any time — it is removed from the community map immediately.</p>
 
-  <h2>5. Data Retention</h2>
+  <h2>5. Accuracy and How We Guard Against Fabrication</h2>
+  <p>GraveStory uses generative AI to write biographies, and we take the risk of AI &ldquo;hallucination&rdquo; — confidently invented facts — seriously. A fabricated life story about a real person who is buried somewhere is not acceptable to us. We have built multiple safeguards into the app specifically to keep the biographies grounded in evidence rather than in the AI&rsquo;s imagination:</p>
+  <ul>
+    <li><strong>Grounded only in real sources.</strong> The AI is instructed to write <em>only</em> from the gravestone itself and from numbered, externally retrieved sources — never from its own training memory. Its guiding rule is that &ldquo;memory is not a source.&rdquo; A short, honest biography is treated as a success; an invented one as a failure.</li>
+    <li><strong>No sources, no AI.</strong> When our research finds no supporting records at all, we do <em>not</em> ask the AI to write a biography. Instead the app returns a short summary drawn strictly from the words on the stone. This removes the most common path to fabrication entirely.</li>
+    <li><strong>Cross-source corroboration.</strong> Before writing, we cross-check names, dates, and burial places across independent sources (WikiTree, Wikidata, Find A Grave, BillionGraves, historic obituaries, the Library of Congress newspaper archive, and the Internet Archive). Agreement raises confidence; conflicts are flagged to the AI explicitly, and the date carved on the stone is preferred over conflicting records.</li>
+    <li><strong>Citations on every claim.</strong> Each factual statement in a biography must carry a numbered citation pointing back to the source that supports it. Our software validates these citations after generation, removes any orphaned or invented citation markers, and surfaces the underlying sources to you so you can check them yourself.</li>
+    <li><strong>Evidence-scaled length.</strong> The depth of a biography is capped by how much evidence actually exists. A single weak source yields only a paragraph or two; a fuller life history is permitted only when multiple independent sources agree. The AI is told not to pad a story with generic filler.</li>
+    <li><strong>&ldquo;Same name&rdquo; protection.</strong> When matching a person to historical records, we reject candidates whose dates differ significantly from the dates on the stone, so a stranger who merely shares a name is not mistaken for the person you photographed.</li>
+    <li><strong>Famous-figure guardrail.</strong> A biography is only allowed to draw on the wider public record of a well-known historical figure when the dates on the stone match that figure within a few years <em>and</em> an encyclopedia article confirming the same person is present in the cited sources. This prevents an ordinary person from being mistakenly given a famous namesake&rsquo;s life story.</li>
+    <li><strong>Photo verification.</strong> Before any biography is attempted, the app first checks that the photo actually shows a gravestone, reducing nonsensical output from unrelated images.</li>
+  </ul>
+  <p>No automated system is perfect, and we cannot guarantee that every detail is correct — historical records themselves contain errors, and weathered stones can be misread. We encourage you to treat the biographies as a respectful, source-cited starting point and to verify important details against the cited sources.</p>
+
+  <h2>6. Data Retention</h2>
   <p>Your stories are retained until you delete them or delete your account. Deleted stories are soft-deleted (marked with a deletion timestamp) for up to 30 days to allow sync across devices, then permanently removed. Scan event records (used for usage limits) are retained for 12 months.</p>
 
-  <h2>6. Your Rights</h2>
+  <h2>7. Your Rights</h2>
   <ul>
     <li><strong>Access &amp; export</strong> — contact us to request a copy of your stored data.</li>
     <li><strong>Deletion</strong> — delete individual stories from within the app. To delete your account and all associated data, email us at <a href="mailto:j3k420@gmail.com">j3k420@gmail.com</a>.</li>
@@ -141,16 +155,16 @@
     <li><strong>Opt out of public sharing</strong> — set your default visibility to Private in Settings, or toggle individual stories to private.</li>
   </ul>
 
-  <h2>7. Children</h2>
+  <h2>8. Children</h2>
   <p>GraveStory is not directed at children under 13. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information, please contact us and we will delete it.</p>
 
-  <h2>8. Security</h2>
+  <h2>9. Security</h2>
   <p>All data is transmitted over HTTPS. Supabase Row Level Security policies ensure users can only read and write their own records. Purchased credit balances are write-protected at the database level — only our server-side webhook can add credits.</p>
 
-  <h2>9. Changes to This Policy</h2>
+  <h2>10. Changes to This Policy</h2>
   <p>We may update this policy from time to time. The effective date at the top of this page will reflect the most recent revision. Continued use of GraveStory after a change constitutes acceptance of the updated policy.</p>
 
-  <h2>10. Contact</h2>
+  <h2>11. Contact</h2>
   <p>Questions, data requests, or account deletion: <a href="mailto:j3k420@gmail.com">j3k420@gmail.com</a></p>
 
   <footer>

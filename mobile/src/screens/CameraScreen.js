@@ -538,13 +538,28 @@ export default function CameraScreen({ navigation, route }) {
       // GPS over Nominatim coords; only fall back to Nominatim when GPS is absent.
       const primaryName = primaryOcrName || bioResult.name || '';
       const geoResult = await forwardGeocode(bioResult.location, primaryName, bioResult.dates);
-      // Wikidata burial coords are a precise fallback for famous figures when no GPS was captured
+      // Wikidata burial coords (P119 place of burial → P625) are a documented,
+      // confident location for famous figures when no GPS was captured. They beat
+      // a Nominatim cemetery-centroid fallback (geoResult.approximate), but a PRECISE
+      // geoResult — an actual tagged grave node — still wins.
       const wikidataCoords = wikidataResult?.burialCoords || null;
-      const refinedGps = gps ?? (geoResult ? { lat: geoResult.lat, lng: geoResult.lng } : null) ?? wikidataCoords;
+      const geoIsApproximate = geoResult?.approximate === true;
+      // Resolution priority when no on-site GPS:
+      //   1. real GPS (always best)
+      //   2. a precise geocode (grave node)
+      //   3. Wikidata burial coords (documented, treated as confident)
+      //   4. an approximate cemetery-centroid geocode (last resort)
+      const preciseGeo = geoResult && !geoIsApproximate ? { lat: geoResult.lat, lng: geoResult.lng } : null;
+      const approxGeo = geoResult && geoIsApproximate ? { lat: geoResult.lat, lng: geoResult.lng } : null;
+      const usedWikidataCoords = !gps && !preciseGeo && !!wikidataCoords;
+      const refinedGps = gps ?? preciseGeo ?? wikidataCoords ?? approxGeo;
       // Flag the pin when it isn't the grave's real position: state-mismatch
       // geocodes, and cemetery-centroid fallbacks used in place of missing GPS
-      // (those all share one coordinate, so the user needs the drag-to-correct hint).
-      const lowConfidence = (geoResult?.lowConfidence || (!gps && geoResult?.approximate === true)) || undefined;
+      // (those share one coordinate, so the user needs the drag-to-correct hint).
+      // Wikidata burial coords are documented/confident, so a pin sourced from them
+      // is NOT flagged — that's why famous library scans (e.g. Amy Winehouse) no
+      // longer show the "approximate location" disclaimer.
+      const lowConfidence = (geoResult?.lowConfidence || (!gps && geoIsApproximate && !usedWikidataCoords)) || undefined;
 
       // Read default visibility from user metadata
       const { data: { session } } = await supabase.auth.getSession();

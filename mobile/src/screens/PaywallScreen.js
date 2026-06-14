@@ -5,6 +5,7 @@ import Purchases from 'react-native-purchases';
 import { colors, fonts, radius } from '../lib/theme';
 import { SCAN_LIMIT_GUEST, SCAN_LIMIT_USER } from '../lib/scan-limit';
 import { logEvent, EVENTS } from '../lib/analytics';
+import GravestoneLogo from '../components/GravestoneLogo';
 
 // Product IDs must match exactly what's created in Google Play Console + RevenueCat
 const PRODUCT_IDS = ['gravestory_5_scans', 'gravestory_20_scans', 'gravestory_60_scans', 'gravestory_150_scans'];
@@ -103,7 +104,9 @@ export default function PaywallScreen({ navigation, route }) {
       </TouchableOpacity>
 
       <View style={styles.content}>
-        <Text style={styles.icon}>🪦</Text>
+        <View style={styles.icon}>
+          <GravestoneLogo size={64} animate={false} />
+        </View>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.count}>{countLabel}</Text>
 
@@ -221,7 +224,7 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
 
-  icon: { fontSize: 52, marginBottom: 20 },
+  icon: { alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
 
   title: {
     color: colors.parchment,

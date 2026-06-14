@@ -113,9 +113,11 @@ async function shareStory() {
   if (navigator.share) {
     try {
       await navigator.share({ title: `GraveStory: ${currentStory.name}`, text });
+      if (typeof logEvent === 'function') logEvent(ANALYTICS_EVENTS.STORY_SHARED, { method: 'native', isGlobal: !!currentStory._isGlobal });
     } catch (e) { copyToClipboard(text); }
   } else {
     copyToClipboard(text);
+    if (typeof logEvent === 'function') logEvent(ANALYTICS_EVENTS.STORY_SHARED, { method: 'clipboard', isGlobal: !!currentStory._isGlobal });
   }
 }
 

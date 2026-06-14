@@ -25,6 +25,17 @@ const ANALYTICS_EVENTS = {
   STORY_SAVED:           'story_saved',
   MADE_PUBLIC:           'made_public',
   SAMPLE_VIEWED:         'sample_viewed',
+  // Phase-B funnels (added 2026-06-13). Keep identical to mobile EVENTS.
+  // paywall_shown / purchase_* are MOBILE-ONLY (web has no purchase flow) —
+  // they live in this map for parity but are never fired from web.
+  CEMETERY_RESOLVED:     'cemetery_resolved',
+  PAYWALL_SHOWN:         'paywall_shown',
+  PURCHASE_COMPLETED:    'purchase_completed',
+  PURCHASE_FAILED:       'purchase_failed',
+  MAP_OPENED:            'map_opened',
+  TRIBUTE_LEFT:          'tribute_left',
+  STORY_SHARED:          'story_shared',
+  RESEARCH_YIELD:        'research_yield',
 };
 
 function logEvent(event, props) {

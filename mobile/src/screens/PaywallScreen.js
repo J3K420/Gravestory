@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Purchases from 'react-native-purchases';
 import { colors, fonts, radius } from '../lib/theme';
 import { SCAN_LIMIT_GUEST, SCAN_LIMIT_USER } from '../lib/scan-limit';
+import { logEvent, EVENTS } from '../lib/analytics';
 
 // Product IDs must match exactly what's created in Google Play Console + RevenueCat
 const PRODUCT_IDS = ['gravestory_5_scans', 'gravestory_20_scans', 'gravestory_60_scans'];
@@ -51,16 +52,24 @@ export default function PaywallScreen({ navigation, route }) {
 
   useEffect(() => {
     loadOfferings();
+    // Funnel: the paywall was reached (scan limit hit → upgrade prompt shown).
+    // Pair with purchase_completed to get view→buy conversion.
+    logEvent(EVENTS.PAYWALL_SHOWN, { count, isGuest });
   }, []);
 
   async function handlePurchase(pkg) {
     setPurchasing(pkg.product.identifier);
     try {
       await Purchases.purchasePackage(pkg);
+      // Funnel: a purchase completed in the SDK. The credits land via the
+      // RevenueCat→Worker webhook→scan_credits — cross-check this count against
+      // scan_credits.updated_at bumps to confirm the fragile webhook link fires.
+      logEvent(EVENTS.PURCHASE_COMPLETED, { productId: pkg.product.identifier });
       Alert.alert('Purchase complete', 'Your scans have been added to your account.');
       navigation.goBack();
     } catch (e) {
       if (!e.userCancelled) {
+        logEvent(EVENTS.PURCHASE_FAILED, { productId: pkg.product.identifier, reason: e.message });
         Alert.alert('Purchase failed', e.message ?? 'Please try again.');
       }
     } finally {

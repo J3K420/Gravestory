@@ -320,6 +320,7 @@ export default function ResultScreen({ navigation, route }) {
       const text = [name, dates, location, '', biography, '', 'Discovered with GraveStory']
         .filter(Boolean).join('\n');
       await Share.share({ message: text, title: `GraveStory — ${name || 'Unknown'}` });
+      logEvent(EVENTS.STORY_SHARED, { isGlobal: !!story._isGlobal });
     } catch {}
     setSharing(false);
   }
@@ -376,6 +377,8 @@ export default function ResultScreen({ navigation, route }) {
     // Tapping the same type toggles it off; tapping a different type switches
     const newType = tributes.userTribute === type ? null : type;
     await setTribute(story.grave_id, newType);
+    // Log only when a tribute is added (not toggled off), so the count tracks engagement.
+    if (newType) logEvent(EVENTS.TRIBUTE_LEFT, { type: newType });
     const fresh = await getTributes(story.grave_id);
     setTributes(fresh);
     setTributeLoading(false);

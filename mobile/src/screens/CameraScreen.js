@@ -313,6 +313,10 @@ export default function CameraScreen({ navigation, route }) {
 
       const locationHint = await reverseGeoPromise;
       const cemeteryName = await cemeteryNamePromise;
+      // Funnel #1b: does GPS actually yield a cemetery name? Tracks the resolve
+      // rate to test the "GPS improves accuracy" hypothesis in the field (the
+      // cemetery name is a top-tier Tavily disambiguator; null at rural plots).
+      if (gps) logEvent(EVENTS.CEMETERY_RESOLVED, { resolved: !!cemeteryName });
 
       setStepIndex(1);
       const graveData = await readGravestone(base64, locationHint);
@@ -513,6 +517,20 @@ export default function CameraScreen({ navigation, route }) {
 
         setStepIndex(3);
         bioResult = await generateBiography(graveData, mergedSearchResults, wikiData, locationHint, wikipediaSummary, wikidataResult);
+
+        // Funnel: which research sources actually returned hits on this scan.
+        // Tavily is ~85% of variable cost — track its (and the free sources')
+        // hit rate to tune the pipeline. Fired only on the research path (not the
+        // bio cache hit), so zeros mean a real dry scan.
+        logEvent(EVENTS.RESEARCH_YIELD, {
+          tavily:      Array.isArray(searchResults) ? searchResults.length : 0,
+          wikitree:    wikiTreeResults.filter(Boolean).length,
+          wikidata:    wikidataResult ? 1 : 0,
+          chronicling: Array.isArray(chronResults) ? chronResults.length : 0,
+          archive:     Array.isArray(archiveResults) ? archiveResults.length : 0,
+          wikipedia:   wikiSummaryResults.filter(Boolean).length,
+          sources:     Array.isArray(bioResult?.sources) ? bioResult.sources.length : 0,
+        });
 
         // Portrait fallback: if the stone showed only a surname (e.g. "HOUDINI"),
         // the single-token guard skipped the initial Wikipedia fetch. Now that the

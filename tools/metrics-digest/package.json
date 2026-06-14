@@ -1,0 +1,17 @@
+{
+  "name": "gravestory-metrics-digest",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local 'what changed' digest of GraveStory funnel telemetry (reads Supabase with the service-role key — runs on your machine, never in the cloud).",
+  "bin": {
+    "gravestory-digest": "./digest.mjs"
+  },
+  "scripts": {
+    "digest": "node digest.mjs",
+    "week": "node digest.mjs --hours 168"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}

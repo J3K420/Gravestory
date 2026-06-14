@@ -195,6 +195,7 @@ function openCemeteryMap(focusStory = null) {
   } catch (e) {
     console.warn('Could not persist map focus for reload:', e);
   }
+  if (typeof logEvent === 'function') logEvent(ANALYTICS_EVENTS.MAP_OPENED, { which: 'cemetery' });
   showScreen('cemetery-map-screen');
   // Give the screen time to fully paint before Leaflet calculates dimensions
   setTimeout(async () => {

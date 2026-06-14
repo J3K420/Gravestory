@@ -59,6 +59,7 @@ const GLOBAL_MAP_CACHE_KEY = 'gs_global_map_cache_v1';
 const GLOBAL_MAP_CACHE_TTL_MS = 5 * 60 * 1000;
 
 async function openGlobalMap() {
+  if (typeof logEvent === 'function') logEvent(ANALYTICS_EVENTS.MAP_OPENED, { which: 'global' });
   showScreen('global-map-screen');
   setTimeout(async () => {
     await initGlobalMap();

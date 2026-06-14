@@ -509,6 +509,9 @@ function renderTributeSection(story) {
         if (candleBtn) candleBtn.disabled = true;
         if (flowerBtn) flowerBtn.disabled = true;
         await setTribute(story.grave_id, newType);
+        // Log only when a tribute is added (not toggled off), so the count tracks
+        // engagement, not removals. logEvent is a global from js/analytics.js.
+        if (newType && typeof logEvent === 'function') logEvent(ANALYTICS_EVENTS.TRIBUTE_LEFT, { type: newType });
         const fresh = await getTributes(story.grave_id);
         const cEl = document.getElementById('tribute-counts');
         if (cEl) cEl.textContent = `${fresh.candles} ${fresh.candles === 1 ? 'candle' : 'candles'} · ${fresh.flowers} ${fresh.flowers === 1 ? 'flower' : 'flowers'}`;

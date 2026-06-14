@@ -1025,6 +1025,11 @@ async function startAnalysis() {
         reverseGeocodeCemetery(currentExifLocation.lat, currentExifLocation.lng),
       ]);
       console.log('📍 Reverse geocoded location:', locationStr, '| cemetery:', cemeteryName);
+      // Funnel #1b: does GPS actually yield a cemetery name? The cemetery name is a
+      // top-tier Tavily disambiguator; reverseGeocodeCemetery returns null at
+      // small/rural/historic plots (exactly where genealogists go). Track the
+      // resolve rate to test the "GPS improves accuracy" hypothesis in the field.
+      logEvent(ANALYTICS_EVENTS.CEMETERY_RESOLVED, { resolved: !!cemeteryName });
     } else {
       console.log('📍 No GPS coordinates available — skipping location');
     }
@@ -1196,6 +1201,20 @@ async function startAnalysis() {
       // 5. Generate full biography with Gemini
       setStep(5);
       story = await generateBiography(graveData, mergedSearchResults, wikiData, locationStr, wikipediaSummary, wikidataResult);
+
+      // Funnel: which research sources actually earned their keep on this scan.
+      // Tavily is ~85% of variable cost — this tells us how often it (and the
+      // free sources) return hits, to tune the pipeline. Fired only on the
+      // research path (not the bio cache hit), so zeros mean a real dry scan.
+      logEvent(ANALYTICS_EVENTS.RESEARCH_YIELD, {
+        tavily:      Array.isArray(searchResults) ? searchResults.length : 0,
+        wikitree:    Array.isArray(wikiData) ? wikiData.filter(Boolean).length : (wikiData ? 1 : 0),
+        wikidata:    wikidataResult ? 1 : 0,
+        chronicling: Array.isArray(chronResults) ? chronResults.length : 0,
+        archive:     Array.isArray(archiveResults) ? archiveResults.length : 0,
+        wikipedia:   Array.isArray(wikiSummaryResults) ? wikiSummaryResults.filter(Boolean).length : 0,
+        sources:     Array.isArray(story?.sources) ? story.sources.length : 0,
+      });
     }
 
     // 5.25 — Resolve meanings for symbols the static SYMBOL_CONTEXT table can't

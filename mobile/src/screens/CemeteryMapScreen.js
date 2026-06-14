@@ -11,6 +11,7 @@ import { cloudUpdateStory, updateGraveLocation } from '../lib/sync';
 import { supabase } from '../lib/supabase';
 import { forwardGeocode } from '../lib/api-nominatim';
 import { useRefresh } from '../lib/use-refresh';
+import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
 
 const GOLD      = colors.flame;
@@ -125,6 +126,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
 
   useEffect(() => {
     resolveStories();
+    logEvent(EVENTS.MAP_OPENED, { which: 'cemetery' });
   }, []);
 
   async function resolveStories() {

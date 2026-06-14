@@ -8,6 +8,7 @@ import MapView, { Marker } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
 import { rowToStory } from '../lib/sync';
 import { useRefresh } from '../lib/use-refresh';
+import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
 import { Globe } from '../components/Icons';
 import { GraveMarkerSvg } from '../components/GraveMarkers';
@@ -71,6 +72,7 @@ export default function GlobalMapScreen({ navigation }) {
         const u = session?.user ?? null;
         setUser(u);
         fetchStories(u);
+        logEvent(EVENTS.MAP_OPENED, { which: 'global', isGuest: !u });
       });
       return () => { active = false; };
     }, [])

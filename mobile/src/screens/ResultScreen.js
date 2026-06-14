@@ -4,6 +4,7 @@ import {
   Linking, Share, Image, Alert, FlatList, Dimensions, Modal, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudSaveStory, cloudUpdateStory, cloudDeleteStory, findOrCreateGrave, setGraveMarker } from '../lib/sync';
@@ -19,6 +20,7 @@ import { MARKER_STYLES, getMarker, GraveMarkerSvg } from '../components/GraveMar
 import { SYMBOL_CONTEXT } from '../lib/biography';
 
 const SCREEN_W = Dimensions.get('window').width;
+const AI_DISCLAIMER_SEEN_KEY = 'gs_ai_disclaimer_seen';
 
 export default function ResultScreen({ navigation, route }) {
   const [story, setStory]               = useState(route.params?.story);
@@ -33,6 +35,7 @@ export default function ResultScreen({ navigation, route }) {
   const [livePortraits, setLivePortraits] = useState([]);
   const [symbolModal, setSymbolModal]   = useState(null); // { name, text }
   const [markerModal, setMarkerModal]   = useState(false);
+  const [aiModal, setAiModal]           = useState(false); // first-view AI-disclaimer explainer
   const [savingMarker, setSavingMarker] = useState(false);
   // Mirrors the chosen marker synchronously so handleSave reads the latest pick
   // even if the user taps Save before the setStory re-render lands (a pre-save
@@ -59,6 +62,18 @@ export default function ResultScreen({ navigation, route }) {
       getTributes(story.grave_id).then(setTributes);
     }
   }, [story?.grave_id]);
+
+  // First-ever view of a real generated biography → show the one-time
+  // AI-disclaimer explainer, then persist a flag so it never shows again
+  // (the small caption beneath each bio carries the message thereafter).
+  // Skipped for the read-only sample and the unresearched pending template.
+  useEffect(() => {
+    const hasRealBio = story && !story._isSample && !story._pending && (story.biography || '').trim();
+    if (!hasRealBio) return;
+    AsyncStorage.getItem(AI_DISCLAIMER_SEEN_KEY)
+      .then(seen => { if (seen !== 'true') setAiModal(true); })
+      .catch(() => {});
+  }, [story?._isSample, story?._pending, story?.biography]);
 
   // Global map bios: fetch all community photos of this stone
   useEffect(() => {
@@ -399,6 +414,13 @@ export default function ResultScreen({ navigation, route }) {
   const currentMarker = getMarker(story.marker_style);
   const isPublic = story.is_public;
   const hasTappableSymbol = symbols.some(s => symbolMeaning(s) !== null);
+  // Real bio (not sample/template) → show the small persistent AI caption.
+  const showAiCaption = !isSample && !story._pending && (biography || '').trim();
+
+  function dismissAiModal() {
+    setAiModal(false);
+    AsyncStorage.setItem(AI_DISCLAIMER_SEEN_KEY, 'true').catch(() => {});
+  }
 
   function handleBack() {
     if (isUnsaved && !saving) {
@@ -484,6 +506,15 @@ export default function ResultScreen({ navigation, route }) {
         {paragraphs.map((para, i) => (
           <Text key={i} style={[styles.bio, i === 0 && styles.bioFirst]}>{para}</Text>
         ))}
+
+        {/* AI-honesty caption — small, calm note beneath every generated bio.
+            Honest-research register; first view also triggers the explainer
+            modal below. Suppressed for the sample / unresearched template. */}
+        {showAiCaption && (
+          <Text style={styles.aiCaption}>
+            ✦ AI-generated story — researched from public records. It may contain errors and is not an official record.
+          </Text>
+        )}
 
         {/* Inscription */}
         {!!graveData?.inscription && (
@@ -722,6 +753,30 @@ export default function ResultScreen({ navigation, route }) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* First-view AI-disclaimer explainer — shown once, ever. */}
+      <Modal
+        visible={aiModal}
+        transparent
+        animationType="slide"
+        onRequestClose={dismissAiModal}
+      >
+        <Pressable style={styles.symbolOverlay} onPress={dismissAiModal}>
+          <Pressable style={styles.symbolSheet} onPress={() => {}}>
+            <View style={styles.symbolSheetHandle} />
+            <Text style={styles.symbolSheetName}>About these stories</Text>
+            <Text style={styles.symbolSheetText}>
+              GraveStory assembles each biography with AI from public records and historical
+              sources. It's a thoughtful starting point for remembrance and research — but it can
+              contain errors and is not an official or authoritative record. If you spot something
+              wrong, you can report it.
+            </Text>
+            <TouchableOpacity style={styles.symbolSheetClose} onPress={dismissAiModal}>
+              <Text style={styles.symbolSheetCloseText}>I understand</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -775,6 +830,24 @@ const styles = StyleSheet.create({
     fontFamily: fonts.serif,
   },
   bioFirst: { fontSize: 16, lineHeight: 28 },
+
+  // AI-honesty caption — muted gold, honest-research register (not a warning).
+  aiCaption: {
+    color: '#b89656',
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontFamily: fonts.bodyItalic,
+    fontStyle: 'italic',
+    borderLeftWidth: 2,
+    borderLeftColor: 'rgba(242,182,92,0.45)',
+    backgroundColor: 'rgba(242,182,92,0.06)',
+    paddingLeft: 12,
+    paddingRight: 10,
+    paddingVertical: 8,
+    borderRadius: 4,
+    marginTop: 4,
+    marginBottom: 18,
+  },
 
   inscriptionBox: {
     borderLeftWidth: 2, borderLeftColor: colors.flame,

@@ -216,6 +216,25 @@
 
   .biography-text p { margin-bottom: 1rem; }
 
+  /* AI-honesty caption — small, calm note beneath every generated bio.
+     Muted gold-on-dark to read as honest scholarship, not a warning. */
+  .ai-disclaimer-note {
+    margin-top: 1rem;
+    padding: 0.5rem 0.75rem;
+    border-left: 2px solid rgba(201,168,76,0.5);
+    background: rgba(201,168,76,0.06);
+    color: #8a6f3a;
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    border-radius: 0 4px 4px 0;
+  }
+
+  /* First-view explainer reuses the symbol bottom-sheet shell; just give the
+     longer body text comfortable spacing. */
+  .ai-disclaimer-sheet .symbol-sheet-text { line-height: 1.6; }
+
   .biography-text sup.cite {
     font-size: 0.7em;
     vertical-align: super;

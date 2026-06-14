@@ -128,6 +128,21 @@ function renderResult(story) {
   bioText.innerHTML = paragraphs.map(p => `<p>${renderCitations(p)}</p>`).join('');
   bioSection.appendChild(bioLabel);
   bioSection.appendChild(bioText);
+
+  // AI-honesty caption — a small, persistent note beneath every generated
+  // biography. Honest-research register (not a scary warning): sets the
+  // expectation that the story is AI-assembled from public sources, may err,
+  // and is not an authoritative record. Suppressed only for the read-only
+  // sample (which carries its own "Example story" banner). The first-ever
+  // view also gets the one-time explainer modal (showAiDisclaimerOnce below).
+  if (!story._isSample && (story.biography || '').trim()) {
+    const aiNote = document.createElement('div');
+    aiNote.className = 'ai-disclaimer-note';
+    aiNote.innerHTML = `✦ AI-generated story — researched from public records. It may contain errors and is not an official record.`;
+    bioSection.appendChild(aiNote);
+    showAiDisclaimerOnce();
+  }
+
   body.appendChild(bioSection);
 
   // Sources
@@ -195,6 +210,49 @@ function renderResult(story) {
     renderTributeSection(story);
     renderMarkerSection(story, alreadySaved);
   }
+}
+
+// ── AI DISCLAIMER (one-time explainer) ───────────────────────────
+// The first time a user ever views a generated biography, show a friendly
+// one-time modal explaining what these stories are (AI-assembled from public
+// records, may err, not an authoritative record). After it's acknowledged we
+// set a localStorage flag so it never shows again — the small persistent
+// caption beneath each bio carries the message thereafter. Honest-research
+// tone by design: this is a confidence/credibility signal, not a scare banner.
+const AI_DISCLAIMER_SEEN_KEY = 'gs_ai_disclaimer_seen';
+
+function showAiDisclaimerOnce() {
+  let seen = false;
+  try { seen = localStorage.getItem(AI_DISCLAIMER_SEEN_KEY) === 'true'; } catch (e) {}
+  if (seen) return;
+  if (document.getElementById('ai-disclaimer-overlay')) return;
+
+  const dismiss = () => {
+    try { localStorage.setItem(AI_DISCLAIMER_SEEN_KEY, 'true'); } catch (e) {}
+    const el = document.getElementById('ai-disclaimer-overlay');
+    if (el) el.remove();
+  };
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ai-disclaimer-overlay';
+  overlay.className = 'symbol-sheet-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) dismiss(); };
+  overlay.innerHTML = `
+    <div class="symbol-sheet ai-disclaimer-sheet" role="dialog" aria-modal="true">
+      <div class="symbol-sheet-handle"></div>
+      <div class="symbol-sheet-name">About these stories</div>
+      <div class="symbol-sheet-text">
+        GraveStory assembles each biography with AI from public records and
+        historical sources. It's a thoughtful starting point for remembrance and
+        research — but it can contain errors and is not an official or
+        authoritative record. If you spot something wrong, you can report it.
+      </div>
+      <button type="button" class="symbol-sheet-close" id="ai-disclaimer-ok">I understand</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const okBtn = document.getElementById('ai-disclaimer-ok');
+  if (okBtn) okBtn.onclick = dismiss;
 }
 
 // ── SYMBOLS ON THE STONE ─────────────────────────────────────────

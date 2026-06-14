@@ -138,8 +138,10 @@ function renderResult(story) {
   if (!story._isSample && (story.biography || '').trim()) {
     const aiNote = document.createElement('div');
     aiNote.className = 'ai-disclaimer-note';
-    aiNote.innerHTML = `✦ AI-generated story — researched from public records. It may contain errors and is not an official record.`;
+    aiNote.innerHTML = `✦ AI-generated story — researched from public records. It may contain errors and is not an official record. <button type="button" class="ai-report-link" id="ai-report-link">Report a problem</button>`;
     bioSection.appendChild(aiNote);
+    const reportLink = aiNote.querySelector('#ai-report-link');
+    if (reportLink) reportLink.onclick = () => openReportSheet(story);
     showAiDisclaimerOnce();
   }
 
@@ -253,6 +255,96 @@ function showAiDisclaimerOnce() {
   document.body.appendChild(overlay);
   const okBtn = document.getElementById('ai-disclaimer-ok');
   if (okBtn) okBtn.onclick = dismiss;
+}
+
+// ── REPORT A PROBLEM (bottom sheet) ──────────────────────────────
+// Lets any viewer (guest or signed-in) flag a generated biography. Reason
+// chips + an optional note → submitContentReport (js/api-reports.js) writes to
+// the content_reports table. Open to everyone by design: a relative who finds
+// a wrong public bio should be able to report it without an account. Satisfies
+// Google Play's in-app AI-content reporting requirement.
+function openReportSheet(story) {
+  const existing = document.getElementById('report-sheet-overlay');
+  if (existing) existing.remove();
+
+  const reasons = (typeof REPORT_REASONS !== 'undefined') ? REPORT_REASONS : [
+    { id: 'factual_error', label: 'Factual error' },
+    { id: 'wrong_person', label: 'Wrong person' },
+    { id: 'offensive', label: 'Offensive or inappropriate' },
+    { id: 'privacy', label: 'Privacy concern / about a living person' },
+    { id: 'other', label: 'Something else' },
+  ];
+
+  const overlay = document.createElement('div');
+  overlay.id = 'report-sheet-overlay';
+  overlay.className = 'symbol-sheet-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  const chips = reasons.map(r =>
+    `<button type="button" class="report-reason-chip" data-reason="${r.id}">${escapeHtml(r.label)}</button>`
+  ).join('');
+
+  overlay.innerHTML = `
+    <div class="symbol-sheet report-sheet" role="dialog" aria-modal="true">
+      <div class="symbol-sheet-handle"></div>
+      <div class="symbol-sheet-name">Report a problem</div>
+      <div class="report-sheet-sub">Thanks for helping keep these stories accurate and respectful. What's wrong?</div>
+      <div class="report-reasons">${chips}</div>
+      <textarea id="report-note" class="report-note" rows="3" maxlength="600" placeholder="Add any details (optional)"></textarea>
+      <div class="report-actions">
+        <button type="button" class="report-cancel" id="report-cancel">Cancel</button>
+        <button type="button" class="report-submit" id="report-submit" disabled>Send report</button>
+      </div>
+      <div class="report-status" id="report-status"></div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  let selectedReason = null;
+  const submitBtn = document.getElementById('report-submit');
+  overlay.querySelectorAll('.report-reason-chip').forEach(chip => {
+    chip.onclick = () => {
+      selectedReason = chip.getAttribute('data-reason');
+      overlay.querySelectorAll('.report-reason-chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      submitBtn.disabled = false;
+    };
+  });
+
+  document.getElementById('report-cancel').onclick = () => overlay.remove();
+
+  submitBtn.onclick = async () => {
+    if (!selectedReason) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sending…';
+    const note = (document.getElementById('report-note') || {}).value || '';
+    const ok = (typeof submitContentReport === 'function')
+      ? await submitContentReport({
+          storyTs: story.timestamp,
+          graveId: story.grave_id || null,
+          personName: story.name || story.primary_name || null,
+          reason: selectedReason,
+          note,
+          isPublic: !!(story.is_public || story._isGlobal),
+        })
+      : false;
+    const statusEl = document.getElementById('report-status');
+    if (ok) {
+      const sheet = overlay.querySelector('.report-sheet');
+      if (sheet) sheet.innerHTML = `
+        <div class="symbol-sheet-handle"></div>
+        <div class="symbol-sheet-name">Thank you</div>
+        <div class="report-sheet-sub">Your report has been sent. We review flagged stories and will take a look.</div>
+        <div class="report-actions"><button type="button" class="report-submit" id="report-done">Done</button></div>
+      `;
+      const doneBtn = document.getElementById('report-done');
+      if (doneBtn) doneBtn.onclick = () => overlay.remove();
+    } else {
+      if (statusEl) statusEl.textContent = 'Could not send the report. Please check your connection and try again.';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Send report';
+    }
+  };
 }
 
 // ── SYMBOLS ON THE STONE ─────────────────────────────────────────

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Linking, Share, Image, Alert, FlatList, Dimensions, Modal, Pressable,
+  Linking, Share, Image, Alert, FlatList, Dimensions, Modal, Pressable, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,6 +10,7 @@ import { loadStories, saveStories } from '../lib/storage';
 import { cloudSaveStory, cloudUpdateStory, cloudDeleteStory, findOrCreateGrave, setGraveMarker } from '../lib/sync';
 import { uploadGravestoneImage } from '../lib/api-r2';
 import { getTributes, setTribute } from '../lib/api-tributes';
+import { submitContentReport, REPORT_REASONS, REPORT_NOTE_MAX } from '../lib/api-reports';
 import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
 import { useRefresh } from '../lib/use-refresh';
 import { deletePendingPhoto } from '../lib/pending';
@@ -36,6 +37,11 @@ export default function ResultScreen({ navigation, route }) {
   const [symbolModal, setSymbolModal]   = useState(null); // { name, text }
   const [markerModal, setMarkerModal]   = useState(false);
   const [aiModal, setAiModal]           = useState(false); // first-view AI-disclaimer explainer
+  const [reportModal, setReportModal]   = useState(false); // "report a problem" sheet
+  const [reportReason, setReportReason] = useState(null);
+  const [reportNote, setReportNote]     = useState('');
+  const [reportSending, setReportSending] = useState(false);
+  const [reportDone, setReportDone]     = useState(false);
   const [savingMarker, setSavingMarker] = useState(false);
   // Mirrors the chosen marker synchronously so handleSave reads the latest pick
   // even if the user taps Save before the setStory re-render lands (a pre-save
@@ -422,6 +428,33 @@ export default function ResultScreen({ navigation, route }) {
     AsyncStorage.setItem(AI_DISCLAIMER_SEEN_KEY, 'true').catch(() => {});
   }
 
+  function openReportModal() {
+    setReportReason(null);
+    setReportNote('');
+    setReportDone(false);
+    setReportSending(false);
+    setReportModal(true);
+  }
+
+  async function handleSubmitReport() {
+    if (!reportReason || reportSending) return;
+    setReportSending(true);
+    const ok = await submitContentReport({
+      storyTs: story.timestamp,
+      graveId: story.grave_id || null,
+      personName: name || story.primary_name || null,
+      reason: reportReason,
+      note: reportNote,
+      isPublic: !!(story.is_public || story._isGlobal),
+    });
+    setReportSending(false);
+    if (ok) {
+      setReportDone(true);
+    } else {
+      Alert.alert('Could not send report', 'Please check your connection and try again.');
+    }
+  }
+
   function handleBack() {
     if (isUnsaved && !saving) {
       Alert.alert(
@@ -511,9 +544,12 @@ export default function ResultScreen({ navigation, route }) {
             Honest-research register; first view also triggers the explainer
             modal below. Suppressed for the sample / unresearched template. */}
         {showAiCaption && (
-          <Text style={styles.aiCaption}>
-            ✦ AI-generated story — researched from public records. It may contain errors and is not an official record.
-          </Text>
+          <View style={styles.aiCaption}>
+            <Text style={styles.aiCaptionText}>
+              ✦ AI-generated story — researched from public records. It may contain errors and is not an official record.{' '}
+              <Text style={styles.aiReportLink} onPress={openReportModal}>Report a problem</Text>
+            </Text>
+          </View>
         )}
 
         {/* Inscription */}
@@ -777,6 +813,74 @@ export default function ResultScreen({ navigation, route }) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Report a problem sheet */}
+      <Modal
+        visible={reportModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setReportModal(false)}
+      >
+        <Pressable style={styles.symbolOverlay} onPress={() => setReportModal(false)}>
+          <Pressable style={styles.symbolSheet} onPress={() => {}}>
+            <View style={styles.symbolSheetHandle} />
+            {reportDone ? (
+              <>
+                <Text style={styles.symbolSheetName}>Thank you</Text>
+                <Text style={styles.symbolSheetText}>
+                  Your report has been sent. We review flagged stories and will take a look.
+                </Text>
+                <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setReportModal(false)}>
+                  <Text style={styles.symbolSheetCloseText}>Done</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.symbolSheetName}>Report a problem</Text>
+                <Text style={styles.reportSub}>
+                  Thanks for helping keep these stories accurate and respectful. What's wrong?
+                </Text>
+                <View style={styles.reportReasons}>
+                  {REPORT_REASONS.map(r => {
+                    const sel = reportReason === r.id;
+                    return (
+                      <TouchableOpacity
+                        key={r.id}
+                        style={[styles.reportChip, sel && styles.reportChipSel]}
+                        onPress={() => setReportReason(r.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.reportChipText, sel && styles.reportChipTextSel]}>{r.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TextInput
+                  style={styles.reportNote}
+                  placeholder="Add any details (optional)"
+                  placeholderTextColor={colors.ashDim}
+                  value={reportNote}
+                  onChangeText={setReportNote}
+                  multiline
+                  maxLength={REPORT_NOTE_MAX}
+                />
+                <View style={styles.reportActions}>
+                  <TouchableOpacity style={styles.reportCancel} onPress={() => setReportModal(false)}>
+                    <Text style={styles.reportCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.reportSubmit, (!reportReason || reportSending) && styles.reportSubmitDisabled]}
+                    onPress={handleSubmitReport}
+                    disabled={!reportReason || reportSending}
+                  >
+                    <Text style={styles.reportSubmitText}>{reportSending ? 'Sending…' : 'Send report'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -833,11 +937,6 @@ const styles = StyleSheet.create({
 
   // AI-honesty caption — muted gold, honest-research register (not a warning).
   aiCaption: {
-    color: '#b89656',
-    fontSize: 12.5,
-    lineHeight: 18,
-    fontFamily: fonts.bodyItalic,
-    fontStyle: 'italic',
     borderLeftWidth: 2,
     borderLeftColor: 'rgba(242,182,92,0.45)',
     backgroundColor: 'rgba(242,182,92,0.06)',
@@ -847,6 +946,17 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginTop: 4,
     marginBottom: 18,
+  },
+  aiCaptionText: {
+    color: '#b89656',
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontFamily: fonts.bodyItalic,
+    fontStyle: 'italic',
+  },
+  aiReportLink: {
+    color: colors.flame,
+    textDecorationLine: 'underline',
   },
 
   inscriptionBox: {
@@ -978,6 +1088,44 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
   symbolSheetCloseText: { color: colors.ash, fontFamily: fonts.body, fontSize: 14 },
+
+  // Report-a-problem sheet
+  reportSub: {
+    color: colors.ash, fontSize: 14, fontFamily: fonts.serif,
+    lineHeight: 21, marginBottom: 16,
+  },
+  reportReasons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  reportChip: {
+    backgroundColor: 'rgba(242,182,92,0.08)',
+    borderWidth: 1, borderColor: 'rgba(242,182,92,0.35)',
+    borderRadius: 20, paddingVertical: 8, paddingHorizontal: 14,
+  },
+  reportChipSel: {
+    backgroundColor: 'rgba(242,182,92,0.22)', borderColor: colors.flame,
+  },
+  reportChipText: { color: colors.parchment, fontSize: 13.5, fontFamily: fonts.body },
+  reportChipTextSel: { color: '#fff', fontFamily: fonts.bodyMedium },
+  reportNote: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1, borderColor: 'rgba(242,182,92,0.25)',
+    borderRadius: radius.sm, color: colors.parchment,
+    fontFamily: fonts.body, fontSize: 14,
+    paddingHorizontal: 12, paddingVertical: 10,
+    minHeight: 70, textAlignVertical: 'top', marginBottom: 16,
+  },
+  reportActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
+  reportCancel: {
+    paddingVertical: 11, paddingHorizontal: 18,
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.line,
+  },
+  reportCancelText: { color: colors.ash, fontFamily: fonts.body, fontSize: 14 },
+  reportSubmit: {
+    paddingVertical: 11, paddingHorizontal: 22,
+    borderRadius: radius.md, backgroundColor: 'rgba(242,182,92,0.2)',
+    borderWidth: 1, borderColor: colors.flame,
+  },
+  reportSubmitDisabled: { opacity: 0.45 },
+  reportSubmitText: { color: '#fff', fontFamily: fonts.bodyMedium, fontSize: 14 },
 
   markerSheet: {
     backgroundColor: colors.stone, borderTopLeftRadius: 20, borderTopRightRadius: 20,

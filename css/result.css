@@ -235,6 +235,98 @@
      longer body text comfortable spacing. */
   .ai-disclaimer-sheet .symbol-sheet-text { line-height: 1.6; }
 
+  /* "Report a problem" link inside the caption — quiet, underlined, inline. */
+  .ai-report-link {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-left: 0.15rem;
+    color: var(--gold, #c9a84c);
+    font-family: 'Crimson Pro', serif;
+    font-style: italic;
+    font-size: 0.82rem;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .ai-report-link:hover { color: #e8d4a0; }
+
+  /* Report bottom-sheet (reuses .symbol-sheet shell from modals.css). */
+  .report-sheet-sub {
+    font-family: 'Crimson Pro', serif;
+    color: var(--cream, #e8d4a0);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    opacity: 0.85;
+    margin-bottom: 1rem;
+  }
+  .report-reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .report-reason-chip {
+    background: rgba(201,168,76,0.08);
+    border: 1px solid rgba(201,168,76,0.35);
+    color: var(--cream, #e8d4a0);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    cursor: pointer;
+  }
+  .report-reason-chip.selected {
+    background: rgba(201,168,76,0.22);
+    border-color: var(--gold, #c9a84c);
+    color: #fff;
+  }
+  .report-note {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(201,168,76,0.25);
+    border-radius: 6px;
+    color: var(--cream, #e8d4a0);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.9rem;
+    padding: 0.6rem 0.7rem;
+    margin-bottom: 1rem;
+    resize: vertical;
+  }
+  .report-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+  }
+  .report-cancel {
+    background: none;
+    border: 1px solid rgba(138,126,110,0.4);
+    color: var(--stone, #8a7e6e);
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .report-submit {
+    background: rgba(201,168,76,0.2);
+    border: 1px solid var(--gold, #c9a84c);
+    color: #fff;
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.9rem;
+    padding: 0.5rem 1.1rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .report-submit:disabled { opacity: 0.45; cursor: default; }
+  .report-status {
+    color: #c97a3a;
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.82rem;
+    margin-top: 0.7rem;
+    text-align: right;
+  }
+
   .biography-text sup.cite {
     font-size: 0.7em;
     vertical-align: super;

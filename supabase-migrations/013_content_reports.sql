@@ -45,5 +45,16 @@ CREATE POLICY "content_reports_insert_anyone"
   ON public.content_reports FOR INSERT
   WITH CHECK (reporter_id IS NULL OR reporter_id = auth.uid());
 
--- NO SELECT / UPDATE / DELETE policies on purpose: reports are write-only for
--- clients and readable only by the service role (dashboard / digest).
+-- TABLE-LEVEL GRANT (required, not optional). An RLS policy only governs WHICH
+-- rows a role may touch — the role still needs table-level INSERT privilege
+-- first. A brand-new table does NOT inherit anon's grants, so without this the
+-- anon (guest) insert is rejected with "new row violates row-level security
+-- policy" (PostgREST 401 / SQLSTATE 42501) even though the policy WITH CHECK
+-- passes. Verified necessary on this project 2026-06-14. See migration 009 +
+-- memory reference-rls-load-bearing. GRANT is idempotent.
+GRANT INSERT ON public.content_reports TO anon;
+GRANT INSERT ON public.content_reports TO authenticated;
+
+-- NO SELECT / UPDATE / DELETE policies or grants on purpose: reports are
+-- write-only for clients and readable only by the service role (dashboard /
+-- digest).

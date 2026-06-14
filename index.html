@@ -1194,9 +1194,31 @@ async function startAnalysis() {
         ...(archiveResults || []),
       ];
 
-      const wikipediaSummary = wikiSummaryResults.length === 1
+      let wikipediaSummary = wikiSummaryResults.length === 1
         ? wikiSummaryResults[0]
         : wikiSummaryResults;
+
+      // Wikidata-title bridge: queryWikidata resolves the en.wikipedia article
+      // title even when the stone's engraved name differs from it (alias/maiden/
+      // stage name — e.g. "Erik Weisz" → "Harry Houdini"). The article-summary
+      // fetch above keys off the engraved name and its title-match guard rejects
+      // the correct article in exactly that case. So if Wikidata found a title for
+      // the PRIMARY subject but the primary article summary came back empty, retry
+      // by the authoritative title. Single-subject: the summary is one object.
+      // Multi-subject: the primary subject is index 0 of the array.
+      if (wikidataResult?.wikipediaTitle) {
+        const primaryEmpty = Array.isArray(wikipediaSummary)
+          ? !wikipediaSummary[0]
+          : !wikipediaSummary;
+        if (primaryEmpty) {
+          const bridged = await fetchWikipediaArticleSummary(
+            primaryOcrName, datesStr, wikidataResult.wikipediaTitle);
+          if (bridged) {
+            if (Array.isArray(wikipediaSummary)) wikipediaSummary[0] = bridged;
+            else wikipediaSummary = bridged;
+          }
+        }
+      }
 
       // 5. Generate full biography with Gemini
       setStep(5);
@@ -1237,6 +1259,15 @@ async function startAnalysis() {
     let portraits = (cachedBio?.portrait_left_url || cachedBio?.portrait_right_url)
       ? { left: cachedBio.portrait_left_url || null, right: cachedBio.portrait_right_url || null }
       : await fetchWikipediaPortraits(story.name, story.dates);
+    // Wikidata-title bridge for portraits: when the engraved name differs from
+    // the Wikipedia article title, the name-keyed fetch above finds nothing.
+    // Retry by Wikidata's authoritative article title (the name arg is still
+    // passed for the "unknown" guard; knownTitle drives the lookup).
+    if (!portraits?.left && !portraits?.right && wikidataResult?.wikipediaTitle && !cachedBio) {
+      const bridged = await fetchWikipediaPortraits(
+        primaryOcrName, story.dates, wikidataResult.wikipediaTitle);
+      if (bridged?.left || bridged?.right) portraits = bridged;
+    }
     if (!portraits?.left && !portraits?.right && story.name?.includes(' & ')) {
       const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
       for (const part of story.name.split(' & ').map(s => s.trim())) {

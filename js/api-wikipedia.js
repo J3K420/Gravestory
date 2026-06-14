@@ -53,35 +53,48 @@ function imageFilenameMatchesPerson(imageUrl, queriedNameSet) {
 
 // Fetches the Wikipedia article lead text for a person. Returns { title, extract, url }
 // or null if no matching article is found. Does not download any images.
-async function fetchWikipediaArticleSummary(name, dates) {
+//
+// `knownTitle` (optional): an authoritative Wikipedia article title resolved
+// upstream — e.g. from Wikidata's en.wikipedia sitelink (queryWikidata's
+// wikipediaTitle), which bridges a stone whose engraved name differs from the
+// article title ("Erik Weisz" → "Harry Houdini"). When supplied, the name-search
+// + title-match guard is BYPASSED and the summary is fetched directly by that
+// title — the guard would otherwise reject the correct article because the
+// engraved name doesn't appear in it.
+async function fetchWikipediaArticleSummary(name, dates, knownTitle) {
   if (!name || name.toLowerCase().includes('unknown')) return null;
 
-  const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
-  const significantTokens = name
-    .toLowerCase()
-    .replace(/[.,'"()]/g, '')
-    .split(/\s+/)
-    .filter(w => w.length > 1 && !SKIP.has(w));
-  if (significantTokens.length < 2) return null;
-
   try {
-    const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
-    const deathYear = yearMatch?.length > 0 ? yearMatch[yearMatch.length - 1] : '';
-    const searchQuery = encodeURIComponent(`${name} ${deathYear}`.trim());
-    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${searchQuery}&srlimit=3&format=json&origin=*`;
+    let title = (knownTitle || '').trim() || null;
 
-    const searchRes = await fetch(searchUrl);
-    if (!searchRes.ok) return null;
-    const searchData = await searchRes.json();
-    const hits = searchData?.query?.search || [];
-    if (hits.length === 0) return null;
+    // No authoritative title — search Wikipedia and accept only a hit whose
+    // article TITLE contains every significant word of the queried name.
+    if (!title) {
+      const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
+      const significantTokens = name
+        .toLowerCase()
+        .replace(/[.,'"()]/g, '')
+        .split(/\s+/)
+        .filter(w => w.length > 1 && !SKIP.has(w));
+      if (significantTokens.length < 2) return null;
 
-    let title = null;
-    for (const hit of hits) {
-      const t = (hit.title || '').toLowerCase();
-      if (significantTokens.every(w => t.includes(w))) { title = hit.title; break; }
+      const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
+      const deathYear = yearMatch?.length > 0 ? yearMatch[yearMatch.length - 1] : '';
+      const searchQuery = encodeURIComponent(`${name} ${deathYear}`.trim());
+      const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${searchQuery}&srlimit=3&format=json&origin=*`;
+
+      const searchRes = await fetch(searchUrl);
+      if (!searchRes.ok) return null;
+      const searchData = await searchRes.json();
+      const hits = searchData?.query?.search || [];
+      if (hits.length === 0) return null;
+
+      for (const hit of hits) {
+        const t = (hit.title || '').toLowerCase();
+        if (significantTokens.every(w => t.includes(w))) { title = hit.title; break; }
+      }
+      if (!title) return null;
     }
-    if (!title) return null;
 
     const summaryRes = await fetch(
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`
@@ -90,7 +103,7 @@ async function fetchWikipediaArticleSummary(name, dates) {
     const summary = await summaryRes.json();
     if (summary.type === 'disambiguation' || !summary.extract || summary.extract.length < 80) return null;
 
-    console.log('📖 Wikipedia article found:', summary.title);
+    console.log('📖 Wikipedia article found:', summary.title, knownTitle ? '(via Wikidata title)' : '');
     return {
       title: summary.title,
       extract: summary.extract.slice(0, 2000),
@@ -106,79 +119,84 @@ async function fetchWikipediaArticleSummary(name, dates) {
 // year if known), pick the top match, fetch its summary, take the lead image.
 // If the page has multiple images (file-list), grab a second one from the
 // images-on-page list.
-async function fetchWikipediaPortraits(name, dates) {
+async function fetchWikipediaPortraits(name, dates, knownTitle) {
   const result = { left: null, right: null };
   if (!name || name.toLowerCase().includes('unknown')) return result;
 
-  // Single-token-name guard: if the deceased's name is just one word
-  // (e.g. "George", "Mary"), Wikipedia search will reliably return a famous
-  // person, monarch, or saint by that name — King George V, Mary Queen of
-  // Scots, etc. The title-match guard below CAN'T disambiguate these,
-  // because every "George Xyz" article title contains "george".
-  //
-  // For these cases we skip the Wikipedia portrait pull entirely. An empty
-  // header is honest; a king's portrait on a random stone is not.
-  //
-  // Skip honorifics/suffixes the same way the title-match guard does, so
-  // "Dr. George" with the "Dr." stripped is still treated as one token.
+  // SKIP — honorifics/suffixes stripped before token analysis, shared by the
+  // single-token guard, the title-match guard, and the filename-sanity name set.
   const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
+
+  // When an authoritative article title is supplied (e.g. from Wikidata's
+  // sitelink — see fetchWikipediaArticleSummary), bypass the name search and
+  // title-match guard. The filename-sanity name set is then derived from the
+  // ARTICLE TITLE, not the engraved name — "Erik Weisz" wouldn't match a
+  // "Harry_Houdini.jpg" filename, but "Harry Houdini" will.
+  let title = (knownTitle || '').trim() || null;
+  const titleTokens = title
+    ? title.toLowerCase().replace(/[.,'"()]/g, '').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w))
+    : [];
+
+  // Single-token-name guard (only when we have no authoritative title): if the
+  // deceased's name is just one word (e.g. "George", "Mary"), Wikipedia search
+  // reliably returns a famous person/monarch/saint by that name — King George V,
+  // Mary Queen of Scots, etc. The title-match guard CAN'T disambiguate these,
+  // because every "George Xyz" article title contains "george". An empty header
+  // is honest; a king's portrait on a random stone is not.
   const significantTokens = name
     .toLowerCase()
     .replace(/[.,'"()]/g, '')
     .split(/\s+/)
     .filter(w => w.length > 1 && !SKIP.has(w));
-  if (significantTokens.length < 2) {
+  if (!title && significantTokens.length < 2) {
     console.log('🖼️ Skipping Wikipedia portrait — single-token name too generic to disambiguate:', JSON.stringify(name));
     return result;
   }
 
   try {
-    // Step 1: search for a matching Wikipedia article
-    // Use the death year as disambiguation when available
-    const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
-    const deathYear = yearMatch && yearMatch.length > 0 ? yearMatch[yearMatch.length - 1] : '';
-    const searchQuery = encodeURIComponent(`${name} ${deathYear}`.trim());
-    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${searchQuery}&srlimit=3&format=json&origin=*`;
+    // Step 1/2: resolve the article title via name search + title-match guard,
+    // unless an authoritative title was supplied upstream.
+    if (!title) {
+      // Use the death year as disambiguation when available
+      const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
+      const deathYear = yearMatch && yearMatch.length > 0 ? yearMatch[yearMatch.length - 1] : '';
+      const searchQuery = encodeURIComponent(`${name} ${deathYear}`.trim());
+      const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${searchQuery}&srlimit=3&format=json&origin=*`;
 
-    const searchRes = await fetch(searchUrl);
-    if (!searchRes.ok) throw new Error(`search ${searchRes.status}`);
-    const searchData = await searchRes.json();
-    const hits = searchData?.query?.search || [];
-    if (hits.length === 0) {
-      console.log('🖼️ No Wikipedia article found for', name);
-      return result;
-    }
+      const searchRes = await fetch(searchUrl);
+      if (!searchRes.ok) throw new Error(`search ${searchRes.status}`);
+      const searchData = await searchRes.json();
+      const hits = searchData?.query?.search || [];
+      if (hits.length === 0) {
+        console.log('🖼️ No Wikipedia article found for', name);
+        return result;
+      }
 
-    // Step 2: pick the first hit whose TITLE actually contains the queried
-    // name. Wikipedia's full-text search ranks by snippet relevance, not title
-    // match — so for a name like "Bruce Lee" the top hit can be "Linda Lee
-    // Cadwell" (his wife's article mentions him heavily). Accepting hits[0]
-    // blindly is what surfaced Linda's headshot as Bruce's portrait.
-    //
-    // Rule: every significant word of the queried name (length > 1 — skips
-    // initials like "J.") must appear in the article title, case-insensitive.
-    // Skip honorifics and generation suffixes that may not be on Wikipedia.
-    const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
-    const required = name
-      .toLowerCase()
-      .replace(/[.,'"()]/g, '')
-      .split(/\s+/)
-      .filter(w => w.length > 1 && !SKIP.has(w));
-
-    let title = null;
-    for (const hit of hits) {
-      const t = (hit.title || '').toLowerCase();
-      if (required.every(w => t.includes(w))) {
-        title = hit.title;
-        break;
+      // Pick the first hit whose TITLE actually contains the queried name.
+      // Wikipedia's full-text search ranks by snippet relevance, not title match —
+      // so for "Bruce Lee" the top hit can be "Linda Lee Cadwell" (his wife's
+      // article mentions him heavily). Accepting hits[0] blindly is what surfaced
+      // Linda's headshot as Bruce's portrait. Rule: every significant word of the
+      // queried name (length > 1 — skips initials like "J.") must appear in the
+      // article title, case-insensitive.
+      for (const hit of hits) {
+        const t = (hit.title || '').toLowerCase();
+        if (significantTokens.every(w => t.includes(w))) {
+          title = hit.title;
+          break;
+        }
+      }
+      if (!title) {
+        console.log('🖼️ No Wikipedia article title matches', JSON.stringify(name),
+                    '— hits were:', hits.map(h => h.title));
+        return result;
       }
     }
-    if (!title) {
-      console.log('🖼️ No Wikipedia article title matches', JSON.stringify(name),
-                  '— hits were:', hits.map(h => h.title));
-      return result;
-    }
-    console.log('🖼️ Wikipedia article matched:', title);
+    // Filename-sanity name set: article-title tokens when supplied (so the
+    // engraved-name mismatch doesn't reject the correct portrait), else the
+    // queried name's tokens.
+    const required = titleTokens.length ? titleTokens : significantTokens;
+    console.log('🖼️ Wikipedia article matched:', title, knownTitle ? '(via Wikidata title)' : '');
     const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
     const summaryRes = await fetch(summaryUrl);
     if (!summaryRes.ok) throw new Error(`summary ${summaryRes.status}`);

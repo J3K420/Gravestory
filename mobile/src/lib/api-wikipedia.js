@@ -87,39 +87,52 @@ function imageFilenameMatchesPerson(imageUrl, queriedNameSet) {
 
 // Fetches the Wikipedia article lead text for a person. Returns { title, extract, url }
 // or null if no matching article is found. Does not download any images.
-export async function fetchWikipediaArticleSummary(name, dates) {
+//
+// `knownTitle` (optional): an authoritative Wikipedia article title resolved
+// upstream — e.g. from Wikidata's en.wikipedia sitelink (queryWikidata's
+// wikipediaTitle), which bridges a stone whose engraved name differs from the
+// article title ("Erik Weisz" → "Harry Houdini"). When supplied, the name-search
+// + title-match guard is BYPASSED and the summary is fetched directly by that
+// title — the guard would otherwise reject the correct article because the
+// engraved name doesn't appear in it.
+export async function fetchWikipediaArticleSummary(name, dates, knownTitle) {
   if (!name || name.toLowerCase().includes('unknown')) return null;
 
-  const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
-  const significantTokens = name
-    .toLowerCase()
-    .replace(/[.,'"()]/g, '')
-    .split(/\s+/)
-    .filter(w => w.length > 1 && !SKIP.has(w));
-  if (significantTokens.length < 2) return null;
-
-  // Match on first+last significant token only — middle names like "Jade" in
-  // "Amy Jade Winehouse" won't appear in the Wikipedia article title "Amy Winehouse".
-  const firstLast = [significantTokens[0], significantTokens[significantTokens.length - 1]];
-
   try {
-    const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
-    const deathYear = yearMatch?.length > 0 ? yearMatch[yearMatch.length - 1] : '';
-    const searchQuery = encodeURIComponent(`${name} ${deathYear}`.trim());
-    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${searchQuery}&srlimit=3&format=json&origin=*`;
+    let title = (knownTitle || '').trim() || null;
 
-    const searchRes = await fetch(searchUrl, { headers: WIKI_HEADERS });
-    if (!searchRes.ok) return null;
-    const searchData = await searchRes.json();
-    const hits = searchData?.query?.search || [];
-    if (hits.length === 0) return null;
+    // No authoritative title — search Wikipedia and accept only a hit whose
+    // article TITLE contains the first+last significant token of the queried
+    // name (middle names like "Jade" in "Amy Jade Winehouse" won't appear in
+    // the article title "Amy Winehouse").
+    if (!title) {
+      const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
+      const significantTokens = name
+        .toLowerCase()
+        .replace(/[.,'"()]/g, '')
+        .split(/\s+/)
+        .filter(w => w.length > 1 && !SKIP.has(w));
+      if (significantTokens.length < 2) return null;
 
-    let title = null;
-    for (const hit of hits) {
-      const t = (hit.title || '').toLowerCase();
-      if (firstLast.every(w => t.includes(w))) { title = hit.title; break; }
+      const firstLast = [significantTokens[0], significantTokens[significantTokens.length - 1]];
+
+      const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
+      const deathYear = yearMatch?.length > 0 ? yearMatch[yearMatch.length - 1] : '';
+      const searchQuery = encodeURIComponent(`${name} ${deathYear}`.trim());
+      const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${searchQuery}&srlimit=3&format=json&origin=*`;
+
+      const searchRes = await fetch(searchUrl, { headers: WIKI_HEADERS });
+      if (!searchRes.ok) return null;
+      const searchData = await searchRes.json();
+      const hits = searchData?.query?.search || [];
+      if (hits.length === 0) return null;
+
+      for (const hit of hits) {
+        const t = (hit.title || '').toLowerCase();
+        if (firstLast.every(w => t.includes(w))) { title = hit.title; break; }
+      }
+      if (!title) return null;
     }
-    if (!title) return null;
 
     const summaryRes = await fetch(
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
@@ -152,7 +165,13 @@ export function normalizePortraits(portraits) {
 // Returns remote URLs directly — no local file download needed, so portraits
 // persist across app restarts. Wikipedia's thumbnail URLs are always pre-rendered
 // JPEGs regardless of the original file format, safe for React Native's Image.
-export async function fetchWikipediaPortraits(name, dates) {
+// `knownTitle` (optional): an authoritative Wikipedia article title resolved
+// upstream (e.g. Wikidata's sitelink — see fetchWikipediaArticleSummary). When
+// supplied, the name search + title-match guard is bypassed and the
+// filename-sanity name set is derived from the ARTICLE TITLE, not the engraved
+// name — "Erik Weisz" wouldn't match a "Harry_Houdini.jpg" filename, but
+// "Harry Houdini" will.
+export async function fetchWikipediaPortraits(name, dates, knownTitle) {
   if (!name || name.toLowerCase().includes('unknown')) return [];
 
   const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
@@ -161,31 +180,42 @@ export async function fetchWikipediaPortraits(name, dates) {
     .replace(/[.,'"()]/g, '')
     .split(/\s+/)
     .filter(w => w.length > 1 && !SKIP.has(w));
-  if (significantTokens.length < 2) return [];
+
+  let title = (knownTitle || '').trim() || null;
+  const titleTokens = title
+    ? title.toLowerCase().replace(/[.,'"()]/g, '').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w))
+    : [];
+
+  if (!title && significantTokens.length < 2) return [];
 
   // Match on first+last token only — avoids middle-name mismatches like
   // "Amy Jade Winehouse" failing to match the "Amy Winehouse" article title.
-  const firstLast = [significantTokens[0], significantTokens[significantTokens.length - 1]];
-  const nameSet = new Set(significantTokens);
+  const firstLast = significantTokens.length >= 2
+    ? [significantTokens[0], significantTokens[significantTokens.length - 1]]
+    : significantTokens;
+  // Filename-sanity name set: article-title tokens when a title was supplied
+  // (so an engraved-name mismatch doesn't reject the correct portrait).
+  const nameSet = new Set(titleTokens.length ? titleTokens : significantTokens);
 
   try {
-    const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
-    const deathYear = yearMatch && yearMatch.length > 0 ? yearMatch[yearMatch.length - 1] : '';
-    const searchQuery = encodeURIComponent(`${name} ${deathYear}`.trim());
-    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${searchQuery}&srlimit=3&format=json&origin=*`;
+    if (!title) {
+      const yearMatch = (dates || '').match(/\b(1[5-9]\d{2}|20\d{2})\b/g);
+      const deathYear = yearMatch && yearMatch.length > 0 ? yearMatch[yearMatch.length - 1] : '';
+      const searchQuery = encodeURIComponent(`${name} ${deathYear}`.trim());
+      const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${searchQuery}&srlimit=3&format=json&origin=*`;
 
-    const searchRes = await fetch(searchUrl, { headers: WIKI_HEADERS });
-    if (!searchRes.ok) throw new Error(`search ${searchRes.status}`);
-    const searchData = await searchRes.json();
-    const hits = searchData?.query?.search || [];
-    if (hits.length === 0) return [];
+      const searchRes = await fetch(searchUrl, { headers: WIKI_HEADERS });
+      if (!searchRes.ok) throw new Error(`search ${searchRes.status}`);
+      const searchData = await searchRes.json();
+      const hits = searchData?.query?.search || [];
+      if (hits.length === 0) return [];
 
-    let title = null;
-    for (const hit of hits) {
-      const t = (hit.title || '').toLowerCase();
-      if (firstLast.every(w => t.includes(w))) { title = hit.title; break; }
+      for (const hit of hits) {
+        const t = (hit.title || '').toLowerCase();
+        if (firstLast.every(w => t.includes(w))) { title = hit.title; break; }
+      }
+      if (!title) return [];
     }
-    if (!title) return [];
 
     const summaryRes = await fetch(
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,

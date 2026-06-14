@@ -511,9 +511,30 @@ export default function CameraScreen({ navigation, route }) {
         ];
 
         const portraits = portraitArrays.flat();
-        const wikipediaSummary = wikiSummaryResults.length === 1
+        let wikipediaSummary = wikiSummaryResults.length === 1
           ? wikiSummaryResults[0]
           : wikiSummaryResults;
+
+        // Wikidata-title bridge: queryWikidata resolves the en.wikipedia article
+        // title even when the stone's engraved name differs from it (alias/maiden/
+        // stage name — "Erik Weisz" → "Harry Houdini"). The article-summary fetch
+        // keys off the engraved name and its title-match guard rejects the correct
+        // article in exactly that case. If Wikidata found a title for the PRIMARY
+        // subject but the primary summary came back empty, retry by that title.
+        // Single-subject: one object. Multi-subject: primary is index 0.
+        if (wikidataResult?.wikipediaTitle) {
+          const primaryEmpty = Array.isArray(wikipediaSummary)
+            ? !wikipediaSummary[0]
+            : !wikipediaSummary;
+          if (primaryEmpty) {
+            const bridged = await fetchWikipediaArticleSummary(
+              primaryOcrName, datesStr, wikidataResult.wikipediaTitle);
+            if (bridged) {
+              if (Array.isArray(wikipediaSummary)) wikipediaSummary[0] = bridged;
+              else wikipediaSummary = bridged;
+            }
+          }
+        }
 
         setStepIndex(3);
         bioResult = await generateBiography(graveData, mergedSearchResults, wikiData, locationHint, wikipediaSummary, wikidataResult);
@@ -538,6 +559,14 @@ export default function CameraScreen({ navigation, route }) {
         // because bio.name is often a combined string ("Harry Houdini and Bess Houdini")
         // that would fail the Wikipedia title-match guard when passed as-is.
         resolvedPortraits = portraits;
+        // Wikidata-title bridge for portraits: when the engraved name differs from
+        // the Wikipedia article title, the name-keyed fetch finds nothing. Retry by
+        // Wikidata's authoritative article title before the surname-split fallback.
+        if (resolvedPortraits.length === 0 && wikidataResult?.wikipediaTitle) {
+          const bridged = await fetchWikipediaPortraits(
+            primaryOcrName, bioResult.dates, wikidataResult.wikipediaTitle);
+          if (bridged.length > 0) resolvedPortraits = bridged;
+        }
         if (resolvedPortraits.length === 0 && bioResult.name) {
           const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
           const nameParts = bioResult.name.split(/\s+(?:and|&)\s+/i).map(n => n.trim()).filter(Boolean);

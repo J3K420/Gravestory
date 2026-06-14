@@ -442,9 +442,10 @@ async function handleRevenueCatWebhook(request, env, origin, allowed) {
   }
 
   const CREDIT_MAP = {
-    gravestory_5_scans:  5,
-    gravestory_20_scans: 20,
-    gravestory_60_scans: 60,
+    gravestory_5_scans:   5,
+    gravestory_20_scans:  20,
+    gravestory_60_scans:  60,
+    gravestory_150_scans: 150,
   };
 
   const credits = CREDIT_MAP[productId];

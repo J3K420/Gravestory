@@ -7,12 +7,18 @@ import { SCAN_LIMIT_GUEST, SCAN_LIMIT_USER } from '../lib/scan-limit';
 import { logEvent, EVENTS } from '../lib/analytics';
 
 // Product IDs must match exactly what's created in Google Play Console + RevenueCat
-const PRODUCT_IDS = ['gravestory_5_scans', 'gravestory_20_scans', 'gravestory_60_scans'];
+const PRODUCT_IDS = ['gravestory_5_scans', 'gravestory_20_scans', 'gravestory_60_scans', 'gravestory_150_scans'];
 
+// The live price the user pays/sees comes from RevenueCat (pkg.product.priceString),
+// which mirrors Google Play Console — so a price change is a STORE-side action, no OTA.
+// The `price` strings below are only a fallback shown in the greyed-out offline preview
+// when offerings fail to load; keep them in sync with the Play Console prices so the
+// error state isn't misleading.
 const PACK_INFO = {
-  gravestory_5_scans:  { label: 'Starter',   scans: 5,  price: '$0.99' },
-  gravestory_20_scans: { label: 'Explorer',  scans: 20, price: '$2.99' },
-  gravestory_60_scans: { label: 'Historian', scans: 60, price: '$6.99' },
+  gravestory_5_scans:   { label: 'Starter',   scans: 5,   price: '$1.99' },
+  gravestory_20_scans:  { label: 'Explorer',  scans: 20,  price: '$5.99' },
+  gravestory_60_scans:  { label: 'Historian', scans: 60,  price: '$12.99' },
+  gravestory_150_scans: { label: 'Legacy',    scans: 150, price: '$24.99' },
 };
 
 export default function PaywallScreen({ navigation, route }) {

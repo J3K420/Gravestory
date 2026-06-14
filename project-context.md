@@ -88,7 +88,7 @@ The mobile pipeline in `CameraScreen.js` mirrors this exactly. **Changes to pipe
 - **Web**: `js/scan-limit.js` — `checkWebScanLimit()` (fail-closed on Supabase error) gates `startAnalysis()`; `checkWebSaveLimit()` gates `saveStory()`
 - **Mobile**: `mobile/src/lib/scan-limit.js` — same logic; `checkScanLimit()` fail-closed; `CameraScreen` checks before opening picker
 - Guest: 3 lifetime scans / 3 saves. Free signed-in: 10 lifetime scans / 10 saves. `is_unlimited: true` in `app_metadata` bypasses all limits (testers only, set via Supabase SQL).
-- Credits model: `scan_credits` table (Supabase). Starter 5/$0.99, Explorer 20/$2.99, Historian 60/$6.99.
+- Credits model: `scan_credits` table (Supabase). Starter 5/$1.99, Explorer 20/$5.99, Historian 60/$12.99, Legacy 150/$24.99 (premium set + Legacy gift tier, 2026-06-13; prices live from Play Console via RevenueCat, no code change; new product IDs also need a worker `CREDIT_MAP` entry).
 
 ### Pull-to-refresh (mobile)
 All 8 mobile screens use `useRefresh(callback)` from `mobile/src/lib/use-refresh.js`. **Never add inline `[refreshing, setRefreshing]` state** — use the hook.

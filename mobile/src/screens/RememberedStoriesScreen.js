@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
-import { cloudDeleteStory } from '../lib/sync';
+import { cloudDeleteStory, syncDelta } from '../lib/sync';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
@@ -59,8 +59,15 @@ export default function RememberedStoriesScreen({ navigation }) {
       async function load() {
         const { data: { session } } = await supabase.auth.getSession();
         const uid = session?.user?.id ?? null;
+        // Show local immediately, then pull cloud deltas so a long-backgrounded
+        // resume (or an edit/delete from another device) reflects here instead
+        // of showing the stale local copy until a manual pull-to-refresh.
         const local = await loadStories(uid);
         if (active) { setStories(local); setLoaded(true); }
+        if (session?.user) {
+          const synced = await syncDelta(session.user);
+          if (active && synced) setStories(synced);
+        }
       }
       load();
       return () => { active = false; };

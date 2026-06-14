@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
@@ -57,13 +58,23 @@ export default function GlobalMapScreen({ navigation }) {
   const [selectedStory, setSelectedStory] = useState(null);
   const [bioExpanded, setBioExpanded]     = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      fetchStories(u);
-    });
-  }, []);
+  // Re-check on every focus (not just mount) so a long-backgrounded resume or
+  // a return from another screen refreshes the community map. fetchStories
+  // honours the 5-min cache, so rapid back-and-forth won't spam the RPC — but
+  // once the cache is stale it refetches automatically instead of waiting for
+  // a manual pull-to-refresh.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!active) return;
+        const u = session?.user ?? null;
+        setUser(u);
+        fetchStories(u);
+      });
+      return () => { active = false; };
+    }, [])
+  );
 
   async function fetchStories(currentUser) {
     const cacheKey = currentUser ? currentUser.id : 'guest';

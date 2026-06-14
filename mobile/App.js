@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
+import * as Updates from 'expo-updates';
 import { useFonts } from 'expo-font';
 import {
   Fraunces_400Regular,
@@ -126,6 +127,48 @@ export default function App() {
     return () => {
       authListener?.subscription?.unsubscribe();
     };
+  }, []);
+
+  // Background/foreground lifecycle. Two things break on an app that sits
+  // backgrounded for a long time (hours/days) and is then resumed WITHOUT a
+  // cold start, both fixed here:
+  //
+  //  1. Supabase token refresh. autoRefreshToken runs on a JS setInterval the
+  //     OS suspends while backgrounded, so the ~1hr access token can be expired
+  //     on return. The documented RN pattern is to stop the timer in the
+  //     background and start it (which also refreshes immediately) on resume.
+  //  2. OTA updates. expo-updates only checks at cold start, so a long-resumed
+  //     app keeps running stale JS. We check on every foreground and reload if
+  //     a newer bundle is available. Guarded by Updates.isEnabled so it no-ops
+  //     in dev/Expo Go (where the check would otherwise reject).
+  useEffect(() => {
+    async function applyPendingUpdate() {
+      if (!Updates.isEnabled) return;
+      try {
+        const result = await Updates.checkForUpdateAsync();
+        if (result.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch (e) {
+        // Offline, mid-flight, or transient — next foreground retries.
+        console.warn('OTA update check on resume failed:', e.message);
+      }
+    }
+
+    function handleAppStateChange(state) {
+      if (state === 'active') {
+        supabase.auth.startAutoRefresh();
+        applyPendingUpdate();
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
+    }
+
+    // Prime for the launch (already-foreground) state, then subscribe.
+    if (AppState.currentState === 'active') supabase.auth.startAutoRefresh();
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub.remove();
   }, []);
 
   if (!fontsLoaded) return null;

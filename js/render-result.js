@@ -587,17 +587,77 @@ function renderVisibilityControls(story, alreadySaved) {
   body.appendChild(wrap);
 
   document.getElementById('visibility-toggle-btn').onclick = async () => {
-    const btn = document.getElementById('visibility-toggle-btn');
-    btn.disabled = true;
-    btn.textContent = '…';
-    savedRow.is_public = !savedRow.is_public;
-    // Mirror in currentStory so the UI re-render after toggle is consistent
-    if (currentStory && currentStory.timestamp === savedRow.timestamp) {
-      currentStory.is_public = savedRow.is_public;
+    const goingPublic = !savedRow.is_public;
+    // First time a user shares ANY story publicly, make them read+accept a
+    // one-time notice that public stories are visible to everyone and may name
+    // others. Acknowledged once, then never again (flag gs_share_notice_seen).
+    // Making a story private again never gates.
+    if (goingPublic && !_hasSeenShareNotice()) {
+      showShareNoticeOnce(() => _applyVisibilityToggle(savedRow));
+      return;
     }
-    if (savedRow.is_public) logEvent(ANALYTICS_EVENTS.MADE_PUBLIC, {});
-    await persistUpdate(savedRow);
-    renderVisibilityControls(currentStory || savedRow, true);
+    _applyVisibilityToggle(savedRow);
+  };
+}
+
+// Performs the actual public/private flip + persist + re-render. Split out so the
+// first-share consent gate can call it after the user accepts the notice.
+async function _applyVisibilityToggle(savedRow) {
+  const btn = document.getElementById('visibility-toggle-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  savedRow.is_public = !savedRow.is_public;
+  // Mirror in currentStory so the UI re-render after toggle is consistent
+  if (currentStory && currentStory.timestamp === savedRow.timestamp) {
+    currentStory.is_public = savedRow.is_public;
+  }
+  if (savedRow.is_public) logEvent(ANALYTICS_EVENTS.MADE_PUBLIC, {});
+  await persistUpdate(savedRow);
+  renderVisibilityControls(currentStory || savedRow, true);
+}
+
+// ── FIRST-SHARE PUBLIC NOTICE (one-time) ─────────────────────────
+// Shown the first time a user shares any story to the public community map.
+// Informed-consent moment at the action that creates the exposure: public
+// stories are visible to everyone and may name other people. Reuses the
+// symbol bottom-sheet shell. onAccept runs the share; cancel aborts it.
+const SHARE_NOTICE_SEEN_KEY = 'gs_share_notice_seen';
+
+function _hasSeenShareNotice() {
+  try { return localStorage.getItem(SHARE_NOTICE_SEEN_KEY) === 'true'; } catch (e) { return false; }
+}
+
+function showShareNoticeOnce(onAccept) {
+  const existing = document.getElementById('share-notice-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'share-notice-overlay';
+  overlay.className = 'symbol-sheet-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="symbol-sheet" role="dialog" aria-modal="true">
+      <div class="symbol-sheet-handle"></div>
+      <div class="symbol-sheet-name">Sharing publicly</div>
+      <div class="symbol-sheet-text">
+        Public stories appear on the community map for anyone to see, including the
+        biography, photo, name, dates, and approximate location — and they may name
+        other people. Only share stories you're comfortable making public, and please
+        don't share private details about living people. You can make a story private
+        again at any time.
+      </div>
+      <div class="report-actions" style="margin-top:1.2rem;">
+        <button type="button" class="report-cancel" id="share-notice-cancel">Cancel</button>
+        <button type="button" class="report-submit" id="share-notice-accept">Share publicly</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById('share-notice-cancel').onclick = () => overlay.remove();
+  document.getElementById('share-notice-accept').onclick = () => {
+    try { localStorage.setItem(SHARE_NOTICE_SEEN_KEY, 'true'); } catch (e) {}
+    overlay.remove();
+    if (typeof onAccept === 'function') onAccept();
   };
 }
 

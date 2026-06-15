@@ -22,6 +22,7 @@ import { SYMBOL_CONTEXT } from '../lib/biography';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AI_DISCLAIMER_SEEN_KEY = 'gs_ai_disclaimer_seen';
+const SHARE_NOTICE_SEEN_KEY = 'gs_share_notice_seen';
 
 export default function ResultScreen({ navigation, route }) {
   const [story, setStory]               = useState(route.params?.story);
@@ -42,6 +43,7 @@ export default function ResultScreen({ navigation, route }) {
   const [reportNote, setReportNote]     = useState('');
   const [reportSending, setReportSending] = useState(false);
   const [reportDone, setReportDone]     = useState(false);
+  const [shareNoticeModal, setShareNoticeModal] = useState(false); // first-share public notice
   const [savingMarker, setSavingMarker] = useState(false);
   // Mirrors the chosen marker synchronously so handleSave reads the latest pick
   // even if the user taps Save before the setStory re-render lands (a pre-save
@@ -348,6 +350,24 @@ export default function ResultScreen({ navigation, route }) {
 
   async function handleTogglePublic() {
     if (!user || story._isGlobal || togglingPublic) return;
+    const goingPublic = !story.is_public;
+    // First time a user shares ANY story publicly, make them read+accept a
+    // one-time notice (public stories are visible to all and may name others).
+    // Making a story private again never gates.
+    if (goingPublic) {
+      const seen = await AsyncStorage.getItem(SHARE_NOTICE_SEEN_KEY).catch(() => null);
+      if (seen !== 'true') {
+        setShareNoticeModal(true);
+        return;
+      }
+    }
+    await _doTogglePublic();
+  }
+
+  // The actual public/private flip — also called after the user accepts the
+  // first-share notice.
+  async function _doTogglePublic() {
+    if (togglingPublic) return;
     setTogglingPublic(true);
     const updated = { ...story, is_public: !story.is_public };
     const all = await loadStories(user?.id ?? null);
@@ -357,6 +377,12 @@ export default function ResultScreen({ navigation, route }) {
     if (updated.id) setStory(await cloudUpdateStory(updated, user));
     if (updated.is_public) logEvent(EVENTS.MADE_PUBLIC, {});
     setTogglingPublic(false);
+  }
+
+  async function acceptShareNotice() {
+    await AsyncStorage.setItem(SHARE_NOTICE_SEEN_KEY, 'true').catch(() => {});
+    setShareNoticeModal(false);
+    await _doTogglePublic();
   }
 
   async function handlePickMarker(styleId) {
@@ -878,6 +904,36 @@ export default function ResultScreen({ navigation, route }) {
                 </View>
               </>
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* First-share public notice — shown once, before the first time a user
+          makes any story public. */}
+      <Modal
+        visible={shareNoticeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShareNoticeModal(false)}
+      >
+        <Pressable style={styles.symbolOverlay} onPress={() => setShareNoticeModal(false)}>
+          <Pressable style={styles.symbolSheet} onPress={() => {}}>
+            <View style={styles.symbolSheetHandle} />
+            <Text style={styles.symbolSheetName}>Sharing publicly</Text>
+            <Text style={styles.symbolSheetText}>
+              Public stories appear on the community map for anyone to see — including the
+              biography, photo, name, dates, and approximate location — and they may name other
+              people. Only share stories you're comfortable making public, and please don't share
+              private details about living people. You can make a story private again at any time.
+            </Text>
+            <View style={styles.reportActions}>
+              <TouchableOpacity style={styles.reportCancel} onPress={() => setShareNoticeModal(false)}>
+                <Text style={styles.reportCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.reportSubmit} onPress={acceptShareNotice}>
+                <Text style={styles.reportSubmitText}>Share publicly</Text>
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>

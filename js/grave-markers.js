@@ -214,21 +214,22 @@ const CHIRHO_GLYPH = `${_FAITH_TABLET}
   <line x1="40" y1="60" x2="60" y2="72" stroke="${PARCH}" stroke-width="2"/>
   <line x1="60" y1="60" x2="40" y2="72" stroke="${PARCH}" stroke-width="2"/>`;
 
-// ── 25. IHS monogram tablet ───────────────────────────────────────────────────
-const IHS_GLYPH = `${_FAITH_TABLET}
-  <!-- I -->
-  <line x1="37" y1="50" x2="37" y2="66" stroke="${PARCH}" stroke-width="2"/>
-  <line x1="33" y1="50" x2="41" y2="50" stroke="${PARCH}" stroke-width="1.6"/>
-  <line x1="33" y1="66" x2="41" y2="66" stroke="${PARCH}" stroke-width="1.6"/>
-  <!-- H -->
-  <line x1="47" y1="50" x2="47" y2="66" stroke="${PARCH}" stroke-width="2"/>
-  <line x1="53" y1="50" x2="53" y2="66" stroke="${PARCH}" stroke-width="2"/>
-  <line x1="47" y1="58" x2="53" y2="58" stroke="${PARCH}" stroke-width="2"/>
-  <!-- S -->
-  <path d="M67 52 Q60 50 60 54 Q60 58 66 58 Q72 58 70 63 Q67 66 60 64" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
-  <!-- cross above H -->
-  <line x1="50" y1="42" x2="50" y2="48" stroke="${PARCH}" stroke-width="1.6"/>
-  <line x1="47" y1="45" x2="53" y2="45" stroke="${PARCH}" stroke-width="1.6"/>`;
+// ── 25. Wheat sheaf (a long life "harvested") ─────────────────────────────────
+const WHEAT_GLYPH = `${_FAITH_TABLET}
+  <!-- stalks fanning up from the tie -->
+  <path d="M50 70 L50 42" stroke="${PARCH}" stroke-width="1.6" fill="none"/>
+  <path d="M50 70 Q44 58 42 44" stroke="${PARCH}" stroke-width="1.6" fill="none"/>
+  <path d="M50 70 Q56 58 58 44" stroke="${PARCH}" stroke-width="1.6" fill="none"/>
+  <path d="M50 70 Q40 60 36 49" stroke="${PARCH}" stroke-width="1.4" fill="none"/>
+  <path d="M50 70 Q60 60 64 49" stroke="${PARCH}" stroke-width="1.4" fill="none"/>
+  <!-- grain heads (short angled ticks) -->
+  <path d="M50 42 L47 45 M50 42 L53 45 M50 46 L47 49 M50 46 L53 49" stroke="${PARCH}" stroke-width="1.3"/>
+  <path d="M42 44 L39 47 M42 44 L44 47 M43 49 L40 52 M43 49 L45 52" stroke="${PARCH}" stroke-width="1.2"/>
+  <path d="M58 44 L55 47 M58 44 L61 47 M57 49 L54 52 M57 49 L60 52" stroke="${PARCH}" stroke-width="1.2"/>
+  <path d="M36 49 L34 52 M36 49 L38 52" stroke="${PARCH}" stroke-width="1.1"/>
+  <path d="M64 49 L62 52 M64 49 L66 52" stroke="${PARCH}" stroke-width="1.1"/>
+  <!-- binding tie -->
+  <rect x="45" y="68" width="10" height="5" rx="1.5" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}"/>`;
 
 // ── 26. Orthodox (three-bar) cross ────────────────────────────────────────────
 const ORTHODOX_GLYPH = `${_FAITH_TABLET}
@@ -239,8 +240,8 @@ const ORTHODOX_GLYPH = `${_FAITH_TABLET}
 
 // ── 27. Alpha & Omega ─────────────────────────────────────────────────────────
 const ALPHAOMEGA_GLYPH = `${_FAITH_TABLET}
-  <path d="M36 64 L42 46 L48 64 M38 58 L46 58" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
-  <path d="M54 64 Q54 46 62 46 Q70 46 70 64 M52 64 L58 64 M66 64 L72 64" stroke="${PARCH}" stroke-width="1.8" fill="none"/>`;
+  <path d="M41 62 L45 50 L49 62 M42.5 58 L47.5 58" stroke="${PARCH}" stroke-width="1.7" fill="none"/>
+  <path d="M53 62 Q53 50 58 50 Q63 50 63 62 M51.5 62 L55 62 M61 62 L64.5 62" stroke="${PARCH}" stroke-width="1.7" fill="none"/>`;
 
 // ── 28. Sacred Heart (flaming, crowned with cross) ────────────────────────────
 const SACREDHEART_GLYPH = `${_FAITH_TABLET}
@@ -383,7 +384,7 @@ const MARKER_STYLES = [
   { id: 'crescent',     label: 'Crescent & Star', pack: 'faith', glyph: CRESCENT_GLYPH },
   { id: 'menorah',      label: 'Menorah',         pack: 'faith', glyph: MENORAH_GLYPH },
   { id: 'chirho',       label: 'Chi-Rho',         pack: 'faith', glyph: CHIRHO_GLYPH },
-  { id: 'ihs',          label: 'IHS Monogram',    pack: 'faith', glyph: IHS_GLYPH },
+  { id: 'wheat',        label: 'Wheat Sheaf',     pack: 'faith', glyph: WHEAT_GLYPH },
   { id: 'orthodox',     label: 'Orthodox Cross',  pack: 'faith', glyph: ORTHODOX_GLYPH },
   { id: 'alphaomega',   label: 'Alpha & Omega',   pack: 'faith', glyph: ALPHAOMEGA_GLYPH },
   { id: 'sacredheart',  label: 'Sacred Heart',    pack: 'faith', glyph: SACREDHEART_GLYPH },

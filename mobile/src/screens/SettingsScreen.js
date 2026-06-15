@@ -226,6 +226,13 @@ export default function SettingsScreen({ navigation }) {
             >
               <Text style={styles.privacyLinkText}>Privacy Policy</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.privacyLink}
+              onPress={() => Linking.openURL('https://j3k420.github.io/Gravestory/terms/')}
+            >
+              <Text style={styles.privacyLinkText}>Terms of Service</Text>
+            </TouchableOpacity>
           </>
         ) : (
           <Text style={styles.notSignedIn}>Not signed in.</Text>

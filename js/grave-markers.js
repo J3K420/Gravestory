@@ -168,27 +168,230 @@ const FLAT_GLYPH = `<path d="M20 58 L80 58 L84 78 L16 78 Z" stroke="${GOLD}" str
   <line x1="32" y1="66" x2="68" y2="66" stroke="${PARCH}" stroke-width="1.4"/>
   <line x1="36" y1="72" x2="64" y2="72" stroke="${PARCH}" stroke-width="1.3"/>`;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PACK 2 — FAITH & RELIGIOUS (glyphs 21-40)
+// Same gold-stroke / parchment-detail palette as Pack 1. Most sit on an arched
+// tablet (the shared faith-stone silhouette); a few are free-standing emblems.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Shared arched faith-tablet silhouette many Pack-2 emblems are carved onto.
+const _FAITH_TABLET = `${_BASE}
+  <path d="M30 84 L30 40 Q30 22 50 22 Q70 22 70 40 L70 84 Z" stroke="${GOLD}" stroke-width="2" fill="${FILL}"/>`;
+
+// ── 21. Ankh ──────────────────────────────────────────────────────────────────
+const ANKH_GLYPH = `${_FAITH_TABLET}
+  <ellipse cx="50" cy="42" rx="8" ry="10" stroke="${PARCH}" stroke-width="2" fill="none"/>
+  <line x1="50" y1="52" x2="50" y2="74" stroke="${PARCH}" stroke-width="2.4"/>
+  <line x1="40" y1="60" x2="60" y2="60" stroke="${PARCH}" stroke-width="2.4"/>`;
+
+// ── 22. Crescent & star (Islamic) ─────────────────────────────────────────────
+const CRESCENT_GLYPH = `${_FAITH_TABLET}
+  <path d="M58 38 Q44 38 44 52 Q44 66 58 66 Q49 60 49 52 Q49 44 58 38 Z" stroke="${PARCH}" stroke-width="1.8" fill="${PARCH_FILL}"/>
+  <polygon points="62,46 64,52 70,52 65,56 67,62 62,58 57,62 59,56 54,52 60,52" stroke="${PARCH}" stroke-width="1.2" fill="${PARCH_FILL}"/>`;
+
+// ── 23. Menorah ───────────────────────────────────────────────────────────────
+const MENORAH_GLYPH = `${_FAITH_TABLET}
+  <line x1="50" y1="44" x2="50" y2="70" stroke="${PARCH}" stroke-width="2"/>
+  <line x1="40" y1="74" x2="60" y2="74" stroke="${PARCH}" stroke-width="2"/>
+  <path d="M50 56 Q42 56 42 46" stroke="${PARCH}" stroke-width="1.6" fill="none"/>
+  <path d="M50 56 Q58 56 58 46" stroke="${PARCH}" stroke-width="1.6" fill="none"/>
+  <path d="M50 52 Q36 52 36 44" stroke="${PARCH}" stroke-width="1.6" fill="none"/>
+  <path d="M50 52 Q64 52 64 44" stroke="${PARCH}" stroke-width="1.6" fill="none"/>
+  <path d="M50 48 Q30 48 30 42" stroke="${PARCH}" stroke-width="1.6" fill="none"/>
+  <path d="M50 48 Q70 48 70 42" stroke="${PARCH}" stroke-width="1.6" fill="none"/>
+  <line x1="30" y1="42" x2="30" y2="40" stroke="${PARCH}" stroke-width="1.6"/>
+  <line x1="36" y1="44" x2="36" y2="42" stroke="${PARCH}" stroke-width="1.6"/>
+  <line x1="42" y1="46" x2="42" y2="44" stroke="${PARCH}" stroke-width="1.6"/>
+  <line x1="50" y1="44" x2="50" y2="42" stroke="${PARCH}" stroke-width="1.6"/>
+  <line x1="58" y1="46" x2="58" y2="44" stroke="${PARCH}" stroke-width="1.6"/>
+  <line x1="64" y1="44" x2="64" y2="42" stroke="${PARCH}" stroke-width="1.6"/>
+  <line x1="70" y1="42" x2="70" y2="40" stroke="${PARCH}" stroke-width="1.6"/>`;
+
+// ── 24. Chi-Rho ───────────────────────────────────────────────────────────────
+const CHIRHO_GLYPH = `${_FAITH_TABLET}
+  <line x1="50" y1="34" x2="50" y2="72" stroke="${PARCH}" stroke-width="2.2"/>
+  <path d="M50 40 Q60 40 60 48 Q60 56 50 56" stroke="${PARCH}" stroke-width="2" fill="none"/>
+  <line x1="40" y1="60" x2="60" y2="72" stroke="${PARCH}" stroke-width="2"/>
+  <line x1="60" y1="60" x2="40" y2="72" stroke="${PARCH}" stroke-width="2"/>`;
+
+// ── 25. IHS monogram tablet ───────────────────────────────────────────────────
+const IHS_GLYPH = `${_FAITH_TABLET}
+  <line x1="40" y1="48" x2="40" y2="64" stroke="${PARCH}" stroke-width="2"/>
+  <line x1="48" y1="48" x2="48" y2="64" stroke="${PARCH}" stroke-width="2"/>
+  <line x1="46" y1="56" x2="54" y2="56" stroke="${PARCH}" stroke-width="2"/>
+  <line x1="54" y1="48" x2="54" y2="64" stroke="${PARCH}" stroke-width="2"/>
+  <path d="M64 50 Q57 48 57 53 Q57 57 63 57 Q69 57 67 62 Q64 65 58 63" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
+  <line x1="50" y1="42" x2="50" y2="46" stroke="${PARCH}" stroke-width="1.6"/>`;
+
+// ── 26. Orthodox (three-bar) cross ────────────────────────────────────────────
+const ORTHODOX_GLYPH = `${_FAITH_TABLET}
+  <line x1="50" y1="30" x2="50" y2="76" stroke="${PARCH}" stroke-width="2.4"/>
+  <line x1="44" y1="38" x2="56" y2="38" stroke="${PARCH}" stroke-width="2"/>
+  <line x1="38" y1="50" x2="62" y2="50" stroke="${PARCH}" stroke-width="2.4"/>
+  <line x1="42" y1="66" x2="58" y2="60" stroke="${PARCH}" stroke-width="2"/>`;
+
+// ── 27. Alpha & Omega ─────────────────────────────────────────────────────────
+const ALPHAOMEGA_GLYPH = `${_FAITH_TABLET}
+  <path d="M36 64 L42 46 L48 64 M38 58 L46 58" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
+  <path d="M54 64 Q54 46 62 46 Q70 46 70 64 M52 64 L58 64 M66 64 L72 64" stroke="${PARCH}" stroke-width="1.8" fill="none"/>`;
+
+// ── 28. Sacred Heart (flaming, crowned with cross) ────────────────────────────
+const SACREDHEART_GLYPH = `${_FAITH_TABLET}
+  <path d="M50 66 Q38 54 38 47 Q38 40 44 40 Q49 40 50 46 Q51 40 56 40 Q62 40 62 47 Q62 54 50 66 Z" stroke="${PARCH}" stroke-width="1.8" fill="${PARCH_FILL}"/>
+  <line x1="50" y1="34" x2="50" y2="42" stroke="${PARCH}" stroke-width="1.8"/>
+  <line x1="46" y1="37" x2="54" y2="37" stroke="${PARCH}" stroke-width="1.8"/>
+  <path d="M46 50 Q50 56 54 50" stroke="${PARCH}" stroke-width="1.3" fill="none"/>`;
+
+// ── 29. Lamb of God (Agnus Dei) ───────────────────────────────────────────────
+const LAMB_GLYPH = `${_FAITH_TABLET}
+  <ellipse cx="50" cy="56" rx="13" ry="9" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}"/>
+  <circle cx="38" cy="52" r="5" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}"/>
+  <line x1="44" y1="63" x2="44" y2="70" stroke="${PARCH}" stroke-width="1.5"/>
+  <line x1="56" y1="63" x2="56" y2="70" stroke="${PARCH}" stroke-width="1.5"/>
+  <line x1="60" y1="40" x2="60" y2="56" stroke="${PARCH}" stroke-width="1.4"/>
+  <path d="M60 40 L66 42 L60 45 Z" stroke="${PARCH}" stroke-width="1" fill="${PARCH_FILL}"/>`;
+
+// ── 30. Open scripture on a stand ─────────────────────────────────────────────
+const SCRIPTURE_GLYPH = `${_FAITH_TABLET}
+  <path d="M50 48 Q42 44 34 46 L34 64 Q42 62 50 66 Z" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}"/>
+  <path d="M50 48 Q58 44 66 46 L66 64 Q58 62 50 66 Z" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}"/>
+  <line x1="38" y1="52" x2="46" y2="53" stroke="${PARCH}" stroke-width="1"/>
+  <line x1="38" y1="57" x2="46" y2="58" stroke="${PARCH}" stroke-width="1"/>
+  <line x1="54" y1="53" x2="62" y2="52" stroke="${PARCH}" stroke-width="1"/>
+  <line x1="54" y1="58" x2="62" y2="57" stroke="${PARCH}" stroke-width="1"/>
+  <line x1="42" y1="70" x2="58" y2="70" stroke="${PARCH}" stroke-width="1.6"/>`;
+
+// ── 31. Chalice ───────────────────────────────────────────────────────────────
+const CHALICE_GLYPH = `${_FAITH_TABLET}
+  <path d="M40 44 Q40 56 50 58 Q60 56 60 44 Z" stroke="${PARCH}" stroke-width="1.8" fill="${PARCH_FILL}"/>
+  <line x1="50" y1="58" x2="50" y2="68" stroke="${PARCH}" stroke-width="1.8"/>
+  <path d="M42 72 Q42 68 50 68 Q58 68 58 72 Z" stroke="${PARCH}" stroke-width="1.8" fill="${PARCH_FILL}"/>
+  <circle cx="50" cy="38" r="3" stroke="${PARCH}" stroke-width="1.4" fill="none"/>`;
+
+// ── 32. Lotus (Buddhist / Hindu) — symmetric water-lily on a waterline ─────────
+const LOTUS_GLYPH = `${_FAITH_TABLET}
+  <path d="M50 64 Q45 52 50 42 Q55 52 50 64 Z" stroke="${PARCH}" stroke-width="1.5" fill="${PARCH_FILL}"/>
+  <path d="M50 64 Q42 54 40 46 Q49 50 50 64 Z" stroke="${PARCH}" stroke-width="1.5" fill="${PARCH_FILL}"/>
+  <path d="M50 64 Q58 54 60 46 Q51 50 50 64 Z" stroke="${PARCH}" stroke-width="1.5" fill="${PARCH_FILL}"/>
+  <path d="M50 64 Q38 58 32 50 Q46 52 50 64 Z" stroke="${PARCH}" stroke-width="1.4" fill="${PARCH_FILL}"/>
+  <path d="M50 64 Q62 58 68 50 Q54 52 50 64 Z" stroke="${PARCH}" stroke-width="1.4" fill="${PARCH_FILL}"/>
+  <path d="M34 66 Q50 72 66 66" stroke="${PARCH}" stroke-width="1.4" fill="none"/>`;
+
+// ── 33. Om (ॐ) symbol tablet — simplified, well-separated strokes ──────────────
+const OM_GLYPH = `${_FAITH_TABLET}
+  <!-- lower loop (the big '3'-like belly) -->
+  <path d="M42 52 Q34 52 34 60 Q34 68 43 68 Q50 68 50 61 Q50 56 44 56" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
+  <!-- upper loop sitting on the lower one -->
+  <path d="M44 56 Q44 49 51 49 Q57 49 57 54" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
+  <!-- tail sweeping to the right -->
+  <path d="M50 60 Q58 60 62 66" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
+  <!-- crescent + dot (chandrabindu) above -->
+  <path d="M55 44 Q61 41 66 45" stroke="${PARCH}" stroke-width="1.5" fill="none"/>
+  <circle cx="60.5" cy="39.5" r="1.8" fill="${PARCH}"/>`;
+
+// ── 34. Trinity knot (triquetra) ──────────────────────────────────────────────
+const TRINITY_GLYPH = `${_FAITH_TABLET}
+  <path d="M50 40 Q60 50 50 60 Q40 50 50 40 Z" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
+  <path d="M50 60 Q38 52 44 42 Q54 48 50 60 Z" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
+  <path d="M50 60 Q62 52 56 42 Q46 48 50 60 Z" stroke="${PARCH}" stroke-width="1.8" fill="none"/>`;
+
+// ── 35. Cross fleury (ornate budded arms) ─────────────────────────────────────
+const CROSSFLEURY_GLYPH = `${_FAITH_TABLET}
+  <line x1="50" y1="34" x2="50" y2="74" stroke="${PARCH}" stroke-width="2.4"/>
+  <line x1="36" y1="52" x2="64" y2="52" stroke="${PARCH}" stroke-width="2.4"/>
+  <path d="M50 34 Q46 30 50 28 Q54 30 50 34" stroke="${PARCH}" stroke-width="1.4" fill="${PARCH_FILL}"/>
+  <path d="M50 74 Q46 78 50 80 Q54 78 50 74" stroke="${PARCH}" stroke-width="1.4" fill="${PARCH_FILL}"/>
+  <path d="M36 52 Q32 48 30 52 Q32 56 36 52" stroke="${PARCH}" stroke-width="1.4" fill="${PARCH_FILL}"/>
+  <path d="M64 52 Q68 48 70 52 Q68 56 64 52" stroke="${PARCH}" stroke-width="1.4" fill="${PARCH_FILL}"/>`;
+
+// ── 36. Hand pointing heavenward ──────────────────────────────────────────────
+const HANDUP_GLYPH = `${_FAITH_TABLET}
+  <line x1="50" y1="36" x2="50" y2="50" stroke="${PARCH}" stroke-width="2.2"/>
+  <path d="M44 50 Q44 46 46 46 Q47 50 47 50 Q47 44 49 44 Q50 50 50 50 Q50 43 52 43 Q53 50 53 50 Q53 45 55 45 Q56 50 56 52 L56 62 Q56 68 50 68 Q44 68 44 62 Z" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}"/>
+  <path d="M44 56 Q40 56 40 60 Q40 64 44 64" stroke="${PARCH}" stroke-width="1.4" fill="none"/>`;
+
+// ── 37. Crown of life ─────────────────────────────────────────────────────────
+const CROWN_GLYPH = `${_FAITH_TABLET}
+  <path d="M36 64 L32 44 L42 54 L50 40 L58 54 L68 44 L64 64 Z" stroke="${PARCH}" stroke-width="1.8" fill="${PARCH_FILL}" stroke-linejoin="round"/>
+  <line x1="36" y1="64" x2="64" y2="64" stroke="${PARCH}" stroke-width="1.8"/>
+  <circle cx="32" cy="44" r="2" fill="${PARCH}"/>
+  <circle cx="50" cy="40" r="2" fill="${PARCH}"/>
+  <circle cx="68" cy="44" r="2" fill="${PARCH}"/>`;
+
+// ── 38. All-seeing eye in radiant triangle ────────────────────────────────────
+const EYE_GLYPH = `${_FAITH_TABLET}
+  <polygon points="50,38 66,66 34,66" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
+  <path d="M42 56 Q50 50 58 56 Q50 62 42 56 Z" stroke="${PARCH}" stroke-width="1.4" fill="${PARCH_FILL}"/>
+  <circle cx="50" cy="56" r="2.4" fill="${PARCH}"/>
+  <line x1="50" y1="34" x2="50" y2="30" stroke="${PARCH}" stroke-width="1.2"/>
+  <line x1="40" y1="38" x2="36" y2="35" stroke="${PARCH}" stroke-width="1.2"/>
+  <line x1="60" y1="38" x2="64" y2="35" stroke="${PARCH}" stroke-width="1.2"/>`;
+
+// ── 39. Angel / winged figure ─────────────────────────────────────────────────
+const ANGEL_GLYPH = `${_FAITH_TABLET}
+  <circle cx="50" cy="42" r="4" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}"/>
+  <path d="M50 46 Q44 50 44 70 L56 70 Q56 50 50 46 Z" stroke="${PARCH}" stroke-width="1.6" fill="${PARCH_FILL}"/>
+  <path d="M44 52 Q32 50 30 64 Q40 58 46 60 Z" stroke="${PARCH}" stroke-width="1.5" fill="${PARCH_FILL}"/>
+  <path d="M56 52 Q68 50 70 64 Q60 58 54 60 Z" stroke="${PARCH}" stroke-width="1.5" fill="${PARCH_FILL}"/>
+  <ellipse cx="50" cy="35" rx="5" ry="1.6" stroke="${PARCH}" stroke-width="1.2" fill="none"/>`;
+
+// ── 40. Khanda (Sikh) ─────────────────────────────────────────────────────────
+const KHANDA_GLYPH = `${_FAITH_TABLET}
+  <line x1="50" y1="38" x2="50" y2="70" stroke="${PARCH}" stroke-width="2.2"/>
+  <path d="M50 44 L52 40 L50 36 L48 40 Z" stroke="${PARCH}" stroke-width="1.2" fill="${PARCH_FILL}"/>
+  <circle cx="50" cy="56" r="11" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
+  <path d="M40 48 Q34 56 40 64" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
+  <path d="M60 48 Q66 56 60 64" stroke="${PARCH}" stroke-width="1.8" fill="none"/>`;
+
+// Pack definitions — drive the picker's tab row (order = display order).
+// Add a pack here and tag its markers with the matching `pack` id below.
+const MARKER_PACKS = [
+  { id: 'classic', label: 'Classic' },
+  { id: 'faith',   label: 'Faith' },
+];
+
 const MARKER_STYLES = [
-  { id: 'book',      label: 'Open Book',     glyph: BOOK_GLYPH },
-  { id: 'arched',    label: 'Arched',        glyph: ARCHED_GLYPH },
-  { id: 'cross-tab', label: 'Cross Tablet',  glyph: CROSS_TABLET_GLYPH },
-  { id: 'cross',     label: 'Cross',         glyph: CROSS_GLYPH },
-  { id: 'celtic',    label: 'Celtic Cross',  glyph: CELTIC_CROSS_GLYPH },
-  { id: 'obelisk',   label: 'Obelisk',       glyph: OBELISK_GLYPH },
-  { id: 'scroll',    label: 'Scroll',        glyph: SCROLL_GLYPH },
-  { id: 'rose',      label: 'Rose',          glyph: ROSE_GLYPH },
-  { id: 'skull',     label: 'Skull',         glyph: SKULL_GLYPH },
-  { id: 'ornate',    label: 'Ornate',        glyph: ORNATE_GLYPH },
-  { id: 'gothic',    label: 'Gothic Arch',   glyph: GOTHIC_ARCH_GLYPH },
-  { id: 'heart',     label: 'Heart',         glyph: HEART_GLYPH },
-  { id: 'praying',   label: 'Praying Hands', glyph: PRAYING_HANDS_GLYPH },
-  { id: 'dove',      label: 'Dove',          glyph: DOVE_GLYPH },
-  { id: 'anchor',    label: 'Anchor',        glyph: ANCHOR_GLYPH },
-  { id: 'column',    label: 'Broken Column', glyph: COLUMN_GLYPH },
-  { id: 'urn',       label: 'Urn',           glyph: URN_GLYPH },
-  { id: 'willow',    label: 'Willow',        glyph: WILLOW_GLYPH },
-  { id: 'star',      label: 'Star of David', glyph: STAR_GLYPH },
-  { id: 'flat',      label: 'Lawn Marker',   glyph: FLAT_GLYPH },
+  { id: 'book',      label: 'Open Book',     pack: 'classic', glyph: BOOK_GLYPH },
+  { id: 'arched',    label: 'Arched',        pack: 'classic', glyph: ARCHED_GLYPH },
+  { id: 'cross-tab', label: 'Cross Tablet',  pack: 'classic', glyph: CROSS_TABLET_GLYPH },
+  { id: 'cross',     label: 'Cross',         pack: 'classic', glyph: CROSS_GLYPH },
+  { id: 'celtic',    label: 'Celtic Cross',  pack: 'classic', glyph: CELTIC_CROSS_GLYPH },
+  { id: 'obelisk',   label: 'Obelisk',       pack: 'classic', glyph: OBELISK_GLYPH },
+  { id: 'scroll',    label: 'Scroll',        pack: 'classic', glyph: SCROLL_GLYPH },
+  { id: 'rose',      label: 'Rose',          pack: 'classic', glyph: ROSE_GLYPH },
+  { id: 'skull',     label: 'Skull',         pack: 'classic', glyph: SKULL_GLYPH },
+  { id: 'ornate',    label: 'Ornate',        pack: 'classic', glyph: ORNATE_GLYPH },
+  { id: 'gothic',    label: 'Gothic Arch',   pack: 'classic', glyph: GOTHIC_ARCH_GLYPH },
+  { id: 'heart',     label: 'Heart',         pack: 'classic', glyph: HEART_GLYPH },
+  { id: 'praying',   label: 'Praying Hands', pack: 'classic', glyph: PRAYING_HANDS_GLYPH },
+  { id: 'dove',      label: 'Dove',          pack: 'classic', glyph: DOVE_GLYPH },
+  { id: 'anchor',    label: 'Anchor',        pack: 'classic', glyph: ANCHOR_GLYPH },
+  { id: 'column',    label: 'Broken Column', pack: 'classic', glyph: COLUMN_GLYPH },
+  { id: 'urn',       label: 'Urn',           pack: 'classic', glyph: URN_GLYPH },
+  { id: 'willow',    label: 'Willow',        pack: 'classic', glyph: WILLOW_GLYPH },
+  { id: 'star',      label: 'Star of David', pack: 'classic', glyph: STAR_GLYPH },
+  { id: 'flat',      label: 'Lawn Marker',   pack: 'classic', glyph: FLAT_GLYPH },
+  // ── Pack 2 — Faith & Religious ──
+  { id: 'ankh',         label: 'Ankh',            pack: 'faith', glyph: ANKH_GLYPH },
+  { id: 'crescent',     label: 'Crescent & Star', pack: 'faith', glyph: CRESCENT_GLYPH },
+  { id: 'menorah',      label: 'Menorah',         pack: 'faith', glyph: MENORAH_GLYPH },
+  { id: 'chirho',       label: 'Chi-Rho',         pack: 'faith', glyph: CHIRHO_GLYPH },
+  { id: 'ihs',          label: 'IHS Monogram',    pack: 'faith', glyph: IHS_GLYPH },
+  { id: 'orthodox',     label: 'Orthodox Cross',  pack: 'faith', glyph: ORTHODOX_GLYPH },
+  { id: 'alphaomega',   label: 'Alpha & Omega',   pack: 'faith', glyph: ALPHAOMEGA_GLYPH },
+  { id: 'sacredheart',  label: 'Sacred Heart',    pack: 'faith', glyph: SACREDHEART_GLYPH },
+  { id: 'lamb',         label: 'Lamb of God',     pack: 'faith', glyph: LAMB_GLYPH },
+  { id: 'scripture',    label: 'Open Scripture',  pack: 'faith', glyph: SCRIPTURE_GLYPH },
+  { id: 'chalice',      label: 'Chalice',         pack: 'faith', glyph: CHALICE_GLYPH },
+  { id: 'lotus',        label: 'Lotus',           pack: 'faith', glyph: LOTUS_GLYPH },
+  { id: 'om',           label: 'Om',              pack: 'faith', glyph: OM_GLYPH },
+  { id: 'trinity',      label: 'Trinity Knot',    pack: 'faith', glyph: TRINITY_GLYPH },
+  { id: 'crossfleury',  label: 'Cross Fleury',    pack: 'faith', glyph: CROSSFLEURY_GLYPH },
+  { id: 'handup',       label: 'Hand Heavenward', pack: 'faith', glyph: HANDUP_GLYPH },
+  { id: 'crown',        label: 'Crown of Life',   pack: 'faith', glyph: CROWN_GLYPH },
+  { id: 'eye',          label: 'All-Seeing Eye',  pack: 'faith', glyph: EYE_GLYPH },
+  { id: 'angel',        label: 'Angel',           pack: 'faith', glyph: ANGEL_GLYPH },
+  { id: 'khanda',       label: 'Khanda',          pack: 'faith', glyph: KHANDA_GLYPH },
 ];
 
 const DEFAULT_MARKER = 'book';

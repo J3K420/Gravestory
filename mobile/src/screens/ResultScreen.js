@@ -17,7 +17,7 @@ import { deletePendingPhoto } from '../lib/pending';
 import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
 import { MapStack, ShareIcon, Globe } from '../components/Icons';
-import { MARKER_STYLES, getMarker, GraveMarkerSvg } from '../components/GraveMarkers';
+import { MARKER_STYLES, MARKER_PACKS, getMarker, GraveMarkerSvg } from '../components/GraveMarkers';
 import { SYMBOL_CONTEXT } from '../lib/biography';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -37,6 +37,7 @@ export default function ResultScreen({ navigation, route }) {
   const [livePortraits, setLivePortraits] = useState([]);
   const [symbolModal, setSymbolModal]   = useState(null); // { name, text }
   const [markerModal, setMarkerModal]   = useState(false);
+  const [markerPack, setMarkerPack]     = useState(MARKER_PACKS[0].id); // active picker tab
   const [aiModal, setAiModal]           = useState(false); // first-view AI-disclaimer explainer
   const [reportModal, setReportModal]   = useState(false); // "report a problem" sheet
   const [reportReason, setReportReason] = useState(null);
@@ -697,7 +698,7 @@ export default function ResultScreen({ navigation, route }) {
           {showMarkerChip && (
             <TouchableOpacity
               style={styles.chip}
-              onPress={() => setMarkerModal(true)}
+              onPress={() => { setMarkerPack(currentMarker.pack || MARKER_PACKS[0].id); setMarkerModal(true); }}
               disabled={savingMarker}
             >
               <GraveMarkerSvg styleId={story.marker_style} size={18} />
@@ -766,11 +767,31 @@ export default function ResultScreen({ navigation, route }) {
                 : 'How this grave appears on your Cemetery map.'}
             </Text>
             <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.markerTabRow}
+              contentContainerStyle={styles.markerTabRowContent}
+            >
+              {MARKER_PACKS.map(p => {
+                const on = p.id === markerPack;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[styles.markerTab, on && styles.markerTabActive]}
+                    onPress={() => setMarkerPack(p.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.markerTabText, on && styles.markerTabTextActive]}>{p.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <ScrollView
               style={styles.markerGridScroll}
               contentContainerStyle={styles.markerGrid}
               showsVerticalScrollIndicator={false}
             >
-              {MARKER_STYLES.map(m => {
+              {MARKER_STYLES.filter(m => m.pack === markerPack).map(m => {
                 const selected = currentMarker.id === m.id;
                 return (
                   <TouchableOpacity
@@ -1192,6 +1213,16 @@ const styles = StyleSheet.create({
     color: colors.ash, fontSize: 13, fontFamily: fonts.body,
     marginBottom: 14, lineHeight: 18,
   },
+  markerTabRow: { flexGrow: 0, marginBottom: 14 },
+  markerTabRowContent: { gap: 8, paddingRight: 8 },
+  markerTab: {
+    paddingVertical: 6, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: colors.line, borderRadius: 999,
+    backgroundColor: 'transparent',
+  },
+  markerTabActive: { borderColor: colors.flame, backgroundColor: colors.stone2 },
+  markerTabText: { color: colors.ash, fontSize: 13, fontFamily: fonts.bodyMedium },
+  markerTabTextActive: { color: colors.flame },
   markerGridScroll: { flexGrow: 0 },
   markerGrid: {
     flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between',

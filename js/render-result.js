@@ -483,11 +483,13 @@ function openMarkerPicker(savedRow) {
   if (existing) existing.remove();
 
   const currentStyle = savedRow.marker_style || DEFAULT_MARKER;
+  // Open on the pack that holds the current selection, so the active pin is visible.
+  let activePack = (getMarker(currentStyle).pack) || MARKER_PACKS[0].id;
   const overlay = document.createElement('div');
   overlay.id = 'marker-picker-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,8,5,0.7);z-index:1000;display:flex;align-items:flex-end;justify-content:center;';
 
-  const grid = MARKER_STYLES.map(m => {
+  const cellHtml = m => {
     const active = m.id === currentStyle;
     return `
       <button class="marker-pick-cell" data-style="${m.id}" style="
@@ -499,24 +501,49 @@ function openMarkerPicker(savedRow) {
         <span style="font-family:'Crimson Pro',serif;color:var(--cream,#e8d4a0);font-size:0.7rem;text-align:center;line-height:1.1;">${escapeHtml(m.label)}</span>
       </button>
     `;
+  };
+
+  const tabsHtml = () => MARKER_PACKS.map(p => {
+    const on = p.id === activePack;
+    return `<button class="marker-pack-tab" data-pack="${p.id}" style="
+      background:${on ? 'rgba(201,168,76,0.2)' : 'transparent'};
+      border:1px solid ${on ? 'rgba(201,168,76,0.7)' : 'rgba(201,168,76,0.25)'};
+      color:${on ? 'var(--gold,#c9a84c)' : 'var(--cream,#e8d4a0)'};
+      font-family:'Crimson Pro',serif;font-size:0.82rem;padding:0.35rem 0.85rem;
+      border-radius:999px;cursor:pointer;white-space:nowrap;">${escapeHtml(p.label)}</button>`;
   }).join('');
 
   overlay.innerHTML = `
     <div style="background:#1a1410;border-top-left-radius:16px;border-top-right-radius:16px;border-top:1px solid rgba(201,168,76,0.3);width:100%;max-width:520px;max-height:80vh;overflow-y:auto;padding:1.2rem 1rem 1.6rem;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.9rem;">
         <div style="font-family:'Playfair Display',serif;color:var(--gold,#c9a84c);font-size:1.05rem;">Choose a map pin</div>
         <button id="marker-picker-close" style="background:none;border:none;color:var(--cream,#e8d4a0);font-size:1.4rem;cursor:pointer;line-height:1;padding:0 0.25rem;">×</button>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:0.6rem;">${grid}</div>
+      <div id="marker-pack-tabs" style="display:flex;gap:0.5rem;overflow-x:auto;margin-bottom:1rem;padding-bottom:0.2rem;">${tabsHtml()}</div>
+      <div id="marker-pick-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:0.6rem;"></div>
     </div>
   `;
   document.body.appendChild(overlay);
+
+  const gridEl = overlay.querySelector('#marker-pick-grid');
+  const tabsEl = overlay.querySelector('#marker-pack-tabs');
+
+  function renderGrid() {
+    gridEl.innerHTML = MARKER_STYLES.filter(m => m.pack === activePack).map(cellHtml).join('');
+    gridEl.querySelectorAll('.marker-pick-cell').forEach(bindCell);
+  }
+  function renderTabs() {
+    tabsEl.innerHTML = tabsHtml();
+    tabsEl.querySelectorAll('.marker-pack-tab').forEach(tab => {
+      tab.onclick = () => { activePack = tab.getAttribute('data-pack'); renderTabs(); renderGrid(); };
+    });
+  }
 
   const close = () => overlay.remove();
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   document.getElementById('marker-picker-close').onclick = close;
 
-  overlay.querySelectorAll('.marker-pick-cell').forEach(cell => {
+  function bindCell(cell) {
     cell.onclick = async () => {
       const styleId = cell.getAttribute('data-style');
       savedRow.marker_style = styleId;
@@ -545,7 +572,10 @@ function openMarkerPicker(savedRow) {
       // Re-render so the marker section reflects the new choice
       renderResult(currentStory || savedRow);
     };
-  });
+  }
+
+  renderTabs();
+  renderGrid();
 }
 
 function renderVisibilityControls(story, alreadySaved) {

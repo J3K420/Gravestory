@@ -186,8 +186,8 @@ const ANKH_GLYPH = `${_FAITH_TABLET}
 
 // ── 22. Crescent & star (Islamic) ─────────────────────────────────────────────
 const CRESCENT_GLYPH = `${_FAITH_TABLET}
-  <path d="M58 38 Q44 38 44 52 Q44 66 58 66 Q49 60 49 52 Q49 44 58 38 Z" stroke="${PARCH}" stroke-width="1.8" fill="${PARCH_FILL}"/>
-  <polygon points="62,46 64,52 70,52 65,56 67,62 62,58 57,62 59,56 54,52 60,52" stroke="${PARCH}" stroke-width="1.2" fill="${PARCH_FILL}"/>`;
+  <path d="M51 38 Q37 38 37 52 Q37 66 51 66 Q42 60 42 52 Q42 44 51 38 Z" stroke="${PARCH}" stroke-width="1.8" fill="${PARCH_FILL}"/>
+  <polygon points="55,46 57,52 63,52 58,56 60,62 55,58 50,62 52,56 47,52 53,52" stroke="${PARCH}" stroke-width="1.2" fill="${PARCH_FILL}"/>`;
 
 // ── 23. Menorah ───────────────────────────────────────────────────────────────
 const MENORAH_GLYPH = `${_FAITH_TABLET}
@@ -216,12 +216,19 @@ const CHIRHO_GLYPH = `${_FAITH_TABLET}
 
 // ── 25. IHS monogram tablet ───────────────────────────────────────────────────
 const IHS_GLYPH = `${_FAITH_TABLET}
-  <line x1="40" y1="48" x2="40" y2="64" stroke="${PARCH}" stroke-width="2"/>
-  <line x1="48" y1="48" x2="48" y2="64" stroke="${PARCH}" stroke-width="2"/>
-  <line x1="46" y1="56" x2="54" y2="56" stroke="${PARCH}" stroke-width="2"/>
-  <line x1="54" y1="48" x2="54" y2="64" stroke="${PARCH}" stroke-width="2"/>
-  <path d="M64 50 Q57 48 57 53 Q57 57 63 57 Q69 57 67 62 Q64 65 58 63" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
-  <line x1="50" y1="42" x2="50" y2="46" stroke="${PARCH}" stroke-width="1.6"/>`;
+  <!-- I -->
+  <line x1="37" y1="50" x2="37" y2="66" stroke="${PARCH}" stroke-width="2"/>
+  <line x1="33" y1="50" x2="41" y2="50" stroke="${PARCH}" stroke-width="1.6"/>
+  <line x1="33" y1="66" x2="41" y2="66" stroke="${PARCH}" stroke-width="1.6"/>
+  <!-- H -->
+  <line x1="47" y1="50" x2="47" y2="66" stroke="${PARCH}" stroke-width="2"/>
+  <line x1="53" y1="50" x2="53" y2="66" stroke="${PARCH}" stroke-width="2"/>
+  <line x1="47" y1="58" x2="53" y2="58" stroke="${PARCH}" stroke-width="2"/>
+  <!-- S -->
+  <path d="M67 52 Q60 50 60 54 Q60 58 66 58 Q72 58 70 63 Q67 66 60 64" stroke="${PARCH}" stroke-width="1.8" fill="none"/>
+  <!-- cross above H -->
+  <line x1="50" y1="42" x2="50" y2="48" stroke="${PARCH}" stroke-width="1.6"/>
+  <line x1="47" y1="45" x2="53" y2="45" stroke="${PARCH}" stroke-width="1.6"/>`;
 
 // ── 26. Orthodox (three-bar) cross ────────────────────────────────────────────
 const ORTHODOX_GLYPH = `${_FAITH_TABLET}

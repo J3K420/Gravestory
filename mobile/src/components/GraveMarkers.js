@@ -296,8 +296,8 @@ const AnkhGlyph = () => (
 const CrescentGlyph = () => (
   <G>
     <FaithTablet />
-    <Path d="M58 38 Q44 38 44 52 Q44 66 58 66 Q49 60 49 52 Q49 44 58 38 Z" stroke={PARCH} strokeWidth="1.8" fill={PARCH_FILL} />
-    <Polygon points="62,46 64,52 70,52 65,56 67,62 62,58 57,62 59,56 54,52 60,52" stroke={PARCH} strokeWidth="1.2" fill={PARCH_FILL} />
+    <Path d="M51 38 Q37 38 37 52 Q37 66 51 66 Q42 60 42 52 Q42 44 51 38 Z" stroke={PARCH} strokeWidth="1.8" fill={PARCH_FILL} />
+    <Polygon points="55,46 57,52 63,52 58,56 60,62 55,58 50,62 52,56 47,52 53,52" stroke={PARCH} strokeWidth="1.2" fill={PARCH_FILL} />
   </G>
 );
 
@@ -338,12 +338,19 @@ const ChiRhoGlyph = () => (
 const IhsGlyph = () => (
   <G>
     <FaithTablet />
-    <Line x1="40" y1="48" x2="40" y2="64" stroke={PARCH} strokeWidth="2" />
-    <Line x1="48" y1="48" x2="48" y2="64" stroke={PARCH} strokeWidth="2" />
-    <Line x1="46" y1="56" x2="54" y2="56" stroke={PARCH} strokeWidth="2" />
-    <Line x1="54" y1="48" x2="54" y2="64" stroke={PARCH} strokeWidth="2" />
-    <Path d="M64 50 Q57 48 57 53 Q57 57 63 57 Q69 57 67 62 Q64 65 58 63" stroke={PARCH} strokeWidth="1.8" fill="none" />
-    <Line x1="50" y1="42" x2="50" y2="46" stroke={PARCH} strokeWidth="1.6" />
+    {/* I */}
+    <Line x1="37" y1="50" x2="37" y2="66" stroke={PARCH} strokeWidth="2" />
+    <Line x1="33" y1="50" x2="41" y2="50" stroke={PARCH} strokeWidth="1.6" />
+    <Line x1="33" y1="66" x2="41" y2="66" stroke={PARCH} strokeWidth="1.6" />
+    {/* H */}
+    <Line x1="47" y1="50" x2="47" y2="66" stroke={PARCH} strokeWidth="2" />
+    <Line x1="53" y1="50" x2="53" y2="66" stroke={PARCH} strokeWidth="2" />
+    <Line x1="47" y1="58" x2="53" y2="58" stroke={PARCH} strokeWidth="2" />
+    {/* S */}
+    <Path d="M67 52 Q60 50 60 54 Q60 58 66 58 Q72 58 70 63 Q67 66 60 64" stroke={PARCH} strokeWidth="1.8" fill="none" />
+    {/* cross above H */}
+    <Line x1="50" y1="42" x2="50" y2="48" stroke={PARCH} strokeWidth="1.6" />
+    <Line x1="47" y1="45" x2="53" y2="45" stroke={PARCH} strokeWidth="1.6" />
   </G>
 );
 

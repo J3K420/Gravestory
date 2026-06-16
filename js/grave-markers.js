@@ -48,6 +48,9 @@ const _DEFS = `<defs>
   <linearGradient id="parchGrad" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="rgba(232,212,160,0.34)"/><stop offset="1" stop-color="rgba(232,212,160,0.12)"/>
   </linearGradient>
+  <linearGradient id="leafGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="rgba(198,214,150,0.34)"/><stop offset="1" stop-color="rgba(150,176,110,0.14)"/>
+  </linearGradient>
   <radialGradient id="groundGrad" cx="0.5" cy="0.5" r="0.5">
     <stop offset="0" stop-color="rgba(0,0,0,0.45)"/><stop offset="0.7" stop-color="rgba(0,0,0,0.22)"/><stop offset="1" stop-color="rgba(0,0,0,0)"/>
   </radialGradient>
@@ -56,6 +59,11 @@ const _DEFS = `<defs>
 const STONE = 'url(#stoneGrad)';   // lit stone face
 const GOLDG = 'url(#goldGrad)';    // polished-metal gold stroke
 const PARCHG = 'url(#parchGrad)';  // lit parchment fill
+// Pack-3 (Nature & Flora) foliage accent: faint green-tinted parchment. Only the
+// leaf/petal/plant DETAIL uses it — stone + gold stroke stay identical, so the
+// global-map gold identity survives.
+const LEAF = '#c6d696';            // green-tinted parchment stroke
+const LEAFG = 'url(#leafGrad)';    // green-tinted parchment fill
 
 // Soft ground shadow, drawn first so the stone sits on it.
 const _GROUND = `<ellipse cx="50" cy="90" rx="30" ry="6" fill="url(#groundGrad)"/>`;
@@ -69,6 +77,13 @@ const _BASE = `${_GROUND}<rect x="22" y="84" width="56" height="6" stroke="${GOL
 function _g(d, w) {
   return `<path d="${d}" stroke="${GROOVE_DK}" stroke-width="${w}" fill="none" stroke-linecap="round" transform="translate(0.9,1)"/>` +
          `<path d="${d}" stroke="${PARCH}" stroke-width="${w}" fill="none" stroke-linecap="round"/>`;
+}
+
+// Green-accent groove for Pack-3 foliage outline detail (stems, veins, fronds).
+// Same carved look as _g but the bright near wall is green-tinted parchment.
+function _gl(d, w) {
+  return `<path d="${d}" stroke="${GROOVE_DK}" stroke-width="${w}" fill="none" stroke-linecap="round" transform="translate(0.9,1)"/>` +
+         `<path d="${d}" stroke="${LEAF}" stroke-width="${w}" fill="none" stroke-linecap="round"/>`;
 }
 
 // ── 1. Book (default — matches the original marker) ───────────────────────────
@@ -403,11 +418,187 @@ const KHANDA_GLYPH = `${_FAITH_TABLET}
   ${_g('M39 47 Q33 56 39 65', 2)}
   ${_g('M61 47 Q67 56 61 65', 2)}`;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PACK 3 — NATURE & FLORA (glyphs 41-60)
+// Same gold-stroke / depth treatment, but FOLIAGE detail (leaves, petals, stems)
+// uses the green-tinted parchment accent (LEAF / LEAFG / _gl) so the pack reads as
+// "nature" while the stone + gold stroke keep the global-map gold identity. Most
+// sit on the shared arched nature-tablet; trees/free forms draw on the base.
+// Byte-for-byte equivalent to mobile GraveMarkers.js.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const _NATURE_TABLET = `${_BASE}
+  <path d="M30 84 L30 40 Q30 22 50 22 Q70 22 70 40 L70 84 Z" stroke="${GOLDG}" stroke-width="2.2" fill="${STONE}"/>`;
+
+// ── 41. Oak (strength, endurance) — rounded canopy on a short trunk ────────────
+const OAK_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M50 72 L50 56', 2)}
+  <path d="M50 58 Q34 58 34 47 Q34 36 44 37 Q46 29 50 29 Q54 29 56 37 Q66 36 66 47 Q66 58 50 58 Z" stroke="${LEAF}" stroke-width="1.7" fill="${LEAFG}"/>
+  ${_gl('M44 47 Q50 50 56 47', 1.2)}
+  ${_gl('M50 40 L50 52', 1.1)}`;
+
+// ── 42. Tree of Life — branches filling a ring, roots mirroring below ─────────
+const TREEOFLIFE_GLYPH = `${_NATURE_TABLET}
+  <circle cx="50" cy="50" r="18" stroke="${GOLDG}" stroke-width="1.6" fill="none"/>
+  ${_gl('M50 50 L50 40', 2)}
+  ${_gl('M50 42 Q42 40 38 34 M50 42 Q58 40 62 34', 1.5)}
+  ${_gl('M50 45 Q44 44 41 39 M50 45 Q56 44 59 39', 1.4)}
+  ${_gl('M50 40 Q48 36 49 32 M50 40 Q52 36 51 32', 1.4)}
+  ${_gl('M50 50 L50 60', 2)}
+  ${_gl('M50 58 Q42 60 38 66 M50 58 Q58 60 62 66', 1.5)}
+  ${_gl('M50 55 Q44 56 41 61 M50 55 Q56 56 59 61', 1.4)}`;
+
+// ── 43. Pine / evergreen (eternal life) — tiered conifer ──────────────────────
+const PINE_GLYPH = `${_NATURE_TABLET}
+  ${_g('M46 72 L54 72 L54 66 L46 66 Z', 1.4)}
+  <path d="M50 30 L40 46 L46 46 L38 56 L46 56 L40 66 L60 66 L54 56 L62 56 L54 46 L60 46 Z" stroke="${LEAF}" stroke-width="1.6" fill="${LEAFG}" stroke-linejoin="round"/>`;
+
+// ── 44. Acorn (potential, immortality) ────────────────────────────────────────
+const ACORN_GLYPH = `${_NATURE_TABLET}
+  <path d="M40 50 Q40 68 50 70 Q60 68 60 50 Z" stroke="${LEAF}" stroke-width="1.7" fill="${LEAFG}"/>
+  <path d="M38 50 Q38 44 50 44 Q62 44 62 50 Q62 53 50 53 Q38 53 38 50 Z" stroke="${LEAF}" stroke-width="1.6" fill="${LEAFG}"/>
+  ${_gl('M50 44 L50 38', 1.4)}
+  ${_g('M42 50 L58 50', 1)}`;
+
+// ── 45. Fallen tree / stump (life cut short) ──────────────────────────────────
+const FALLENTREE_GLYPH = `${_NATURE_TABLET}
+  <path d="M40 70 L40 50 Q40 46 50 46 Q60 46 60 50 L60 70 Z" stroke="${PARCH}" stroke-width="1.8" fill="${PARCHG}"/>
+  <ellipse cx="50" cy="48" rx="10" ry="3.4" stroke="${PARCH}" stroke-width="1.5" fill="${PARCHG}"/>
+  <ellipse cx="50" cy="48" rx="5" ry="1.7" stroke="${PARCH}" stroke-width="1" fill="none"/>
+  ${_gl('M62 52 Q72 50 74 42 M62 56 Q70 56 73 50', 1.3)}`;
+
+// ── 46. Fern (sincerity, humility) — arched spine with paired leaflets ────────
+const FERN_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M42 72 Q46 50 58 34', 1.8)}
+  ${_gl('M44 64 Q38 62 36 64 M47 57 Q41 55 39 57 M50 50 Q44 48 42 50 M53 44 Q48 41 46 43 M56 39 Q52 36 50 37', 1.2)}
+  ${_gl('M44 64 Q47 60 50 61 M47 57 Q50 53 53 54 M50 50 Q53 46 56 47 M53 44 Q56 41 58 42', 1.2)}`;
+
+// ── 47. Lily (purity, resurrection) — trumpet bloom ───────────────────────────
+const LILY_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M50 72 L50 52', 1.8)}
+  <path d="M50 52 Q40 50 36 38 Q46 42 50 52 Z" stroke="${LEAF}" stroke-width="1.5" fill="${LEAFG}"/>
+  <path d="M50 52 Q60 50 64 38 Q54 42 50 52 Z" stroke="${LEAF}" stroke-width="1.5" fill="${LEAFG}"/>
+  <path d="M50 52 Q44 42 50 32 Q56 42 50 52 Z" stroke="${LEAF}" stroke-width="1.6" fill="${LEAFG}"/>
+  ${_gl('M50 40 L50 50', 1)}
+  ${_gl('M50 62 Q44 62 42 66 M50 66 Q56 66 58 70', 1.2)}`;
+
+// ── 48. Calla lily — single furled spathe ─────────────────────────────────────
+const CALLALILY_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M48 72 Q50 58 54 46', 1.8)}
+  <path d="M54 46 Q40 40 44 28 Q56 30 62 42 Q60 48 54 46 Z" stroke="${LEAF}" stroke-width="1.7" fill="${LEAFG}"/>
+  ${_gl('M52 44 L57 33', 1.4)}
+  ${_gl('M44 66 Q38 64 36 58', 1.3)}`;
+
+// ── 49. Tulip — cupped bloom on a stem with leaves ────────────────────────────
+const TULIP_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M50 72 L50 50', 1.8)}
+  <path d="M40 48 Q40 36 50 34 Q60 36 60 48 Q54 44 50 50 Q46 44 40 48 Z" stroke="${LEAF}" stroke-width="1.7" fill="${LEAFG}"/>
+  ${_gl('M50 38 L50 48', 1)}
+  ${_gl('M50 60 Q40 60 36 50 M50 64 Q60 64 64 54', 1.4)}`;
+
+// ── 50. Forget-me-not — five-petal blossom ────────────────────────────────────
+const FORGETMENOT_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M50 72 L50 58', 1.6)}
+  <circle cx="50" cy="42" r="4.4" stroke="${LEAF}" stroke-width="1.4" fill="${LEAFG}"/>
+  <circle cx="42" cy="46" r="4.4" stroke="${LEAF}" stroke-width="1.4" fill="${LEAFG}"/>
+  <circle cx="58" cy="46" r="4.4" stroke="${LEAF}" stroke-width="1.4" fill="${LEAFG}"/>
+  <circle cx="45" cy="54" r="4.4" stroke="${LEAF}" stroke-width="1.4" fill="${LEAFG}"/>
+  <circle cx="55" cy="54" r="4.4" stroke="${LEAF}" stroke-width="1.4" fill="${LEAFG}"/>
+  <circle cx="50" cy="49" r="2.4" fill="${GOLD}"/>`;
+
+// ── 51. Daisy — radiating petals ──────────────────────────────────────────────
+const DAISY_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M50 72 L50 58', 1.6)}
+  <g stroke="${LEAF}" stroke-width="1.4" fill="${LEAFG}">
+    <ellipse cx="50" cy="34" rx="2.6" ry="6"/><ellipse cx="50" cy="54" rx="2.6" ry="6"/>
+    <ellipse cx="40" cy="44" rx="6" ry="2.6"/><ellipse cx="60" cy="44" rx="6" ry="2.6"/>
+    <ellipse cx="43" cy="37" rx="2.6" ry="6" transform="rotate(-45 43 37)"/>
+    <ellipse cx="57" cy="37" rx="2.6" ry="6" transform="rotate(45 57 37)"/>
+    <ellipse cx="43" cy="51" rx="2.6" ry="6" transform="rotate(45 43 51)"/>
+    <ellipse cx="57" cy="51" rx="2.6" ry="6" transform="rotate(-45 57 51)"/>
+  </g>
+  <circle cx="50" cy="44" r="3.4" fill="${GOLD}"/>`;
+
+// ── 52. Lotus bud (on a stem — distinct from Pack-2 open lotus) ────────────────
+const LOTUSBUD_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M50 72 L50 56', 1.8)}
+  <path d="M50 56 Q42 50 44 36 Q50 42 50 56 Z" stroke="${LEAF}" stroke-width="1.5" fill="${LEAFG}"/>
+  <path d="M50 56 Q58 50 56 36 Q50 42 50 56 Z" stroke="${LEAF}" stroke-width="1.5" fill="${LEAFG}"/>
+  <path d="M50 56 Q47 44 50 30 Q53 44 50 56 Z" stroke="${LEAF}" stroke-width="1.6" fill="${LEAFG}"/>
+  ${_gl('M50 60 Q40 60 36 66 M50 62 Q60 62 64 68', 1.3)}`;
+
+// ── 53. Thistle (Scottish remembrance) — spiky tuft over a cross-hatched bulb ─
+const THISTLE_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M50 74 L50 58', 1.8)}
+  <path d="M43 58 Q43 50 50 50 Q57 50 57 58 Q57 64 50 64 Q43 64 43 58 Z" stroke="${LEAF}" stroke-width="1.6" fill="${LEAFG}"/>
+  ${_gl('M45 55 L55 61 M55 55 L45 61', 1)}
+  ${_gl('M50 50 L50 38 M50 50 L43 40 M50 50 L57 40 M50 51 L39 44 M50 51 L61 44', 1.3)}
+  ${_gl('M50 38 L48 34 M50 38 L52 34', 1.1)}
+  ${_gl('M48 64 Q42 66 39 62 M52 64 Q58 66 61 62', 1.3)}`;
+
+// ── 54. Poppy (remembrance, sleep) — open bloom, drooping bud ─────────────────
+const POPPY_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M50 72 Q50 56 44 48', 1.8)}
+  <path d="M44 48 Q34 44 36 34 Q44 32 50 40 Q56 32 64 34 Q66 44 56 48 Q50 52 44 48 Z" stroke="${LEAF}" stroke-width="1.6" fill="${LEAFG}"/>
+  <circle cx="50" cy="42" r="3" fill="${GROOVE_DK}"/>
+  ${_gl('M50 60 Q42 62 40 56', 1.3)}`;
+
+// ── 55. Ivy vine (fidelity, eternal life) — winding stem, 4 trefoil leaves ────
+const IVY_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M44 72 Q58 66 50 56 Q42 48 54 42 Q62 38 54 32', 1.7)}
+  <path d="M48 66 Q42 67 40 62 Q42 57 47 58 Q51 60 51 63 Q50 66 48 66 Z" stroke="${LEAF}" stroke-width="1.3" fill="${LEAFG}"/>
+  <path d="M52 56 Q58 57 60 52 Q58 47 53 48 Q49 50 49 53 Q50 56 52 56 Z" stroke="${LEAF}" stroke-width="1.3" fill="${LEAFG}"/>
+  <path d="M46 47 Q40 47 39 42 Q41 37 46 39 Q50 41 50 44 Q49 47 46 47 Z" stroke="${LEAF}" stroke-width="1.3" fill="${LEAFG}"/>
+  <path d="M54 38 Q60 37 60 32 Q58 28 53 30 Q49 32 50 35 Q51 38 54 38 Z" stroke="${LEAF}" stroke-width="1.3" fill="${LEAFG}"/>`;
+
+// ── 56. Laurel wreath (victory, honor) — open U of branches inside the stone ──
+// Kept within x≈38–62 / y≈36–68 so leaves never cross the gold tablet edge.
+const LAUREL_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M50 67 Q40 63 39 51 Q38 44 43 39', 1.6)}
+  ${_gl('M50 67 Q60 63 61 51 Q62 44 57 39', 1.6)}
+  <g stroke="${LEAF}" stroke-width="1.1" fill="${LEAFG}">
+    <ellipse cx="37" cy="49" rx="3.6" ry="1.9" transform="rotate(-58 37 49)"/>
+    <ellipse cx="38" cy="57" rx="3.6" ry="1.9" transform="rotate(-32 38 57)"/>
+    <ellipse cx="43" cy="64" rx="3.6" ry="1.9" transform="rotate(-12 43 64)"/>
+    <ellipse cx="63" cy="49" rx="3.6" ry="1.9" transform="rotate(58 63 49)"/>
+    <ellipse cx="62" cy="57" rx="3.6" ry="1.9" transform="rotate(32 62 57)"/>
+    <ellipse cx="57" cy="64" rx="3.6" ry="1.9" transform="rotate(12 57 64)"/>
+  </g>
+  ${_gl('M47 67 Q50 70 53 67', 1.3)}`;
+
+// ── 57. Single oak leaf — veined ──────────────────────────────────────────────
+const LEAF_GLYPH = `${_NATURE_TABLET}
+  <path d="M50 70 Q34 58 38 42 Q44 30 50 30 Q56 30 62 42 Q66 58 50 70 Z" stroke="${LEAF}" stroke-width="1.7" fill="${LEAFG}"/>
+  ${_gl('M50 66 L50 34', 1.4)}
+  ${_gl('M50 44 Q44 42 41 46 M50 44 Q56 42 59 46 M50 52 Q43 50 40 55 M50 52 Q57 50 60 55 M50 60 Q45 58 43 62 M50 60 Q55 58 57 62', 1)}`;
+
+// ── 58. Wheat sprig (single LIVING stalk — distinct from Pack-2 bound sheaf) ───
+const WHEATSPRIG_GLYPH = `${_NATURE_TABLET}
+  ${_gl('M50 72 L50 38', 1.7)}
+  ${_gl('M50 40 L46 44 M50 40 L54 44 M50 46 L45 50 M50 46 L55 50 M50 52 L45 56 M50 52 L55 56 M50 58 L46 62 M50 58 L54 62', 1.3)}
+  ${_gl('M50 38 L48 33 M50 38 L52 33 M50 38 L50 32', 1.3)}`;
+
+// ── 59. Sun rising (dawn, resurrection) over a horizon ────────────────────────
+const SUNRISE_GLYPH = `${_NATURE_TABLET}
+  ${_g('M32 62 L68 62', 1.8)}
+  <path d="M38 62 Q38 48 50 48 Q62 48 62 62 Z" stroke="${GOLDG}" stroke-width="1.8" fill="${PARCHG}"/>
+  ${_g('M50 44 L50 38 M40 47 L36 42 M60 47 L64 42 M33 56 L27 54 M67 56 L73 54', 1.4)}`;
+
+// ── 60. Butterfly (the soul, transformation) ──────────────────────────────────
+const BUTTERFLY_GLYPH = `${_NATURE_TABLET}
+  ${_g('M50 40 L50 64', 1.8)}
+  <path d="M50 46 Q36 32 32 44 Q30 54 44 54 Q50 52 50 46 Z" stroke="${PARCH}" stroke-width="1.5" fill="${PARCHG}"/>
+  <path d="M50 46 Q64 32 68 44 Q70 54 56 54 Q50 52 50 46 Z" stroke="${PARCH}" stroke-width="1.5" fill="${PARCHG}"/>
+  <path d="M50 52 Q40 56 40 64 Q46 68 50 62 Z" stroke="${PARCH}" stroke-width="1.4" fill="${PARCHG}"/>
+  <path d="M50 52 Q60 56 60 64 Q54 68 50 62 Z" stroke="${PARCH}" stroke-width="1.4" fill="${PARCHG}"/>
+  ${_g('M50 40 L47 35 M50 40 L53 35', 1.2)}`;
+
 // Pack definitions — drive the picker's tab row (order = display order).
 // Add a pack here and tag its markers with the matching `pack` id below.
 const MARKER_PACKS = [
   { id: 'classic', label: 'Classic' },
   { id: 'faith',   label: 'Faith' },
+  { id: 'nature',  label: 'Nature' },
 ];
 
 const MARKER_STYLES = [
@@ -452,6 +643,27 @@ const MARKER_STYLES = [
   { id: 'eye',          label: 'All-Seeing Eye',  pack: 'faith', glyph: EYE_GLYPH },
   { id: 'angel',        label: 'Angel',           pack: 'faith', glyph: ANGEL_GLYPH },
   { id: 'khanda',       label: 'Khanda',          pack: 'faith', glyph: KHANDA_GLYPH },
+  // ── Pack 3 — Nature & Flora ──
+  { id: 'oak',          label: 'Oak',             pack: 'nature', glyph: OAK_GLYPH },
+  { id: 'treeoflife',   label: 'Tree of Life',    pack: 'nature', glyph: TREEOFLIFE_GLYPH },
+  { id: 'pine',         label: 'Evergreen',       pack: 'nature', glyph: PINE_GLYPH },
+  { id: 'acorn',        label: 'Acorn',           pack: 'nature', glyph: ACORN_GLYPH },
+  { id: 'fallentree',   label: 'Tree Stump',      pack: 'nature', glyph: FALLENTREE_GLYPH },
+  { id: 'fern',         label: 'Fern',            pack: 'nature', glyph: FERN_GLYPH },
+  { id: 'lily',         label: 'Lily',            pack: 'nature', glyph: LILY_GLYPH },
+  { id: 'callalily',    label: 'Calla Lily',      pack: 'nature', glyph: CALLALILY_GLYPH },
+  { id: 'tulip',        label: 'Tulip',           pack: 'nature', glyph: TULIP_GLYPH },
+  { id: 'forgetmenot',  label: 'Forget-Me-Not',   pack: 'nature', glyph: FORGETMENOT_GLYPH },
+  { id: 'daisy',        label: 'Daisy',           pack: 'nature', glyph: DAISY_GLYPH },
+  { id: 'lotusbud',     label: 'Lotus Bud',       pack: 'nature', glyph: LOTUSBUD_GLYPH },
+  { id: 'thistle',      label: 'Thistle',         pack: 'nature', glyph: THISTLE_GLYPH },
+  { id: 'poppy',        label: 'Poppy',           pack: 'nature', glyph: POPPY_GLYPH },
+  { id: 'ivy',          label: 'Ivy',             pack: 'nature', glyph: IVY_GLYPH },
+  { id: 'laurel',       label: 'Laurel Wreath',   pack: 'nature', glyph: LAUREL_GLYPH },
+  { id: 'leaf',         label: 'Oak Leaf',        pack: 'nature', glyph: LEAF_GLYPH },
+  { id: 'wheatsprig',   label: 'Wheat Sprig',     pack: 'nature', glyph: WHEATSPRIG_GLYPH },
+  { id: 'sunrise',      label: 'Sunrise',         pack: 'nature', glyph: SUNRISE_GLYPH },
+  { id: 'butterfly',    label: 'Butterfly',       pack: 'nature', glyph: BUTTERFLY_GLYPH },
 ];
 
 const DEFAULT_MARKER = 'book';

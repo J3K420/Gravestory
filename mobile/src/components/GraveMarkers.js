@@ -1,4 +1,4 @@
-// GraveMarkers.js — 40 hand-built SVG gravestone markers for the Cemetery map.
+// GraveMarkers.js — 80 hand-built SVG gravestone markers for the Cemetery map.
 //
 // Each entry is a "glyph": a React fragment of raw SVG primitives on the shared
 // viewBox="0 0 100 100". A single <Svg> wrapper (GraveMarkerSvg) owns width/height
@@ -49,6 +49,11 @@ const PARCHG = 'url(#parchGrad)';  // lit parchment fill
 // global-map gold identity survives.
 const LEAF = '#c6d696';            // green-tinted parchment stroke
 const LEAFG = 'url(#leafGrad)';    // green-tinted parchment fill
+// Pack-4 (Celestial & Eternity) accent: a faint silver-blue (echoes the global-
+// map silver). Only the celestial DETAIL (suns/moons/stars/flames) uses it; the
+// stone + gold stroke stay identical so the global-map gold identity survives.
+const SILVER = '#bccde6';          // silver-blue stroke
+const SILVERG = 'url(#skyGrad)';   // silver-blue fill
 
 // Shared <Defs> rendered once per <Svg> wrapper; glyphs reference via url(#id).
 const MarkerDefs = () => (
@@ -69,6 +74,10 @@ const MarkerDefs = () => (
     <LinearGradient id="leafGrad" x1="0" y1="0" x2="0" y2="1">
       <Stop offset="0" stopColor="rgba(198,214,150,0.34)" />
       <Stop offset="1" stopColor="rgba(150,176,110,0.14)" />
+    </LinearGradient>
+    <LinearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <Stop offset="0" stopColor="rgba(190,205,230,0.36)" />
+      <Stop offset="1" stopColor="rgba(140,160,200,0.14)" />
     </LinearGradient>
     <RadialGradient id="groundGrad" cx="0.5" cy="0.5" r="0.5">
       <Stop offset="0" stopColor="rgba(0,0,0,0.45)" />
@@ -108,6 +117,16 @@ const GrooveLeaf = ({ d, w }) => (
       <Path d={d} stroke={GROOVE_DK} strokeWidth={w} fill="none" strokeLinecap="round" />
     </G>
     <Path d={d} stroke={LEAF} strokeWidth={w} fill="none" strokeLinecap="round" />
+  </>
+);
+
+// Silver-accent groove for Pack-4 celestial outline detail (rays, beams, arcs).
+const GrooveSky = ({ d, w }) => (
+  <>
+    <G x={0.9} y={1}>
+      <Path d={d} stroke={GROOVE_DK} strokeWidth={w} fill="none" strokeLinecap="round" />
+    </G>
+    <Path d={d} stroke={SILVER} strokeWidth={w} fill="none" strokeLinecap="round" />
   </>
 );
 
@@ -867,12 +886,228 @@ const ButterflyGlyph = () => (
   </G>
 );
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PACK 4 — CELESTIAL & ETERNITY (glyphs 61-80)
+// Same depth treatment; celestial detail (suns, moons, stars, flames, beams) uses
+// the silver-blue accent (SILVER/SILVERG/<GrooveSky>) so the pack reads as "sky /
+// eternity" while stone + gold stroke keep the global-map gold identity. All art
+// kept inside x≈[34,66] so nothing crosses the tablet edge. Byte-for-byte
+// equivalent to web js/grave-markers.js.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const SkyTablet = () => (
+  <>
+    <Base />
+    <Path d="M30 84 L30 40 Q30 22 50 22 Q70 22 70 40 L70 84 Z" stroke={GOLDG} strokeWidth="2.2" fill={STONE} />
+  </>
+);
+
+// ── 61. Sun ───────────────────────────────────────────────────────────────────
+const SunGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Circle cx="50" cy="50" r="9" stroke={SILVER} strokeWidth="1.8" fill={SILVERG} />
+    <GrooveSky d="M50 35 L50 29 M50 71 L50 65 M35 50 L29 50 M71 50 L65 50" w={1.4} />
+    <GrooveSky d="M40 40 L36 36 M60 40 L64 36 M40 60 L36 64 M60 60 L64 64" w={1.3} />
+  </G>
+);
+
+// ── 62. Crescent moon ─────────────────────────────────────────────────────────
+const CrescentMoonGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Path d="M58 36 Q40 38 40 54 Q40 70 58 72 Q46 64 46 54 Q46 44 58 36 Z" stroke={SILVER} strokeWidth="1.8" fill={SILVERG} />
+  </G>
+);
+
+// ── 63. Full moon ─────────────────────────────────────────────────────────────
+const FullMoonGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Circle cx="50" cy="52" r="15" stroke={SILVER} strokeWidth="1.8" fill={SILVERG} />
+    <Circle cx="44" cy="47" r="3" stroke={SILVER} strokeWidth="1.2" fill="none" />
+    <Circle cx="56" cy="55" r="2.2" stroke={SILVER} strokeWidth="1.1" fill="none" />
+    <Circle cx="47" cy="58" r="1.8" stroke={SILVER} strokeWidth="1" fill="none" />
+  </G>
+);
+
+// ── 64. Five-pointed star ─────────────────────────────────────────────────────
+const FiveStarGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Polygon points="50,34 54,46 67,46 56,54 60,67 50,59 40,67 44,54 33,46 46,46" stroke={SILVER} strokeWidth="1.6" fill={SILVERG} strokeLinejoin="round" />
+  </G>
+);
+
+// ── 65. Starfield ─────────────────────────────────────────────────────────────
+const StarfieldGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Polygon points="46,36 48,42 54,42 49,46 51,52 46,48 41,52 43,46 38,42 44,42" stroke={SILVER} strokeWidth="1.2" fill={SILVERG} strokeLinejoin="round" />
+    <Polygon points="60,50 61.5,54.5 66,54.5 62.5,57.5 64,62 60,59 56,62 57.5,57.5 54,54.5 58.5,54.5" stroke={SILVER} strokeWidth="1.1" fill={SILVERG} strokeLinejoin="round" />
+    <Polygon points="42,58 43,61 46,61 43.5,63 44.5,66 42,64 39.5,66 40.5,63 38,61 41,61" stroke={SILVER} strokeWidth="1" fill={SILVERG} strokeLinejoin="round" />
+  </G>
+);
+
+// ── 66. Shooting star ─────────────────────────────────────────────────────────
+const ShootingStarGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Polygon points="60,38 62,44 68,44 63,48 65,54 60,50 55,54 57,48 52,44 58,44" stroke={SILVER} strokeWidth="1.3" fill={SILVERG} strokeLinejoin="round" />
+    <GrooveSky d="M55 49 L38 66 M58 52 L44 68 M52 47 L36 60" w={1.4} />
+  </G>
+);
+
+// ── 67. Eternal flame ─────────────────────────────────────────────────────────
+const EternalFlameGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Path d="M50 70 Q40 62 40 52 Q40 42 50 32 Q52 42 56 44 Q60 48 60 54 Q60 64 50 70 Z" stroke={SILVER} strokeWidth="1.7" fill={SILVERG} />
+    <Path d="M50 66 Q45 60 46 54 Q47 48 50 44 Q53 50 53 56 Q53 62 50 66 Z" stroke={SILVER} strokeWidth="1.2" fill="none" />
+  </G>
+);
+
+// ── 68. Candle ────────────────────────────────────────────────────────────────
+const CandleGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Rect x="45" y="50" width="10" height="22" stroke={PARCH} strokeWidth="1.7" fill={PARCHG} />
+    <Path d="M48 74 Q48 70 50 70 Q52 70 52 74 Z" stroke={PARCH} strokeWidth="1.4" fill={PARCHG} />
+    <GrooveSky d="M50 50 L50 44" w={1.2} />
+    <Path d="M50 44 Q45 40 50 32 Q55 40 50 44 Z" stroke={SILVER} strokeWidth="1.5" fill={SILVERG} />
+  </G>
+);
+
+// ── 69. Gates of heaven ───────────────────────────────────────────────────────
+const GatesOfHeavenGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Path d="M40 74 L40 52 Q40 40 47 38 L47 74 Z" stroke={PARCH} strokeWidth="1.7" fill={PARCHG} />
+    <Path d="M60 74 L60 52 Q60 40 53 38 L53 74 Z" stroke={PARCH} strokeWidth="1.7" fill={PARCHG} />
+    <Groove d="M43 46 L43 72 M50 41 L50 72 M57 46 L57 72" w={1} />
+    <GrooveSky d="M50 34 L50 28 M44 36 L41 31 M56 36 L59 31" w={1.3} />
+  </G>
+);
+
+// ── 70. Ascending stair ───────────────────────────────────────────────────────
+const AscendingStairGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Groove d="M36 70 L44 70 L44 62 L52 62 L52 54 L60 54 L60 46 L66 46" w={2} />
+    <Groove d="M36 70 L36 72 M44 62 L44 64 M52 54 L52 56 M60 46 L60 48" w={1.2} />
+    <GrooveSky d="M60 40 L60 34 M54 42 L51 37 M66 42 L69 37" w={1.3} />
+  </G>
+);
+
+// ── 71. Infinity ──────────────────────────────────────────────────────────────
+const InfinityGlyph = () => (
+  <G>
+    <SkyTablet />
+    <GrooveSky d="M50 52 Q43 42 37 47 Q31 52 37 57 Q43 62 50 52 Q57 42 63 47 Q69 52 63 57 Q57 62 50 52 Z" w={2.4} />
+  </G>
+);
+
+// ── 72. Ouroboros ─────────────────────────────────────────────────────────────
+const OuroborosGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Path d="M46 38 A13 13 0 1 0 54 39" stroke={SILVER} strokeWidth="3.4" fill="none" strokeLinecap="round" />
+    <Path d="M54 39 L62 33 L60 43 L55 46 Q50 44 50 41 Q50 39 54 39 Z" stroke={SILVER} strokeWidth="1.4" fill={SILVERG} strokeLinejoin="round" />
+    <Circle cx="57" cy="38" r="1.2" fill={GROOVE_DK} />
+  </G>
+);
+
+// ── 73. Hourglass ─────────────────────────────────────────────────────────────
+const HourglassGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Groove d="M40 36 L60 36 M40 70 L60 70" w={1.8} />
+    <Path d="M42 37 L58 37 L50 53 Z" stroke={PARCH} strokeWidth="1.6" fill={PARCHG} strokeLinejoin="round" />
+    <Path d="M42 69 L58 69 L50 53 Z" stroke={PARCH} strokeWidth="1.6" fill={PARCHG} strokeLinejoin="round" />
+    <GrooveSky d="M50 53 L50 64" w={1.2} />
+  </G>
+);
+
+// ── 74. Winged hourglass ──────────────────────────────────────────────────────
+const WingedHourglassGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Groove d="M44 42 L56 42 M44 68 L56 68" w={1.6} />
+    <Path d="M46 43 L54 43 L50 55 Z" stroke={PARCH} strokeWidth="1.5" fill={PARCHG} strokeLinejoin="round" />
+    <Path d="M46 67 L54 67 L50 55 Z" stroke={PARCH} strokeWidth="1.5" fill={PARCHG} strokeLinejoin="round" />
+    <Path d="M44 46 Q34 42 35 52 Q40 49 44 52 Z" stroke={SILVER} strokeWidth="1.4" fill={SILVERG} />
+    <Path d="M56 46 Q66 42 65 52 Q60 49 56 52 Z" stroke={SILVER} strokeWidth="1.4" fill={SILVERG} />
+  </G>
+);
+
+// ── 75. Radiant cross ─────────────────────────────────────────────────────────
+const RadiantCrossGlyph = () => (
+  <G>
+    <SkyTablet />
+    <GrooveSky d="M50 34 L50 36 M40 44 L37 41 M60 44 L63 41 M36 54 L33 54 M64 54 L67 54" w={1.3} />
+    <Groove d="M50 40 L50 72" w={2.4} />
+    <Groove d="M40 52 L60 52" w={2.4} />
+  </G>
+);
+
+// ── 76. Rays / glory ──────────────────────────────────────────────────────────
+const RaysGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Path d="M38 60 Q34 60 34 56 Q34 50 41 51 Q43 46 50 47 Q58 46 60 52 Q66 52 66 58 Q66 62 62 62 Z" stroke={PARCH} strokeWidth="1.6" fill={PARCHG} />
+    <GrooveSky d="M44 64 L41 72 M50 64 L50 73 M56 64 L59 72" w={1.4} />
+  </G>
+);
+
+// ── 77. North star ────────────────────────────────────────────────────────────
+const NorthStarGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Polygon points="50,30 53,48 71,52 53,56 50,74 47,56 29,52 47,48" stroke={SILVER} strokeWidth="1.5" fill={SILVERG} strokeLinejoin="round" />
+    <Circle cx="50" cy="52" r="2.6" fill={SILVER} />
+  </G>
+);
+
+// ── 78. Constellation ─────────────────────────────────────────────────────────
+const ConstellationGlyph = () => (
+  <G>
+    <SkyTablet />
+    <GrooveSky d="M38 42 L50 50 L46 62 L60 58 L62 44" w={1.4} />
+    <Circle cx="38" cy="42" r="2.4" fill={SILVER} />
+    <Circle cx="50" cy="50" r="2.4" fill={SILVER} />
+    <Circle cx="46" cy="62" r="2.4" fill={SILVER} />
+    <Circle cx="60" cy="58" r="2.4" fill={SILVER} />
+    <Circle cx="62" cy="44" r="2.4" fill={SILVER} />
+  </G>
+);
+
+// ── 79. Eclipse ───────────────────────────────────────────────────────────────
+const EclipseGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Circle cx="50" cy="52" r="13" fill={SILVERG} stroke={SILVER} strokeWidth="1.6" />
+    <Circle cx="54" cy="50" r="11" fill={STONE} stroke={SILVER} strokeWidth="1.3" />
+    <GrooveSky d="M50 35 L50 31 M65 45 L69 42 M37 60 L33 63 M64 62 L68 65 M35 44 L31 41" w={1.3} />
+  </G>
+);
+
+// ── 80. Clouds ────────────────────────────────────────────────────────────────
+const CloudsGlyph = () => (
+  <G>
+    <SkyTablet />
+    <Path d="M38 66 Q33 66 33 61 Q33 55 40 56 Q42 50 50 51 Q58 50 60 57 Q67 57 67 63 Q67 66 62 66 Z" stroke={PARCH} strokeWidth="1.6" fill={PARCHG} />
+    <Circle cx="50" cy="40" r="4" stroke={SILVER} strokeWidth="1.5" fill={SILVERG} />
+    <GrooveSky d="M50 44 L50 50 M45 47 L47 51 M55 47 L53 51" w={1.2} />
+  </G>
+);
+
 // Pack definitions — drive the picker's tab row (order = display order).
 // Add a pack here and tag its markers with the matching `pack` id below.
 export const MARKER_PACKS = [
-  { id: 'classic', label: 'Classic' },
-  { id: 'faith',   label: 'Faith' },
-  { id: 'nature',  label: 'Nature' },
+  { id: 'classic',   label: 'Classic' },
+  { id: 'faith',     label: 'Faith' },
+  { id: 'nature',    label: 'Nature' },
+  { id: 'celestial', label: 'Celestial' },
 ];
 
 export const MARKER_STYLES = [
@@ -938,6 +1173,27 @@ export const MARKER_STYLES = [
   { id: 'wheatsprig',   label: 'Wheat Sprig',     pack: 'nature', Glyph: WheatSprigGlyph },
   { id: 'sunrise',      label: 'Sunrise',         pack: 'nature', Glyph: SunriseGlyph },
   { id: 'butterfly',    label: 'Butterfly',       pack: 'nature', Glyph: ButterflyGlyph },
+  // ── Pack 4 — Celestial & Eternity ──
+  { id: 'sun',            label: 'Sun',             pack: 'celestial', Glyph: SunGlyph },
+  { id: 'crescentmoon',   label: 'Crescent Moon',   pack: 'celestial', Glyph: CrescentMoonGlyph },
+  { id: 'fullmoon',       label: 'Full Moon',       pack: 'celestial', Glyph: FullMoonGlyph },
+  { id: 'fivestar',       label: 'Star',            pack: 'celestial', Glyph: FiveStarGlyph },
+  { id: 'starfield',      label: 'Starfield',       pack: 'celestial', Glyph: StarfieldGlyph },
+  { id: 'shootingstar',   label: 'Shooting Star',   pack: 'celestial', Glyph: ShootingStarGlyph },
+  { id: 'eternalflame',   label: 'Eternal Flame',   pack: 'celestial', Glyph: EternalFlameGlyph },
+  { id: 'candle',         label: 'Candle',          pack: 'celestial', Glyph: CandleGlyph },
+  { id: 'gates',          label: 'Gates of Heaven', pack: 'celestial', Glyph: GatesOfHeavenGlyph },
+  { id: 'stair',          label: 'Ascending Stair', pack: 'celestial', Glyph: AscendingStairGlyph },
+  { id: 'infinity',       label: 'Infinity',        pack: 'celestial', Glyph: InfinityGlyph },
+  { id: 'ouroboros',      label: 'Ouroboros',       pack: 'celestial', Glyph: OuroborosGlyph },
+  { id: 'hourglass',      label: 'Hourglass',       pack: 'celestial', Glyph: HourglassGlyph },
+  { id: 'wingedhourglass',label: 'Winged Hourglass',pack: 'celestial', Glyph: WingedHourglassGlyph },
+  { id: 'radiantcross',   label: 'Radiant Cross',   pack: 'celestial', Glyph: RadiantCrossGlyph },
+  { id: 'rays',           label: 'Rays of Glory',   pack: 'celestial', Glyph: RaysGlyph },
+  { id: 'northstar',      label: 'North Star',      pack: 'celestial', Glyph: NorthStarGlyph },
+  { id: 'constellation',  label: 'Constellation',   pack: 'celestial', Glyph: ConstellationGlyph },
+  { id: 'eclipse',        label: 'Eclipse',         pack: 'celestial', Glyph: EclipseGlyph },
+  { id: 'clouds',         label: 'Clouds',          pack: 'celestial', Glyph: CloudsGlyph },
 ];
 
 export const DEFAULT_MARKER = 'book';

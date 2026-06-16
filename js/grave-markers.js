@@ -1,4 +1,4 @@
-// grave-markers.js — 80 hand-built SVG gravestone markers for the cemetery map.
+// grave-markers.js — 100 hand-built SVG gravestone markers for the cemetery map.
 //
 // Web port of mobile/src/components/GraveMarkers.js. Each entry is a "glyph":
 // the inner SVG primitives on the shared viewBox="0 0 100 100". graveMarkerSvg()
@@ -54,6 +54,9 @@ const _DEFS = `<defs>
   <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
     <stop offset="0" stop-color="rgba(190,205,230,0.36)"/><stop offset="1" stop-color="rgba(140,160,200,0.14)"/>
   </linearGradient>
+  <linearGradient id="bronzeGrad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="rgba(214,158,104,0.40)"/><stop offset="1" stop-color="rgba(160,104,58,0.16)"/>
+  </linearGradient>
   <radialGradient id="groundGrad" cx="0.5" cy="0.5" r="0.5">
     <stop offset="0" stop-color="rgba(0,0,0,0.45)"/><stop offset="0.7" stop-color="rgba(0,0,0,0.22)"/><stop offset="1" stop-color="rgba(0,0,0,0)"/>
   </radialGradient>
@@ -72,6 +75,11 @@ const LEAFG = 'url(#leafGrad)';    // green-tinted parchment fill
 // stone + gold stroke stay identical so the global-map gold identity survives.
 const SILVER = '#bccde6';          // silver-blue stroke
 const SILVERG = 'url(#skyGrad)';   // silver-blue fill
+// Pack-5 (Symbols & Trades) accent: a warm burnished copper-bronze. Only the
+// emblem/tool DETAIL uses it; the stone + gold stroke stay identical so the
+// global-map gold identity survives.
+const COPPER = '#d69e68';          // burnished copper-bronze stroke
+const COPPERG = 'url(#bronzeGrad)';// copper-bronze fill
 
 // Soft ground shadow, drawn first so the stone sits on it.
 const _GROUND = `<ellipse cx="50" cy="90" rx="30" ry="6" fill="url(#groundGrad)"/>`;
@@ -99,6 +107,13 @@ function _gl(d, w) {
 function _gs(d, w) {
   return `<path d="${d}" stroke="${GROOVE_DK}" stroke-width="${w}" fill="none" stroke-linecap="round" transform="translate(0.9,1)"/>` +
          `<path d="${d}" stroke="${SILVER}" stroke-width="${w}" fill="none" stroke-linecap="round"/>`;
+}
+
+// Copper-accent groove for Pack-5 trade/symbol outline detail (tools, emblems).
+// Same carved look as _g but the bright near wall is burnished copper-bronze.
+function _gc(d, w) {
+  return `<path d="${d}" stroke="${GROOVE_DK}" stroke-width="${w}" fill="none" stroke-linecap="round" transform="translate(0.9,1)"/>` +
+         `<path d="${d}" stroke="${COPPER}" stroke-width="${w}" fill="none" stroke-linecap="round"/>`;
 }
 
 // ── 1. Book (default — matches the original marker) ───────────────────────────
@@ -745,6 +760,168 @@ const CLOUDS_GLYPH = `${_SKY_TABLET}
   <circle cx="50" cy="40" r="4" stroke="${SILVER}" stroke-width="1.5" fill="${SILVERG}"/>
   ${_gs('M50 44 L50 50 M45 47 L47 51 M55 47 L53 51', 1.2)}`;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PACK 5 — SYMBOLS & TRADES (glyphs 81-100)
+// Emblems of vocation, fellowship and remembrance. Same gold-stroke / depth
+// treatment, but the tool/emblem DETAIL uses the warm copper-bronze accent
+// (COPPER / COPPERG / _gc) so the pack reads as "craft / burnished metal" while
+// the stone + gold stroke keep the global-map gold identity. All art is kept
+// inside x≈[34,66] so nothing crosses the gold tablet edge (the laurel lesson).
+// Byte-for-byte equivalent to mobile GraveMarkers.js.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const _TRADE_TABLET = `${_BASE}
+  <path d="M30 84 L30 40 Q30 22 50 22 Q70 22 70 40 L70 84 Z" stroke="${GOLDG}" stroke-width="2.2" fill="${STONE}"/>`;
+
+// ── 81. Square & compasses (mason — the open compass above a builder's square) ─
+// The square (a right-angle, points up) sits low; the compasses (two legs from a
+// pivot, points down) splay over it — the classic interlocked Masonic emblem.
+const SQUARE_GLYPH = `${_TRADE_TABLET}
+  ${_gc('M34 50 L50 70 L66 50', 2)}
+  <path d="M50 30 L36 62 M50 30 L64 62" stroke="${GROOVE_DK}" stroke-width="2.4" fill="none" stroke-linecap="round" transform="translate(0.9,1)"/>
+  <path d="M50 30 L36 62 M50 30 L64 62" stroke="${COPPER}" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  ${_gc('M40 64 L37 60 M60 64 L63 60', 1.4)}
+  <circle cx="50" cy="30" r="2.6" fill="${COPPER}"/>`;
+
+// ── 82. Anvil (blacksmith — anvil on its stock) ───────────────────────────────
+const ANVIL_GLYPH = `${_TRADE_TABLET}
+  <path d="M36 46 L64 46 L64 51 L56 51 Q60 56 66 56 L66 50 Q58 60 44 58 L44 51 L36 51 Z" stroke="${COPPER}" stroke-width="1.7" fill="${COPPERG}" stroke-linejoin="round"/>
+  ${_gc('M46 58 L46 66 M58 58 L58 66', 1.8)}
+  <rect x="42" y="66" width="20" height="5" stroke="${COPPER}" stroke-width="1.5" fill="${COPPERG}"/>`;
+
+// ── 83. Ship's wheel (mariner — spoked helm) ──────────────────────────────────
+const WHEEL_GLYPH = `${_TRADE_TABLET}
+  <circle cx="50" cy="52" r="14" stroke="${COPPER}" stroke-width="1.8" fill="none"/>
+  <circle cx="50" cy="52" r="4.5" stroke="${COPPER}" stroke-width="1.6" fill="${COPPERG}"/>
+  ${_gc('M50 31 L50 42 M50 62 L50 73 M29 52 L40 52 M60 52 L71 52', 1.6)}
+  ${_gc('M36 38 L43 45 M64 38 L57 45 M36 66 L43 59 M64 66 L57 59', 1.4)}`;
+
+// ── 84. Quill & inkwell (writer — feather pen and pot) ────────────────────────
+const QUILL_GLYPH = `${_TRADE_TABLET}
+  <path d="M40 64 L44 60 Q56 50 64 32 Q50 40 42 56 L38 62 Z" stroke="${COPPER}" stroke-width="1.5" fill="${COPPERG}" stroke-linejoin="round"/>
+  ${_gc('M44 60 L52 52', 1.2)}
+  <path d="M42 66 L40 74 L56 74 L54 66 Z" stroke="${PARCH}" stroke-width="1.6" fill="${PARCHG}" stroke-linejoin="round"/>
+  ${_gc('M40 66 L56 66', 1.4)}`;
+
+// ── 85. Lyre (musician — harp/lyre with strings) ──────────────────────────────
+const LYRE_GLYPH = `${_TRADE_TABLET}
+  <path d="M40 66 Q34 50 42 38 Q44 34 47 36" stroke="${COPPER}" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M60 66 Q66 50 58 38 Q56 34 53 36" stroke="${COPPER}" stroke-width="2" fill="none" stroke-linecap="round"/>
+  ${_gc('M44 40 L56 40', 1.6)}
+  ${_gc('M46 42 L46 64 M50 42 L50 64 M54 42 L54 64', 1.1)}
+  ${_gc('M40 66 L60 66', 1.6)}`;
+
+// ── 86. Scales of justice (law — balanced beam and pans) ──────────────────────
+const SCALES_GLYPH = `${_TRADE_TABLET}
+  ${_gc('M50 32 L50 66', 1.8)}
+  ${_gc('M36 40 L64 40', 1.8)}
+  ${_gc('M36 40 L31 52 M36 40 L41 52 M64 40 L59 52 M64 40 L69 52', 1.1)}
+  <path d="M31 52 Q36 58 41 52 Z" stroke="${COPPER}" stroke-width="1.4" fill="${COPPERG}"/>
+  <path d="M59 52 Q64 58 69 52 Z" stroke="${COPPER}" stroke-width="1.4" fill="${COPPERG}"/>
+  ${_gc('M42 66 L58 66', 1.6)}`;
+
+// ── 87. Caduceus (medicine — winged staff with twin serpents) ─────────────────
+// Central staff; two serpents make symmetric S-coils crossing it three times; a
+// pair of wings spreads just under the top knob so the emblem reads at a glance.
+const CADUCEUS_GLYPH = `${_TRADE_TABLET}
+  ${_gc('M50 38 L50 72', 1.8)}
+  <path d="M44 46 Q56 50 44 56 Q56 62 50 68" stroke="${COPPER}" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M56 46 Q44 50 56 56 Q44 62 50 68" stroke="${COPPER}" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M50 42 Q38 38 32 44 Q42 44 48 47 Z" stroke="${COPPER}" stroke-width="1.3" fill="${COPPERG}" stroke-linejoin="round"/>
+  <path d="M50 42 Q62 38 68 44 Q58 44 52 47 Z" stroke="${COPPER}" stroke-width="1.3" fill="${COPPERG}" stroke-linejoin="round"/>
+  <circle cx="50" cy="38" r="2.4" fill="${COPPER}"/>`;
+
+// ── 88. Gear / cog (industry & engineering) ───────────────────────────────────
+const GEAR_GLYPH = `${_TRADE_TABLET}
+  <path d="M50 36 L53 36 L54 40 L58 42 L61 39 L64 42 L61 45 L63 49 L67 50 L67 54 L63 55 L61 59 L64 62 L61 65 L58 62 L54 64 L53 68 L50 68 L46 64 L42 62 L39 65 L36 62 L39 59 L37 55 L33 54 L33 50 L37 49 L39 45 L36 42 L39 39 L42 42 L46 40 Z" stroke="${COPPER}" stroke-width="1.5" fill="${COPPERG}" stroke-linejoin="round"/>
+  <circle cx="50" cy="52" r="6" stroke="${COPPER}" stroke-width="1.6" fill="${STONE}"/>`;
+
+// ── 89. Torch (the torch of knowledge / liberty, held aloft and lit) ──────────
+const TORCH_GLYPH = `${_TRADE_TABLET}
+  ${_gc('M44 72 L50 50 M56 72 L50 50', 2.2)}
+  <rect x="44" y="46" width="12" height="5" stroke="${PARCH}" stroke-width="1.4" fill="${PARCHG}"/>
+  <path d="M50 46 Q43 40 50 28 Q52 36 55 38 Q59 42 56 47 Q53 50 50 46 Z" stroke="${COPPER}" stroke-width="1.6" fill="${COPPERG}"/>`;
+
+// ── 90. Sword (military valor — upright sword, point down) ─────────────────────
+const SWORD_GLYPH = `${_TRADE_TABLET}
+  ${_gc('M50 36 L50 72', 2.4)}
+  <path d="M47 36 L53 36 L52 70 L50 73 L48 70 Z" stroke="${COPPER}" stroke-width="1.4" fill="${COPPERG}" stroke-linejoin="round"/>
+  ${_gc('M38 44 L62 44', 2)}
+  <circle cx="50" cy="38" r="2.4" stroke="${COPPER}" stroke-width="1.4" fill="${COPPERG}"/>`;
+
+// ── 91. Laurel medal (an award — medallion on a laurel ribbon) ─────────────────
+const MEDAL_GLYPH = `${_TRADE_TABLET}
+  ${_gc('M42 34 L48 50 M58 34 L52 50', 1.6)}
+  <circle cx="50" cy="58" r="12" stroke="${COPPER}" stroke-width="1.8" fill="${COPPERG}"/>
+  <path d="M44 58 Q40 54 44 54 Q46 50 50 53 Q54 50 56 54 Q60 54 56 58 Q58 62 50 64 Q42 62 44 58 Z" stroke="${COPPER}" stroke-width="1.2" fill="none"/>`;
+
+// ── 92. Crossed pick & shovel (miner / labourer) ──────────────────────────────
+const PICK_GLYPH = `${_TRADE_TABLET}
+  ${_gc('M38 70 L60 36', 2.2)}
+  <path d="M52 30 Q60 32 66 40 Q58 38 54 42 Q56 36 52 30 Z" stroke="${COPPER}" stroke-width="1.4" fill="${COPPERG}" stroke-linejoin="round"/>
+  ${_gc('M62 70 L42 38', 2.2)}
+  <path d="M36 32 L48 32 L48 44 Q42 42 36 44 Z" stroke="${COPPER}" stroke-width="1.4" fill="${COPPERG}" stroke-linejoin="round"/>`;
+
+// ── 93. Crossed hammer & spanner (trades / labour) ────────────────────────────
+const HAMMER_GLYPH = `${_TRADE_TABLET}
+  ${_gc('M40 70 L58 36', 2.2)}
+  <rect x="52" y="30" width="14" height="8" rx="1.5" stroke="${COPPER}" stroke-width="1.4" fill="${COPPERG}" transform="rotate(-28 59 34)"/>
+  ${_gc('M60 70 L46 42', 2)}
+  <path d="M40 32 Q34 34 36 40 Q38 36 42 38 Q46 40 44 34 Q42 30 40 32 Z" stroke="${COPPER}" stroke-width="1.4" fill="${COPPERG}" stroke-linejoin="round"/>`;
+
+// ── 94. Palette & brush (artist) ──────────────────────────────────────────────
+const PALETTE_GLYPH = `${_TRADE_TABLET}
+  <path d="M38 52 Q38 38 52 38 Q66 38 66 50 Q66 56 60 56 Q56 56 56 60 Q56 66 48 66 Q38 66 38 52 Z" stroke="${COPPER}" stroke-width="1.6" fill="${COPPERG}"/>
+  <circle cx="45" cy="46" r="2" fill="${COPPER}"/>
+  <circle cx="53" cy="44" r="2" fill="${COPPER}"/>
+  <circle cx="59" cy="49" r="1.8" fill="${COPPER}"/>
+  <circle cx="47" cy="58" r="3" stroke="${COPPER}" stroke-width="1.2" fill="${STONE}"/>
+  ${_gc('M58 36 L66 28', 1.6)}`;
+
+// ── 95. Crossed keys (steward / gatekeeper — keys of the kingdom) ─────────────
+const KEY_GLYPH = `${_TRADE_TABLET}
+  <circle cx="40" cy="40" r="6" stroke="${COPPER}" stroke-width="1.7" fill="none"/>
+  ${_gc('M44 44 L62 64', 2)}
+  ${_gc('M58 60 L64 60 M54 56 L60 56', 1.6)}
+  <circle cx="60" cy="40" r="6" stroke="${COPPER}" stroke-width="1.7" fill="none"/>
+  ${_gc('M56 44 L38 64', 2)}
+  ${_gc('M42 60 L36 60 M46 56 L40 56', 1.6)}`;
+
+// ── 96. Bell (a tolling bell — the call and the knell) ────────────────────────
+const BELL_GLYPH = `${_TRADE_TABLET}
+  ${_gc('M50 32 L50 38', 1.4)}
+  <path d="M38 66 Q38 46 50 42 Q62 46 62 66 Z" stroke="${COPPER}" stroke-width="1.7" fill="${COPPERG}" stroke-linejoin="round"/>
+  ${_gc('M34 66 L66 66', 1.8)}
+  <circle cx="50" cy="71" r="2.6" stroke="${COPPER}" stroke-width="1.3" fill="${COPPERG}"/>`;
+
+// ── 97. Plough (the farmer — a turning plough) ────────────────────────────────
+const PLOW_GLYPH = `${_TRADE_TABLET}
+  ${_gc('M34 40 L50 48 L46 66', 2)}
+  <path d="M42 60 Q40 70 52 70 Q62 70 64 62 Q56 64 52 60 Q48 56 42 60 Z" stroke="${COPPER}" stroke-width="1.6" fill="${COPPERG}" stroke-linejoin="round"/>
+  ${_gc('M50 48 L60 44', 1.5)}`;
+
+// ── 98. Shield (heraldry — a plain heraldic shield with a chevron) ────────────
+const SHIELD_GLYPH = `${_TRADE_TABLET}
+  <path d="M36 36 L64 36 L64 52 Q64 66 50 72 Q36 66 36 52 Z" stroke="${COPPER}" stroke-width="1.8" fill="${COPPERG}" stroke-linejoin="round"/>
+  ${_gc('M40 54 L50 46 L60 54', 2)}
+  ${_gc('M44 62 L56 62', 1.4)}`;
+
+// ── 99. Clasped hands (fellowship / a final farewell — a frequent stone motif) ─
+// Two cuffs enter from the sides; the right hand grips over the left so a thumb
+// and the backs of fingers read at the join — the common "farewell" handshake.
+const CLASPED_GLYPH = `${_TRADE_TABLET}
+  <path d="M30 64 L40 64 L40 50 L30 50 Z" stroke="${PARCH}" stroke-width="1.5" fill="${PARCHG}" stroke-linejoin="round"/>
+  <path d="M70 64 L60 64 L60 50 L70 50 Z" stroke="${PARCH}" stroke-width="1.5" fill="${PARCHG}" stroke-linejoin="round"/>
+  <path d="M40 50 Q52 48 56 52 Q60 56 56 60 Q52 64 44 64 L40 64 Z" stroke="${COPPER}" stroke-width="1.5" fill="${COPPERG}" stroke-linejoin="round"/>
+  <path d="M60 60 Q50 60 48 56 L52 52 Q56 50 60 52 Z" stroke="${COPPER}" stroke-width="1.4" fill="${COPPERG}" stroke-linejoin="round"/>
+  ${_gc('M46 55 L53 55 M46 58 L52 58', 1)}
+  ${_gc('M55 51 Q58 50 59 53', 1.2)}`;
+
+// ── 100. Horseshoe (farrier / luck — open-ended horseshoe) ────────────────────
+const HORSESHOE_GLYPH = `${_TRADE_TABLET}
+  <path d="M40 70 L40 52 Q40 36 50 36 Q60 36 60 52 L60 70" stroke="${COPPER}" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+  ${_gc('M44 48 L46 48 M40 56 L42 56 M40 64 L42 64 M54 48 L56 48 M58 56 L60 56 M58 64 L60 64', 1.2)}`;
+
 // Pack definitions — drive the picker's tab row (order = display order).
 // Add a pack here and tag its markers with the matching `pack` id below.
 const MARKER_PACKS = [
@@ -752,6 +929,7 @@ const MARKER_PACKS = [
   { id: 'faith',     label: 'Faith' },
   { id: 'nature',    label: 'Nature' },
   { id: 'celestial', label: 'Celestial' },
+  { id: 'trades',    label: 'Trades' },
 ];
 
 const MARKER_STYLES = [
@@ -838,6 +1016,27 @@ const MARKER_STYLES = [
   { id: 'constellation',  label: 'Constellation',   pack: 'celestial', glyph: CONSTELLATION_GLYPH },
   { id: 'eclipse',        label: 'Eclipse',         pack: 'celestial', glyph: ECLIPSE_GLYPH },
   { id: 'clouds',         label: 'Clouds',          pack: 'celestial', glyph: CLOUDS_GLYPH },
+  // ── Pack 5 — Symbols & Trades ──
+  { id: 'square',         label: 'Square & Compass',pack: 'trades', glyph: SQUARE_GLYPH },
+  { id: 'anvil',          label: 'Anvil',           pack: 'trades', glyph: ANVIL_GLYPH },
+  { id: 'wheel',          label: "Ship's Wheel",    pack: 'trades', glyph: WHEEL_GLYPH },
+  { id: 'quill',          label: 'Quill & Ink',     pack: 'trades', glyph: QUILL_GLYPH },
+  { id: 'lyre',           label: 'Lyre',            pack: 'trades', glyph: LYRE_GLYPH },
+  { id: 'scales',         label: 'Scales',          pack: 'trades', glyph: SCALES_GLYPH },
+  { id: 'caduceus',       label: 'Caduceus',        pack: 'trades', glyph: CADUCEUS_GLYPH },
+  { id: 'gear',           label: 'Gear',            pack: 'trades', glyph: GEAR_GLYPH },
+  { id: 'torch',          label: 'Torch',           pack: 'trades', glyph: TORCH_GLYPH },
+  { id: 'sword',          label: 'Sword',           pack: 'trades', glyph: SWORD_GLYPH },
+  { id: 'medal',          label: 'Laurel Medal',    pack: 'trades', glyph: MEDAL_GLYPH },
+  { id: 'pick',           label: 'Pick & Shovel',   pack: 'trades', glyph: PICK_GLYPH },
+  { id: 'hammer',         label: 'Hammer & Spanner',pack: 'trades', glyph: HAMMER_GLYPH },
+  { id: 'palette',        label: 'Palette',         pack: 'trades', glyph: PALETTE_GLYPH },
+  { id: 'key',            label: 'Crossed Keys',    pack: 'trades', glyph: KEY_GLYPH },
+  { id: 'bell',           label: 'Bell',            pack: 'trades', glyph: BELL_GLYPH },
+  { id: 'plow',           label: 'Plough',          pack: 'trades', glyph: PLOW_GLYPH },
+  { id: 'shield',         label: 'Shield',          pack: 'trades', glyph: SHIELD_GLYPH },
+  { id: 'clasped',        label: 'Clasped Hands',   pack: 'trades', glyph: CLASPED_GLYPH },
+  { id: 'horseshoe',      label: 'Horseshoe',       pack: 'trades', glyph: HORSESHOE_GLYPH },
 ];
 
 const DEFAULT_MARKER = 'book';

@@ -1,4 +1,4 @@
-// GraveMarkers.js — 80 hand-built SVG gravestone markers for the Cemetery map.
+// GraveMarkers.js — 100 hand-built SVG gravestone markers for the Cemetery map.
 //
 // Each entry is a "glyph": a React fragment of raw SVG primitives on the shared
 // viewBox="0 0 100 100". A single <Svg> wrapper (GraveMarkerSvg) owns width/height
@@ -54,6 +54,11 @@ const LEAFG = 'url(#leafGrad)';    // green-tinted parchment fill
 // stone + gold stroke stay identical so the global-map gold identity survives.
 const SILVER = '#bccde6';          // silver-blue stroke
 const SILVERG = 'url(#skyGrad)';   // silver-blue fill
+// Pack-5 (Symbols & Trades) accent: a warm burnished copper-bronze. Only the
+// emblem/tool DETAIL uses it; the stone + gold stroke stay identical so the
+// global-map gold identity survives.
+const COPPER = '#d69e68';          // burnished copper-bronze stroke
+const COPPERG = 'url(#bronzeGrad)';// copper-bronze fill
 
 // Shared <Defs> rendered once per <Svg> wrapper; glyphs reference via url(#id).
 const MarkerDefs = () => (
@@ -78,6 +83,10 @@ const MarkerDefs = () => (
     <LinearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
       <Stop offset="0" stopColor="rgba(190,205,230,0.36)" />
       <Stop offset="1" stopColor="rgba(140,160,200,0.14)" />
+    </LinearGradient>
+    <LinearGradient id="bronzeGrad" x1="0" y1="0" x2="0" y2="1">
+      <Stop offset="0" stopColor="rgba(214,158,104,0.40)" />
+      <Stop offset="1" stopColor="rgba(160,104,58,0.16)" />
     </LinearGradient>
     <RadialGradient id="groundGrad" cx="0.5" cy="0.5" r="0.5">
       <Stop offset="0" stopColor="rgba(0,0,0,0.45)" />
@@ -127,6 +136,16 @@ const GrooveSky = ({ d, w }) => (
       <Path d={d} stroke={GROOVE_DK} strokeWidth={w} fill="none" strokeLinecap="round" />
     </G>
     <Path d={d} stroke={SILVER} strokeWidth={w} fill="none" strokeLinecap="round" />
+  </>
+);
+
+// Copper-accent groove for Pack-5 trade/symbol outline detail (tools, emblems).
+const GrooveCopper = ({ d, w }) => (
+  <>
+    <G x={0.9} y={1}>
+      <Path d={d} stroke={GROOVE_DK} strokeWidth={w} fill="none" strokeLinecap="round" />
+    </G>
+    <Path d={d} stroke={COPPER} strokeWidth={w} fill="none" strokeLinecap="round" />
   </>
 );
 
@@ -1101,6 +1120,247 @@ const CloudsGlyph = () => (
   </G>
 );
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PACK 5 — SYMBOLS & TRADES (glyphs 81-100)
+// Emblems of vocation, fellowship and remembrance. Same depth treatment; the
+// tool/emblem detail uses the warm copper-bronze accent (COPPER/COPPERG/
+// <GrooveCopper>) so the pack reads as "craft / burnished metal" while stone +
+// gold stroke keep the global-map gold identity. All art kept inside x≈[34,66] so
+// nothing crosses the tablet edge. Byte-for-byte equivalent to web grave-markers.js.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const TradeTablet = () => (
+  <>
+    <Base />
+    <Path d="M30 84 L30 40 Q30 22 50 22 Q70 22 70 40 L70 84 Z" stroke={GOLDG} strokeWidth="2.2" fill={STONE} />
+  </>
+);
+
+// ── 81. Square & compasses ────────────────────────────────────────────────────
+const SquareGlyph = () => (
+  <G>
+    <TradeTablet />
+    <GrooveCopper d="M34 50 L50 70 L66 50" w={2} />
+    <G x={0.9} y={1}>
+      <Path d="M50 30 L36 62 M50 30 L64 62" stroke={GROOVE_DK} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+    </G>
+    <Path d="M50 30 L36 62 M50 30 L64 62" stroke={COPPER} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+    <GrooveCopper d="M40 64 L37 60 M60 64 L63 60" w={1.4} />
+    <Circle cx="50" cy="30" r="2.6" fill={COPPER} />
+  </G>
+);
+
+// ── 82. Anvil ─────────────────────────────────────────────────────────────────
+const AnvilGlyph = () => (
+  <G>
+    <TradeTablet />
+    <Path d="M36 46 L64 46 L64 51 L56 51 Q60 56 66 56 L66 50 Q58 60 44 58 L44 51 L36 51 Z" stroke={COPPER} strokeWidth="1.7" fill={COPPERG} strokeLinejoin="round" />
+    <GrooveCopper d="M46 58 L46 66 M58 58 L58 66" w={1.8} />
+    <Rect x="42" y="66" width="20" height="5" stroke={COPPER} strokeWidth="1.5" fill={COPPERG} />
+  </G>
+);
+
+// ── 83. Ship's wheel ──────────────────────────────────────────────────────────
+const WheelGlyph = () => (
+  <G>
+    <TradeTablet />
+    <Circle cx="50" cy="52" r="14" stroke={COPPER} strokeWidth="1.8" fill="none" />
+    <Circle cx="50" cy="52" r="4.5" stroke={COPPER} strokeWidth="1.6" fill={COPPERG} />
+    <GrooveCopper d="M50 31 L50 42 M50 62 L50 73 M29 52 L40 52 M60 52 L71 52" w={1.6} />
+    <GrooveCopper d="M36 38 L43 45 M64 38 L57 45 M36 66 L43 59 M64 66 L57 59" w={1.4} />
+  </G>
+);
+
+// ── 84. Quill & inkwell ───────────────────────────────────────────────────────
+const QuillGlyph = () => (
+  <G>
+    <TradeTablet />
+    <Path d="M40 64 L44 60 Q56 50 64 32 Q50 40 42 56 L38 62 Z" stroke={COPPER} strokeWidth="1.5" fill={COPPERG} strokeLinejoin="round" />
+    <GrooveCopper d="M44 60 L52 52" w={1.2} />
+    <Path d="M42 66 L40 74 L56 74 L54 66 Z" stroke={PARCH} strokeWidth="1.6" fill={PARCHG} strokeLinejoin="round" />
+    <GrooveCopper d="M40 66 L56 66" w={1.4} />
+  </G>
+);
+
+// ── 85. Lyre ──────────────────────────────────────────────────────────────────
+const LyreGlyph = () => (
+  <G>
+    <TradeTablet />
+    <Path d="M40 66 Q34 50 42 38 Q44 34 47 36" stroke={COPPER} strokeWidth="2" fill="none" strokeLinecap="round" />
+    <Path d="M60 66 Q66 50 58 38 Q56 34 53 36" stroke={COPPER} strokeWidth="2" fill="none" strokeLinecap="round" />
+    <GrooveCopper d="M44 40 L56 40" w={1.6} />
+    <GrooveCopper d="M46 42 L46 64 M50 42 L50 64 M54 42 L54 64" w={1.1} />
+    <GrooveCopper d="M40 66 L60 66" w={1.6} />
+  </G>
+);
+
+// ── 86. Scales of justice ─────────────────────────────────────────────────────
+const ScalesGlyph = () => (
+  <G>
+    <TradeTablet />
+    <GrooveCopper d="M50 32 L50 66" w={1.8} />
+    <GrooveCopper d="M36 40 L64 40" w={1.8} />
+    <GrooveCopper d="M36 40 L31 52 M36 40 L41 52 M64 40 L59 52 M64 40 L69 52" w={1.1} />
+    <Path d="M31 52 Q36 58 41 52 Z" stroke={COPPER} strokeWidth="1.4" fill={COPPERG} />
+    <Path d="M59 52 Q64 58 69 52 Z" stroke={COPPER} strokeWidth="1.4" fill={COPPERG} />
+    <GrooveCopper d="M42 66 L58 66" w={1.6} />
+  </G>
+);
+
+// ── 87. Caduceus ──────────────────────────────────────────────────────────────
+const CaduceusGlyph = () => (
+  <G>
+    <TradeTablet />
+    <GrooveCopper d="M50 38 L50 72" w={1.8} />
+    <Path d="M44 46 Q56 50 44 56 Q56 62 50 68" stroke={COPPER} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+    <Path d="M56 46 Q44 50 56 56 Q44 62 50 68" stroke={COPPER} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+    <Path d="M50 42 Q38 38 32 44 Q42 44 48 47 Z" stroke={COPPER} strokeWidth="1.3" fill={COPPERG} strokeLinejoin="round" />
+    <Path d="M50 42 Q62 38 68 44 Q58 44 52 47 Z" stroke={COPPER} strokeWidth="1.3" fill={COPPERG} strokeLinejoin="round" />
+    <Circle cx="50" cy="38" r="2.4" fill={COPPER} />
+  </G>
+);
+
+// ── 88. Gear / cog ────────────────────────────────────────────────────────────
+const GearGlyph = () => (
+  <G>
+    <TradeTablet />
+    <Path d="M50 36 L53 36 L54 40 L58 42 L61 39 L64 42 L61 45 L63 49 L67 50 L67 54 L63 55 L61 59 L64 62 L61 65 L58 62 L54 64 L53 68 L50 68 L46 64 L42 62 L39 65 L36 62 L39 59 L37 55 L33 54 L33 50 L37 49 L39 45 L36 42 L39 39 L42 42 L46 40 Z" stroke={COPPER} strokeWidth="1.5" fill={COPPERG} strokeLinejoin="round" />
+    <Circle cx="50" cy="52" r="6" stroke={COPPER} strokeWidth="1.6" fill={STONE} />
+  </G>
+);
+
+// ── 89. Torch ─────────────────────────────────────────────────────────────────
+const TorchGlyph = () => (
+  <G>
+    <TradeTablet />
+    <GrooveCopper d="M44 72 L50 50 M56 72 L50 50" w={2.2} />
+    <Rect x="44" y="46" width="12" height="5" stroke={PARCH} strokeWidth="1.4" fill={PARCHG} />
+    <Path d="M50 46 Q43 40 50 28 Q52 36 55 38 Q59 42 56 47 Q53 50 50 46 Z" stroke={COPPER} strokeWidth="1.6" fill={COPPERG} />
+  </G>
+);
+
+// ── 90. Sword ─────────────────────────────────────────────────────────────────
+const SwordGlyph = () => (
+  <G>
+    <TradeTablet />
+    <GrooveCopper d="M50 36 L50 72" w={2.4} />
+    <Path d="M47 36 L53 36 L52 70 L50 73 L48 70 Z" stroke={COPPER} strokeWidth="1.4" fill={COPPERG} strokeLinejoin="round" />
+    <GrooveCopper d="M38 44 L62 44" w={2} />
+    <Circle cx="50" cy="38" r="2.4" stroke={COPPER} strokeWidth="1.4" fill={COPPERG} />
+  </G>
+);
+
+// ── 91. Laurel medal ──────────────────────────────────────────────────────────
+const MedalGlyph = () => (
+  <G>
+    <TradeTablet />
+    <GrooveCopper d="M42 34 L48 50 M58 34 L52 50" w={1.6} />
+    <Circle cx="50" cy="58" r="12" stroke={COPPER} strokeWidth="1.8" fill={COPPERG} />
+    <Path d="M44 58 Q40 54 44 54 Q46 50 50 53 Q54 50 56 54 Q60 54 56 58 Q58 62 50 64 Q42 62 44 58 Z" stroke={COPPER} strokeWidth="1.2" fill="none" />
+  </G>
+);
+
+// ── 92. Crossed pick & shovel ─────────────────────────────────────────────────
+const PickGlyph = () => (
+  <G>
+    <TradeTablet />
+    <GrooveCopper d="M38 70 L60 36" w={2.2} />
+    <Path d="M52 30 Q60 32 66 40 Q58 38 54 42 Q56 36 52 30 Z" stroke={COPPER} strokeWidth="1.4" fill={COPPERG} strokeLinejoin="round" />
+    <GrooveCopper d="M62 70 L42 38" w={2.2} />
+    <Path d="M36 32 L48 32 L48 44 Q42 42 36 44 Z" stroke={COPPER} strokeWidth="1.4" fill={COPPERG} strokeLinejoin="round" />
+  </G>
+);
+
+// ── 93. Crossed hammer & spanner ──────────────────────────────────────────────
+const HammerGlyph = () => (
+  <G>
+    <TradeTablet />
+    <GrooveCopper d="M40 70 L58 36" w={2.2} />
+    <Rect x="52" y="30" width="14" height="8" rx="1.5" stroke={COPPER} strokeWidth="1.4" fill={COPPERG} transform="rotate(-28 59 34)" />
+    <GrooveCopper d="M60 70 L46 42" w={2} />
+    <Path d="M40 32 Q34 34 36 40 Q38 36 42 38 Q46 40 44 34 Q42 30 40 32 Z" stroke={COPPER} strokeWidth="1.4" fill={COPPERG} strokeLinejoin="round" />
+  </G>
+);
+
+// ── 94. Palette & brush ───────────────────────────────────────────────────────
+const PaletteGlyph = () => (
+  <G>
+    <TradeTablet />
+    <Path d="M38 52 Q38 38 52 38 Q66 38 66 50 Q66 56 60 56 Q56 56 56 60 Q56 66 48 66 Q38 66 38 52 Z" stroke={COPPER} strokeWidth="1.6" fill={COPPERG} />
+    <Circle cx="45" cy="46" r="2" fill={COPPER} />
+    <Circle cx="53" cy="44" r="2" fill={COPPER} />
+    <Circle cx="59" cy="49" r="1.8" fill={COPPER} />
+    <Circle cx="47" cy="58" r="3" stroke={COPPER} strokeWidth="1.2" fill={STONE} />
+    <GrooveCopper d="M58 36 L66 28" w={1.6} />
+  </G>
+);
+
+// ── 95. Crossed keys ──────────────────────────────────────────────────────────
+const KeyGlyph = () => (
+  <G>
+    <TradeTablet />
+    <Circle cx="40" cy="40" r="6" stroke={COPPER} strokeWidth="1.7" fill="none" />
+    <GrooveCopper d="M44 44 L62 64" w={2} />
+    <GrooveCopper d="M58 60 L64 60 M54 56 L60 56" w={1.6} />
+    <Circle cx="60" cy="40" r="6" stroke={COPPER} strokeWidth="1.7" fill="none" />
+    <GrooveCopper d="M56 44 L38 64" w={2} />
+    <GrooveCopper d="M42 60 L36 60 M46 56 L40 56" w={1.6} />
+  </G>
+);
+
+// ── 96. Bell ──────────────────────────────────────────────────────────────────
+const BellGlyph = () => (
+  <G>
+    <TradeTablet />
+    <GrooveCopper d="M50 32 L50 38" w={1.4} />
+    <Path d="M38 66 Q38 46 50 42 Q62 46 62 66 Z" stroke={COPPER} strokeWidth="1.7" fill={COPPERG} strokeLinejoin="round" />
+    <GrooveCopper d="M34 66 L66 66" w={1.8} />
+    <Circle cx="50" cy="71" r="2.6" stroke={COPPER} strokeWidth="1.3" fill={COPPERG} />
+  </G>
+);
+
+// ── 97. Plough ────────────────────────────────────────────────────────────────
+const PlowGlyph = () => (
+  <G>
+    <TradeTablet />
+    <GrooveCopper d="M34 40 L50 48 L46 66" w={2} />
+    <Path d="M42 60 Q40 70 52 70 Q62 70 64 62 Q56 64 52 60 Q48 56 42 60 Z" stroke={COPPER} strokeWidth="1.6" fill={COPPERG} strokeLinejoin="round" />
+    <GrooveCopper d="M50 48 L60 44" w={1.5} />
+  </G>
+);
+
+// ── 98. Shield ────────────────────────────────────────────────────────────────
+const ShieldGlyph = () => (
+  <G>
+    <TradeTablet />
+    <Path d="M36 36 L64 36 L64 52 Q64 66 50 72 Q36 66 36 52 Z" stroke={COPPER} strokeWidth="1.8" fill={COPPERG} strokeLinejoin="round" />
+    <GrooveCopper d="M40 54 L50 46 L60 54" w={2} />
+    <GrooveCopper d="M44 62 L56 62" w={1.4} />
+  </G>
+);
+
+// ── 99. Clasped hands ─────────────────────────────────────────────────────────
+const ClaspedGlyph = () => (
+  <G>
+    <TradeTablet />
+    <Path d="M30 64 L40 64 L40 50 L30 50 Z" stroke={PARCH} strokeWidth="1.5" fill={PARCHG} strokeLinejoin="round" />
+    <Path d="M70 64 L60 64 L60 50 L70 50 Z" stroke={PARCH} strokeWidth="1.5" fill={PARCHG} strokeLinejoin="round" />
+    <Path d="M40 50 Q52 48 56 52 Q60 56 56 60 Q52 64 44 64 L40 64 Z" stroke={COPPER} strokeWidth="1.5" fill={COPPERG} strokeLinejoin="round" />
+    <Path d="M60 60 Q50 60 48 56 L52 52 Q56 50 60 52 Z" stroke={COPPER} strokeWidth="1.4" fill={COPPERG} strokeLinejoin="round" />
+    <GrooveCopper d="M46 55 L53 55 M46 58 L52 58" w={1} />
+    <GrooveCopper d="M55 51 Q58 50 59 53" w={1.2} />
+  </G>
+);
+
+// ── 100. Horseshoe ────────────────────────────────────────────────────────────
+const HorseshoeGlyph = () => (
+  <G>
+    <TradeTablet />
+    <Path d="M40 70 L40 52 Q40 36 50 36 Q60 36 60 52 L60 70" stroke={COPPER} strokeWidth="3.4" fill="none" strokeLinecap="round" />
+    <GrooveCopper d="M44 48 L46 48 M40 56 L42 56 M40 64 L42 64 M54 48 L56 48 M58 56 L60 56 M58 64 L60 64" w={1.2} />
+  </G>
+);
+
 // Pack definitions — drive the picker's tab row (order = display order).
 // Add a pack here and tag its markers with the matching `pack` id below.
 export const MARKER_PACKS = [
@@ -1108,6 +1368,7 @@ export const MARKER_PACKS = [
   { id: 'faith',     label: 'Faith' },
   { id: 'nature',    label: 'Nature' },
   { id: 'celestial', label: 'Celestial' },
+  { id: 'trades',    label: 'Trades' },
 ];
 
 export const MARKER_STYLES = [
@@ -1194,6 +1455,27 @@ export const MARKER_STYLES = [
   { id: 'constellation',  label: 'Constellation',   pack: 'celestial', Glyph: ConstellationGlyph },
   { id: 'eclipse',        label: 'Eclipse',         pack: 'celestial', Glyph: EclipseGlyph },
   { id: 'clouds',         label: 'Clouds',          pack: 'celestial', Glyph: CloudsGlyph },
+  // ── Pack 5 — Symbols & Trades ──
+  { id: 'square',         label: 'Square & Compass',pack: 'trades', Glyph: SquareGlyph },
+  { id: 'anvil',          label: 'Anvil',           pack: 'trades', Glyph: AnvilGlyph },
+  { id: 'wheel',          label: "Ship's Wheel",    pack: 'trades', Glyph: WheelGlyph },
+  { id: 'quill',          label: 'Quill & Ink',     pack: 'trades', Glyph: QuillGlyph },
+  { id: 'lyre',           label: 'Lyre',            pack: 'trades', Glyph: LyreGlyph },
+  { id: 'scales',         label: 'Scales',          pack: 'trades', Glyph: ScalesGlyph },
+  { id: 'caduceus',       label: 'Caduceus',        pack: 'trades', Glyph: CaduceusGlyph },
+  { id: 'gear',           label: 'Gear',            pack: 'trades', Glyph: GearGlyph },
+  { id: 'torch',          label: 'Torch',           pack: 'trades', Glyph: TorchGlyph },
+  { id: 'sword',          label: 'Sword',           pack: 'trades', Glyph: SwordGlyph },
+  { id: 'medal',          label: 'Laurel Medal',    pack: 'trades', Glyph: MedalGlyph },
+  { id: 'pick',           label: 'Pick & Shovel',   pack: 'trades', Glyph: PickGlyph },
+  { id: 'hammer',         label: 'Hammer & Spanner',pack: 'trades', Glyph: HammerGlyph },
+  { id: 'palette',        label: 'Palette',         pack: 'trades', Glyph: PaletteGlyph },
+  { id: 'key',            label: 'Crossed Keys',    pack: 'trades', Glyph: KeyGlyph },
+  { id: 'bell',           label: 'Bell',            pack: 'trades', Glyph: BellGlyph },
+  { id: 'plow',           label: 'Plough',          pack: 'trades', Glyph: PlowGlyph },
+  { id: 'shield',         label: 'Shield',          pack: 'trades', Glyph: ShieldGlyph },
+  { id: 'clasped',        label: 'Clasped Hands',   pack: 'trades', Glyph: ClaspedGlyph },
+  { id: 'horseshoe',      label: 'Horseshoe',       pack: 'trades', Glyph: HorseshoeGlyph },
 ];
 
 export const DEFAULT_MARKER = 'book';

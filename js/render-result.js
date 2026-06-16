@@ -509,8 +509,8 @@ function openMarkerPicker(savedRow) {
       background:${on ? 'rgba(201,168,76,0.2)' : 'transparent'};
       border:1px solid ${on ? 'rgba(201,168,76,0.7)' : 'rgba(201,168,76,0.25)'};
       color:${on ? 'var(--gold,#c9a84c)' : 'var(--cream,#e8d4a0)'};
-      font-family:'Crimson Pro',serif;font-size:0.82rem;padding:0.35rem 0.85rem;
-      border-radius:999px;cursor:pointer;white-space:nowrap;">${escapeHtml(p.label)}</button>`;
+      font-family:'Crimson Pro',serif;font-size:0.82rem;line-height:1.4;padding:0.4rem 0.9rem;
+      border-radius:999px;cursor:pointer;white-space:nowrap;flex:0 0 auto;">${escapeHtml(p.label)}</button>`;
   }).join('');
 
   overlay.innerHTML = `
@@ -519,7 +519,7 @@ function openMarkerPicker(savedRow) {
         <div style="font-family:'Playfair Display',serif;color:var(--gold,#c9a84c);font-size:1.05rem;">Choose a map pin</div>
         <button id="marker-picker-close" style="background:none;border:none;color:var(--cream,#e8d4a0);font-size:1.4rem;cursor:pointer;line-height:1;padding:0 0.25rem;">×</button>
       </div>
-      <div id="marker-pack-tabs" style="display:flex;gap:0.5rem;overflow-x:auto;margin-bottom:1rem;padding-bottom:0.2rem;">${tabsHtml()}</div>
+      <div id="marker-pack-tabs" style="display:flex;gap:0.5rem;overflow-x:auto;margin-bottom:1rem;padding:0.15rem 0 0.45rem;">${tabsHtml()}</div>
       <div id="marker-pick-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:0.6rem;"></div>
     </div>
   `;

@@ -1214,14 +1214,14 @@ const styles = StyleSheet.create({
     marginBottom: 14, lineHeight: 18,
   },
   markerTabRow: { flexGrow: 0, marginBottom: 14 },
-  markerTabRowContent: { gap: 8, paddingRight: 8 },
+  markerTabRowContent: { gap: 8, paddingRight: 8, paddingVertical: 2, alignItems: 'center' },
   markerTab: {
-    paddingVertical: 6, paddingHorizontal: 14,
+    paddingVertical: 8, paddingHorizontal: 14,
     borderWidth: 1, borderColor: colors.line, borderRadius: 999,
     backgroundColor: 'transparent',
   },
   markerTabActive: { borderColor: colors.flame, backgroundColor: colors.stone2 },
-  markerTabText: { color: colors.ash, fontSize: 13, fontFamily: fonts.bodyMedium },
+  markerTabText: { color: colors.ash, fontSize: 13, lineHeight: 18, fontFamily: fonts.bodyMedium, includeFontPadding: false, textAlignVertical: 'center' },
   markerTabTextActive: { color: colors.flame },
   markerGridScroll: { flexGrow: 0 },
   markerGrid: {
@@ -1240,8 +1240,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(201,168,76,0.1)',
   },
   markerCellLabel: {
-    color: colors.ashDim, fontSize: 9, fontFamily: fonts.body,
-    marginTop: 4, textAlign: 'center', letterSpacing: 0.2,
+    color: colors.ashDim, fontSize: 9, lineHeight: 12, fontFamily: fonts.body,
+    marginTop: 4, textAlign: 'center', letterSpacing: 0.2, includeFontPadding: false,
   },
   markerCellLabelSelected: { color: colors.flame },
 });

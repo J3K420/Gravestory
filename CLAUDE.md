@@ -4,7 +4,7 @@
 
 - **Always commit and push at the end of every session.** Do not leave work uncommitted.
 - **Mobile JS changes ship via OTA to the `production` channel** (where live testers are): `npx eas update --branch production --environment production`. Verify with `eas channel:list` before publishing. Native-module changes need a new build, not an OTA.
-- **Any web change must bump the `CACHE` version in `sw.js`** (currently `gravestory-v24`) or users keep the old cached shell.
+- **Any web change must bump the `CACHE` version in `sw.js`** (increment the `gravestory-vN` number at the top of `sw.js`) or users keep the old cached shell.
 - Web and mobile are parallel codebases. Search/biography logic lives in BOTH `js/` and `mobile/src/lib/` — apply behavioral changes to both unless explicitly web- or mobile-only.
 
 ## What this app does

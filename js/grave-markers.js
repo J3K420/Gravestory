@@ -55,7 +55,7 @@ const _DEFS = `<defs>
     <stop offset="0" stop-color="rgba(190,205,230,0.36)"/><stop offset="1" stop-color="rgba(140,160,200,0.14)"/>
   </linearGradient>
   <linearGradient id="bronzeGrad" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="rgba(214,158,104,0.40)"/><stop offset="1" stop-color="rgba(160,104,58,0.16)"/>
+    <stop offset="0" stop-color="rgba(248,206,150,0.62)"/><stop offset="0.5" stop-color="rgba(214,158,104,0.34)"/><stop offset="1" stop-color="rgba(150,96,52,0.16)"/>
   </linearGradient>
   <radialGradient id="groundGrad" cx="0.5" cy="0.5" r="0.5">
     <stop offset="0" stop-color="rgba(0,0,0,0.45)"/><stop offset="0.7" stop-color="rgba(0,0,0,0.22)"/><stop offset="1" stop-color="rgba(0,0,0,0)"/>
@@ -78,8 +78,8 @@ const SILVERG = 'url(#skyGrad)';   // silver-blue fill
 // Pack-5 (Symbols & Trades) accent: a warm burnished copper-bronze. Only the
 // emblem/tool DETAIL uses it; the stone + gold stroke stay identical so the
 // global-map gold identity survives.
-const COPPER = '#d69e68';          // burnished copper-bronze stroke
-const COPPERG = 'url(#bronzeGrad)';// copper-bronze fill
+const COPPER = '#eab277';          // bright burnished copper-bronze stroke
+const COPPERG = 'url(#bronzeGrad)';// copper-bronze fill (lit-metal gradient)
 
 // Soft ground shadow, drawn first so the stone sits on it.
 const _GROUND = `<ellipse cx="50" cy="90" rx="30" ry="6" fill="url(#groundGrad)"/>`;

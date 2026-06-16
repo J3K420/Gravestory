@@ -57,8 +57,8 @@ const SILVERG = 'url(#skyGrad)';   // silver-blue fill
 // Pack-5 (Symbols & Trades) accent: a warm burnished copper-bronze. Only the
 // emblem/tool DETAIL uses it; the stone + gold stroke stay identical so the
 // global-map gold identity survives.
-const COPPER = '#d69e68';          // burnished copper-bronze stroke
-const COPPERG = 'url(#bronzeGrad)';// copper-bronze fill
+const COPPER = '#eab277';          // bright burnished copper-bronze stroke
+const COPPERG = 'url(#bronzeGrad)';// copper-bronze fill (lit-metal gradient)
 
 // Shared <Defs> rendered once per <Svg> wrapper; glyphs reference via url(#id).
 const MarkerDefs = () => (
@@ -85,8 +85,9 @@ const MarkerDefs = () => (
       <Stop offset="1" stopColor="rgba(140,160,200,0.14)" />
     </LinearGradient>
     <LinearGradient id="bronzeGrad" x1="0" y1="0" x2="0" y2="1">
-      <Stop offset="0" stopColor="rgba(214,158,104,0.40)" />
-      <Stop offset="1" stopColor="rgba(160,104,58,0.16)" />
+      <Stop offset="0" stopColor="rgba(248,206,150,0.62)" />
+      <Stop offset="0.5" stopColor="rgba(214,158,104,0.34)" />
+      <Stop offset="1" stopColor="rgba(150,96,52,0.16)" />
     </LinearGradient>
     <RadialGradient id="groundGrad" cx="0.5" cy="0.5" r="0.5">
       <Stop offset="0" stopColor="rgba(0,0,0,0.45)" />

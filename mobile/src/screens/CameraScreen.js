@@ -39,8 +39,8 @@ const RESEARCH_TIMEOUT_MS = 30000;
 // the caller can tell "timed out" apart from a legitimately empty result.
 const RESEARCH_TIMEOUT = Symbol('research-timeout');
 
-// Animated <G> so the viewfinder catch-light can be translated across the stone.
-const AnimatedG = Animated.createAnimatedComponent(G);
+// The roaming flashlight pool animates its cx/cy, so it needs an animatable Circle.
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // Resolves to RESEARCH_TIMEOUT if `promise` hasn't settled within ms. Never
 // rejects — research is best-effort, so a timeout degrades gracefully.
@@ -74,11 +74,18 @@ export default function CameraScreen({ navigation, route }) {
   // the "haunting glow" (cousin of the home logo's catch-light), out of phase
   // with the breathe so the two never beat in lockstep.
   const glow = useRef(new Animated.Value(0.45)).current;
-  // A pale catch-light that periodically sweeps diagonally across the carved
-  // face (clipped to the stone), as if it's catching a passing ghost-light.
-  // Borrowed from GravestoneLogo's shimmer. translateX is layout-driven (no
-  // native driver) since it animates an SVG transform.
-  const glint = useRef(new Animated.Value(-90)).current;
+  // A roaming flashlight — a soft pool of light that wanders over the stone in
+  // the dark, like someone searching the inscription with a torch. Wherever it
+  // falls the carved detail is lit; elsewhere the stone stays dim. The 2D wander
+  // comes from two X/Y loops on different (coprime-ish) periods, so the path
+  // never repeats on a tight cycle and reads as a hand-held drift, not a line.
+  // Both are layout-driven (useNativeDriver:false) — they animate SVG transforms.
+  const beamX = useRef(new Animated.Value(160)).current;  // viewBox x of the pool centre
+  const beamY = useRef(new Animated.Value(150)).current;  // viewBox y of the pool centre
+  // The beam also gently pulses brightness so the torch feels alive. This drives
+  // an SVG element's `opacity` prop (not a View style), so it must be JS-driven —
+  // the native driver only animates View transform/opacity, not SVG props.
+  const beamPulse = useRef(new Animated.Value(0.85)).current;
   useEffect(() => {
     const breatheLoop = Animated.loop(
       Animated.sequence([
@@ -86,26 +93,39 @@ export default function CameraScreen({ navigation, route }) {
         Animated.timing(breathe, { toValue: 1.0,  duration: 2800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
+    // Aura is dimmer now — the torch is the star; the aura is just residual dark-glow.
     const glowLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(glow, { toValue: 1.0,  duration: 2300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(glow, { toValue: 0.35, duration: 3100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 0.7,  duration: 2300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 0.28, duration: 3100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
-    // Sweeps left→right across the stone face every ~5s; the reset hop is
-    // instant so there's no visible reverse streak.
-    const glintLoop = Animated.loop(
+    // Horizontal wander: drift across the stone face and back, slowly.
+    const beamXLoop = Animated.loop(
       Animated.sequence([
-        Animated.delay(2600),
-        Animated.timing(glint, { toValue: 410, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
-        Animated.timing(glint, { toValue: -90, duration: 1,    useNativeDriver: false }),
-        Animated.delay(1200),
+        Animated.timing(beamX, { toValue: 206, duration: 3700, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(beamX, { toValue: 114, duration: 4300, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+      ])
+    );
+    // Vertical wander on a different period — sweeps crown → base → crown.
+    const beamYLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(beamY, { toValue: 232, duration: 5200, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(beamY, { toValue: 118, duration: 4600, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+      ])
+    );
+    const beamPulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(beamPulse, { toValue: 1.0,  duration: 1300, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+        Animated.timing(beamPulse, { toValue: 0.78, duration: 1700, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
       ])
     );
     breatheLoop.start();
     glowLoop.start();
-    glintLoop.start();
-    return () => { breatheLoop.stop(); glowLoop.stop(); glintLoop.stop(); };
+    beamXLoop.start();
+    beamYLoop.start();
+    beamPulseLoop.start();
+    return () => { breatheLoop.stop(); glowLoop.stop(); beamXLoop.stop(); beamYLoop.stop(); beamPulseLoop.stop(); };
   }, []);
 
   const { refreshControl } = useRefresh(() => {
@@ -864,15 +884,16 @@ export default function CameraScreen({ navigation, route }) {
                   <Stop offset="0" stopColor="#f2b65c" stopOpacity="0.16" />
                   <Stop offset="1" stopColor="#f2b65c" stopOpacity="0" />
                 </RadialGradient>
-                {/* Narrow pale band for the sweeping catch-light */}
-                <LinearGradient id="vfGlint" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <Stop offset="0"    stopColor="#fff6da" stopOpacity="0" />
-                  <Stop offset="0.42" stopColor="#fff6da" stopOpacity="0" />
-                  <Stop offset="0.5"  stopColor="#fff6da" stopOpacity="0.5" />
-                  <Stop offset="0.58" stopColor="#fff6da" stopOpacity="0" />
-                  <Stop offset="1"    stopColor="#fff6da" stopOpacity="0" />
-                </LinearGradient>
-                {/* Clip the catch-light to the stone face so it never bleeds out */}
+                {/* The flashlight pool — a warm, soft-edged torch beam. Bright
+                    core, gentle falloff (the "blur" is the gradient, since
+                    RN-SVG can't render a real blur filter). */}
+                <RadialGradient id="vfBeam" cx="0.5" cy="0.5" r="0.5">
+                  <Stop offset="0"    stopColor="#fff4d2" stopOpacity="0.9" />
+                  <Stop offset="0.35" stopColor="#ffe7ad" stopOpacity="0.55" />
+                  <Stop offset="0.7"  stopColor="#f2b65c" stopOpacity="0.18" />
+                  <Stop offset="1"    stopColor="#f2b65c" stopOpacity="0" />
+                </RadialGradient>
+                {/* Clip every light to the stone face so the beam never bleeds out */}
                 <ClipPath id="vfStoneClip">
                   <Path d="M92 272 L92 150 Q92 78 160 78 Q228 78 228 150 L228 272 Z" />
                 </ClipPath>
@@ -883,29 +904,32 @@ export default function CameraScreen({ navigation, route }) {
 
               {/* inner face panel — stone reads as solid, not hollow */}
               <Path d="M100 270 L100 150 Q100 86 160 86 Q220 86 220 150 L220 270 Z"
-                    fill="rgba(42,32,23,0.55)" />
+                    fill="rgba(42,32,23,0.7)" />
 
-              {/* headstone outline — the defining gold stroke */}
+              {/* Base carved detail — kept DIM so the stone sits in shadow; the
+                  roaming torch is what brings each part to light as it passes. */}
+              {/* headstone outline */}
               <Path d="M92 272 L92 150 Q92 78 160 78 Q228 78 228 150 L228 272 Z"
-                    fill="none" stroke="url(#vfStone)" strokeWidth={1.9} strokeLinejoin="round" />
-
-              {/* inner chamfer — carved-edge illusion */}
+                    fill="none" stroke="url(#vfStone)" strokeWidth={1.9} strokeLinejoin="round" strokeOpacity={0.5} />
+              {/* inner chamfer */}
               <Path d="M102 270 L102 152 Q102 88 160 88 Q218 88 218 152 L218 270"
-                    fill="none" stroke="url(#vfStone)" strokeWidth={0.8} strokeOpacity={0.32} />
+                    fill="none" stroke="url(#vfStone)" strokeWidth={0.8} strokeOpacity={0.18} />
+              {/* ornament + inscription, dim */}
+              <Circle cx={160} cy={124} r={11} fill="none" stroke="#efe4d2" strokeOpacity={0.10} strokeWidth={1.0} />
+              <Line x1={124} y1={166} x2={196} y2={166} stroke="#efe4d2" strokeOpacity={0.12} strokeWidth={1.0} strokeLinecap="round" />
+              <Line x1={130} y1={188} x2={190} y2={188} stroke="#efe4d2" strokeOpacity={0.10} strokeWidth={0.9} strokeLinecap="round" />
+              <Line x1={136} y1={210} x2={184} y2={210} stroke="#efe4d2" strokeOpacity={0.08} strokeWidth={0.8} strokeLinecap="round" />
 
-              {/* carved ornament hint near the crown */}
-              <Circle cx={160} cy={124} r={11} fill="none" stroke="#efe4d2" strokeOpacity={0.16} strokeWidth={1.0} />
-
-              {/* three worn ghost inscription lines */}
-              <Line x1={124} y1={166} x2={196} y2={166} stroke="#efe4d2" strokeOpacity={0.20} strokeWidth={1.0} strokeLinecap="round" />
-              <Line x1={130} y1={188} x2={190} y2={188} stroke="#efe4d2" strokeOpacity={0.16} strokeWidth={0.9} strokeLinecap="round" />
-              <Line x1={136} y1={210} x2={184} y2={210} stroke="#efe4d2" strokeOpacity={0.12} strokeWidth={0.8} strokeLinecap="round" />
-
-              {/* sweeping catch-light, clipped to the stone, tilted for a diagonal glint */}
+              {/* ===== THE FLASHLIGHT ===== */}
+              {/* A warm pool of torchlight that roams over the stone. Clipped to
+                  the stone face so the light falls ON the carving, never in the
+                  dark around it. RN-SVG has no blur filter — the soft edge IS the
+                  radial gradient. The bright additive core visibly lifts whatever
+                  dim carved detail it passes over, so the inscription and edges
+                  "light up" under the beam and fall back to shadow behind it.
+                  cx/cy are driven by the two wander loops; opacity gently pulses. */}
               <G clipPath="url(#vfStoneClip)">
-                <AnimatedG translateX={glint}>
-                  <Rect x={-30} y={70} width={70} height={210} fill="url(#vfGlint)" rotation={-14} originX={5} originY={175} />
-                </AnimatedG>
+                <AnimatedCircle cx={beamX} cy={beamY} r={66} fill="url(#vfBeam)" opacity={beamPulse} />
               </G>
 
               {/* ground line pair (fading ends) */}

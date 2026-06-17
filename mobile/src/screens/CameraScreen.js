@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Animated, ScrollView, Modal, Alert,
+  Animated, ScrollView, Alert, Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient, Stop, Rect, Path, Line, Circle } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, RadialGradient, Stop, Rect, Path, Line, Circle, Ellipse } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
@@ -61,28 +61,21 @@ export default function CameraScreen({ navigation, route }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [rejected, setRejected] = useState(null);
   const [pipelineError, setPipelineError] = useState(null);
-  const [showPicker, setShowPicker] = useState(false);
 
-  const stoneOpacity = useRef(new Animated.Value(1)).current;
+  // The headstone inside the viewfinder slowly "breathes" — a reverent ~5.6s
+  // opacity swell, NOT the old harsh candle-flicker (which read as a rendering
+  // glitch). Only the stone illustration animates; the gold viewfinder brackets
+  // stay crisp — "the structure is fixed, the memory breathes".
+  const breathe = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    const flicker = Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.delay(600),
-        Animated.timing(stoneOpacity, { toValue: 0.3,  duration: 50,  useNativeDriver: true }),
-        Animated.timing(stoneOpacity, { toValue: 1,    duration: 50,  useNativeDriver: true }),
-        Animated.timing(stoneOpacity, { toValue: 0.5,  duration: 50,  useNativeDriver: true }),
-        Animated.timing(stoneOpacity, { toValue: 1,    duration: 50,  useNativeDriver: true }),
-        Animated.delay(500),
-        Animated.timing(stoneOpacity, { toValue: 0.65, duration: 250, useNativeDriver: true }),
-        Animated.timing(stoneOpacity, { toValue: 1,    duration: 200, useNativeDriver: true }),
-        Animated.delay(400),
-        Animated.timing(stoneOpacity, { toValue: 0.35, duration: 50,  useNativeDriver: true }),
-        Animated.timing(stoneOpacity, { toValue: 1,    duration: 50,  useNativeDriver: true }),
-        Animated.delay(400),
+        Animated.timing(breathe, { toValue: 0.6, duration: 2800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(breathe, { toValue: 1.0, duration: 2800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
-    flicker.start();
-    return () => flicker.stop();
+    loop.start();
+    return () => loop.stop();
   }, []);
 
   const { refreshControl } = useRefresh(() => {
@@ -759,44 +752,6 @@ export default function CameraScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Bottom sheet photo source picker */}
-      <Modal
-        transparent
-        animationType="slide"
-        visible={showPicker}
-        onRequestClose={() => setShowPicker(false)}
-      >
-        <TouchableOpacity
-          style={styles.sheetBackdrop}
-          activeOpacity={1}
-          onPress={() => setShowPicker(false)}
-        />
-        <View style={styles.sheet}>
-          <View style={styles.sheetHandle} />
-          <Text style={styles.sheetTitle}>Choose Photo Source</Text>
-          <TouchableOpacity
-            style={styles.sheetOption}
-            onPress={() => { setShowPicker(false); pickAndAnalyze(true); }}
-          >
-            <Text style={styles.sheetOptionText}>✦ Take Photo</Text>
-            <Text style={styles.sheetOptionHint}>Best at the graveside — your location pins the grave on your map</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.sheetOption}
-            onPress={() => { setShowPicker(false); pickAndAnalyze(false); }}
-          >
-            <Text style={styles.sheetOptionText}>Choose from Library</Text>
-            <Text style={styles.sheetOptionHint}>Use a gravestone photo you took earlier</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.sheetCancel}
-            onPress={() => setShowPicker(false)}
-          >
-            <Text style={styles.sheetCancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
@@ -805,41 +760,146 @@ export default function CameraScreen({ navigation, route }) {
         contentContainerStyle={styles.scroll}
         refreshControl={refreshControl}
       >
+        {/* Memorial-card hairline rules flanking a single gold mark */}
+        <View style={styles.ruleRow}>
+          <View style={styles.hairline} />
+          <Text style={styles.ruleMark}>✦</Text>
+          <View style={styles.hairline} />
+        </View>
+
         <Text style={styles.title}>Photograph the Stone</Text>
-        <Text style={styles.subtitle}>Frame the gravestone clearly for best results</Text>
-        <Text style={styles.tip}>
-          Tip: fill the frame with the inscription, and photograph at the cemetery when you can — the photo's location places the grave on your map.
-        </Text>
+        <Text style={styles.subtitle}>Frame the inscription, edge to edge.</Text>
 
-        <TouchableOpacity style={styles.stoneZone} onPress={() => setShowPicker(true)} activeOpacity={0.85}>
-          <Animated.View style={{ opacity: stoneOpacity }}>
-            <Svg width={375} height={410} viewBox="0 0 100 100" fill="none" strokeWidth={1.5}>
+        {/* Viewfinder: static gold corner brackets framing a slowly breathing
+            headstone. Purely illustrative — not a touch target. */}
+        <View style={styles.viewfinder}>
+          {/* Layer A — static corner brackets + edge ticks */}
+          <Svg width={320} height={340} viewBox="0 0 320 340">
+            {/* top-left */}
+            <Rect x={0}     y={0}     width={30}  height={2.2} fill="#f2b65c" opacity={0.9} />
+            <Rect x={0}     y={0}     width={2.2} height={30}  fill="#f2b65c" opacity={0.9} />
+            {/* top-right */}
+            <Rect x={290}   y={0}     width={30}  height={2.2} fill="#f2b65c" opacity={0.9} />
+            <Rect x={317.8} y={0}     width={2.2} height={30}  fill="#f2b65c" opacity={0.9} />
+            {/* bottom-left */}
+            <Rect x={0}     y={337.8} width={30}  height={2.2} fill="#f2b65c" opacity={0.9} />
+            <Rect x={0}     y={310}   width={2.2} height={30}  fill="#f2b65c" opacity={0.9} />
+            {/* bottom-right */}
+            <Rect x={290}   y={337.8} width={30}  height={2.2} fill="#f2b65c" opacity={0.9} />
+            <Rect x={317.8} y={310}   width={2.2} height={30}  fill="#f2b65c" opacity={0.9} />
+            {/* edge ticks (HUD detail) */}
+            <Rect x={155}   y={0}     width={10}  height={1.4} fill="#f2b65c" opacity={0.3} />
+            <Rect x={155}   y={338.6} width={10}  height={1.4} fill="#f2b65c" opacity={0.3} />
+            <Rect x={0}     y={165}   width={1.4} height={10}  fill="#f2b65c" opacity={0.3} />
+            <Rect x={318.6} y={165}   width={1.4} height={10}  fill="#f2b65c" opacity={0.3} />
+          </Svg>
+
+          {/* Layer B — headstone + inscription + ground (breathes) */}
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: breathe }]}>
+            <Svg width={320} height={340} viewBox="0 0 320 340">
               <Defs>
-                <LinearGradient id="camStoneGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <Stop offset="0%" stopColor="#e8d4a0" />
-                  <Stop offset="100%" stopColor="#8a6f3a" />
+                {/* Stroke gradients MUST be userSpaceOnUse — objectBoundingBox
+                    stroke gradients silently paint nothing on Android RN-SVG. */}
+                <LinearGradient id="vfStone" x1={160} y1={78} x2={160} y2={272} gradientUnits="userSpaceOnUse">
+                  <Stop offset="0"    stopColor="#e8d4a0" stopOpacity="0.95" />
+                  <Stop offset="0.55" stopColor="#c9a84c" stopOpacity="0.9" />
+                  <Stop offset="1"    stopColor="#6b4f1e" stopOpacity="0.7" />
                 </LinearGradient>
+                <LinearGradient id="vfGround" x1={62} y1={276} x2={258} y2={276} gradientUnits="userSpaceOnUse">
+                  <Stop offset="0"   stopColor="#c9a84c" stopOpacity="0" />
+                  <Stop offset="0.3" stopColor="#c9a84c" stopOpacity="0.35" />
+                  <Stop offset="0.7" stopColor="#c9a84c" stopOpacity="0.35" />
+                  <Stop offset="1"   stopColor="#c9a84c" stopOpacity="0" />
+                </LinearGradient>
+                {/* Radial FILL gradient is fine in objectBoundingBox — replaces a drop shadow */}
+                <RadialGradient id="vfGlow" cx="0.5" cy="0.5" r="0.5">
+                  <Stop offset="0" stopColor="#f2b65c" stopOpacity="0.16" />
+                  <Stop offset="1" stopColor="#f2b65c" stopOpacity="0" />
+                </RadialGradient>
               </Defs>
-              <Rect x="22" y="84" width="56" height="6" stroke="url(#camStoneGrad)" fill="none" />
-              <Path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="url(#camStoneGrad)" fill="none" />
-              <Path d="M36 80 L36 38 Q36 24 50 24 Q64 24 64 38 L64 80" stroke="url(#camStoneGrad)" strokeOpacity={0.4} fill="none" />
-              <Line x1="40" y1="58" x2="60" y2="58" stroke="url(#camStoneGrad)" strokeOpacity={0.45} strokeWidth={0.7} />
-              <Line x1="42" y1="64" x2="58" y2="64" stroke="url(#camStoneGrad)" strokeOpacity={0.4} strokeWidth={0.7} />
-              <Line x1="44" y1="70" x2="56" y2="70" stroke="url(#camStoneGrad)" strokeOpacity={0.35} strokeWidth={0.7} />
-              <Line x1="18" y1="92" x2="82" y2="92" stroke="url(#camStoneGrad)" strokeOpacity={0.5} />
-            </Svg>
 
-            <View style={styles.stoneInner}>
-              <Svg width={34} height={34} viewBox="0 0 24 24" fill="none" stroke="#c9a84c" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
-                <Path d="M3 7.5h3l1.5-2h9L18 7.5h3a1 1 0 0 1 1 1V18a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8.5a1 1 0 0 1 1-1z" />
-                <Circle cx="12" cy="13" r="3.5" />
-              </Svg>
-              <Text style={styles.stoneText}>Tap</Text>
-            </View>
+              {/* ambient ground glow */}
+              <Ellipse cx={160} cy={278} rx={112} ry={10} fill="url(#vfGlow)" />
+
+              {/* inner face panel — stone reads as solid, not hollow */}
+              <Path d="M100 270 L100 150 Q100 86 160 86 Q220 86 220 150 L220 270 Z"
+                    fill="rgba(42,32,23,0.55)" />
+
+              {/* headstone outline — the defining gold stroke */}
+              <Path d="M92 272 L92 150 Q92 78 160 78 Q228 78 228 150 L228 272 Z"
+                    fill="none" stroke="url(#vfStone)" strokeWidth={1.9} strokeLinejoin="round" />
+
+              {/* inner chamfer — carved-edge illusion */}
+              <Path d="M102 270 L102 152 Q102 88 160 88 Q218 88 218 152 L218 270"
+                    fill="none" stroke="url(#vfStone)" strokeWidth={0.8} strokeOpacity={0.32} />
+
+              {/* carved ornament hint near the crown */}
+              <Circle cx={160} cy={124} r={11} fill="none" stroke="#efe4d2" strokeOpacity={0.16} strokeWidth={1.0} />
+
+              {/* three worn ghost inscription lines */}
+              <Line x1={124} y1={166} x2={196} y2={166} stroke="#efe4d2" strokeOpacity={0.20} strokeWidth={1.0} strokeLinecap="round" />
+              <Line x1={130} y1={188} x2={190} y2={188} stroke="#efe4d2" strokeOpacity={0.16} strokeWidth={0.9} strokeLinecap="round" />
+              <Line x1={136} y1={210} x2={184} y2={210} stroke="#efe4d2" strokeOpacity={0.12} strokeWidth={0.8} strokeLinecap="round" />
+
+              {/* ground line pair (fading ends) */}
+              <Line x1={80} y1={276} x2={240} y2={276} stroke="url(#vfGround)" strokeWidth={1.3} />
+              <Line x1={62} y1={281} x2={258} y2={281} stroke="url(#vfGround)" strokeWidth={0.7} strokeOpacity={0.45} />
+            </Svg>
           </Animated.View>
+        </View>
+
+        {/* Primary CTA — Take Photo */}
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Take a photo of a gravestone with your camera"
+          onPress={() => pickAndAnalyze(true)}
+        >
+          <CameraIcon />
+          <View style={styles.btnTextCol}>
+            <Text style={styles.primaryLabel}>Take Photo</Text>
+            <Text style={styles.primaryHint}>Best at the graveside — GPS pins the grave on your map</Text>
+          </View>
         </TouchableOpacity>
+
+        {/* Secondary CTA — Choose from Library */}
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel="Choose a gravestone photo from your photo library"
+          onPress={() => pickAndAnalyze(false)}
+        >
+          <LibraryIcon />
+          <View style={styles.btnTextCol}>
+            <Text style={styles.secondaryLabel}>Choose from Library</Text>
+            <Text style={styles.secondaryHint}>Use a gravestone photo you took before</Text>
+          </View>
+        </TouchableOpacity>
+
+        <Text style={styles.tagline}>every life deserves to be remembered</Text>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={colors.onFlame} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M3 9h3l1.5-2.5h9L18 9h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z" />
+      <Circle cx={12} cy={14} r={3.2} />
+    </Svg>
+  );
+}
+
+function LibraryIcon() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={colors.flame} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <Rect x={4} y={6} width={16} height={14} rx={2} />
+      <Path d="M7 6 V4 a1 1 0 0 1 1-1 h11 a1 1 0 0 1 1 1 v11" />
+      <Path d="M8 16 l3-3 l2 2 l3-4 l2 3" />
+    </Svg>
   );
 }
 
@@ -915,71 +975,49 @@ async function getDeviceGps() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.ink },
-  back: { padding: 24, paddingBottom: 0 },
-  backText: { color: 'rgba(201,168,76,0.6)', fontSize: 15, fontFamily: fonts.body },
-  scroll: { alignItems: 'center', padding: 24, paddingTop: 48 },
+  back: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 0 },
+  backText: { color: colors.ashDim, fontFamily: fonts.body, fontSize: 15 },
+  scroll: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 28, alignItems: 'center' },
+
+  ruleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginTop: 18, marginBottom: 14,
+  },
+  hairline: { width: 56, height: 1, backgroundColor: 'rgba(242,182,92,0.30)' },
+  ruleMark: { color: colors.flame, opacity: 0.7, fontSize: 12, marginHorizontal: 12, fontFamily: fonts.title },
+
   title: {
-    color: colors.parchment, fontSize: 26, fontFamily: fonts.title,
-    letterSpacing: 1, marginBottom: 10, textAlign: 'center',
+    color: colors.parchment, fontFamily: fonts.title, fontSize: 24,
+    letterSpacing: 0.5, textAlign: 'center', marginBottom: 4,
   },
   subtitle: {
-    color: colors.ash, fontFamily: fonts.bodyItalic, textAlign: 'center',
-    lineHeight: 22, marginBottom: 8, fontSize: 14,
-  },
-  tip: {
-    color: colors.ashDim, fontFamily: fonts.bodyItalic, textAlign: 'center',
-    fontSize: 12, lineHeight: 18, maxWidth: 300,
-  },
-  stoneZone: {
-    width: 375, height: 410,
-    alignSelf: 'center',
-    marginTop: 24,
-  },
-  stoneInner: {
-    position: 'absolute',
-    top: 122,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  stoneText: {
-    color: colors.ash, fontFamily: fonts.bodyItalic,
-    fontSize: 32, textAlign: 'center',
-    marginTop: 26, opacity: 0.9, letterSpacing: 2,
+    color: colors.ash, fontFamily: fonts.bodyItalic, fontSize: 13,
+    lineHeight: 19, textAlign: 'center', marginBottom: 22,
   },
 
-  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
-  sheet: {
-    backgroundColor: colors.stone,
-    borderTopWidth: 1, borderTopColor: 'rgba(201,168,76,0.3)',
-    borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg,
-    paddingBottom: 36, paddingHorizontal: 24,
+  viewfinder: { width: 320, height: 340, alignSelf: 'center', marginBottom: 26 },
+
+  // minHeight (not height) so the two-line label+hint never clips — the
+  // GraveStory Android-text lesson; the row centers and the text column flexes.
+  primaryBtn: {
+    flexDirection: 'row', alignItems: 'center', width: '100%', minHeight: 72,
+    backgroundColor: colors.flame, borderRadius: radius.md,
+    paddingVertical: 14, paddingHorizontal: 20, gap: 14, marginBottom: 12,
   },
-  sheetHandle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: 'rgba(201,168,76,0.4)',
-    alignSelf: 'center', marginTop: 12, marginBottom: 20,
+  secondaryBtn: {
+    flexDirection: 'row', alignItems: 'center', width: '100%', minHeight: 72,
+    backgroundColor: colors.stone2, borderWidth: 1, borderColor: 'rgba(242,182,92,0.28)',
+    borderRadius: radius.md, paddingVertical: 14, paddingHorizontal: 20, gap: 14, marginBottom: 24,
   },
-  sheetTitle: {
-    color: colors.parchment, fontSize: 13, letterSpacing: 2,
-    fontFamily: fonts.body, textTransform: 'uppercase', marginBottom: 16, opacity: 0.6,
-  },
-  sheetOption: {
-    borderWidth: 1, borderColor: 'rgba(201,168,76,0.3)',
-    paddingVertical: 16, paddingHorizontal: 16,
-    marginBottom: 10, borderRadius: radius.sm,
-  },
-  sheetOptionText: {
-    color: colors.flame, fontSize: 16, letterSpacing: 1,
-    textAlign: 'center', fontFamily: fonts.body,
-  },
-  sheetOptionHint: {
-    color: colors.ashDim, fontSize: 12, fontFamily: fonts.bodyItalic,
-    textAlign: 'center', marginTop: 4, lineHeight: 17,
-  },
-  sheetCancel: { paddingVertical: 14, marginTop: 4 },
-  sheetCancelText: {
-    color: colors.ash, fontSize: 15, textAlign: 'center', fontFamily: fonts.bodyItalic,
+  btnTextCol: { flex: 1 },
+  primaryLabel: { color: colors.onFlame, fontFamily: fonts.sansBold, fontSize: 17, letterSpacing: 0.3 },
+  primaryHint: { color: colors.onFlame, opacity: 0.62, fontFamily: fonts.body, fontSize: 12, lineHeight: 16, marginTop: 2 },
+  secondaryLabel: { color: colors.parchment, fontFamily: fonts.bodyMedium, fontSize: 16, letterSpacing: 0.3 },
+  secondaryHint: { color: colors.ashDim, fontFamily: fonts.bodyItalic, fontSize: 12, lineHeight: 16, marginTop: 2 },
+
+  tagline: {
+    color: colors.ash, opacity: 0.5, fontFamily: fonts.serifItalic, fontSize: 12,
+    letterSpacing: 0.3, textAlign: 'center', marginBottom: 8,
   },
 
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },

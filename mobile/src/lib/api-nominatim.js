@@ -73,6 +73,25 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
     geoTokens.push(lc);
   }
   const requireGeo = geoTokens.length > 0;
+
+  // GUARD: refuse to geocode a location too vague to anchor a real place.
+  // When there are no geographic tokens (country-only like "United States",
+  // or a bare "Cemetery"), Nominatim returns a STABLE-BUT-ARBITRARY "best" match
+  // — so every such stone collapses onto one identical coordinate and the map
+  // shows a phantom cluster. We only proceed token-less when the first segment
+  // is itself a specific named cemetery (e.g. "Arlington National Cemetery").
+  if (!requireGeo) {
+    const firstSeg = (allParts[0] || '').toLowerCase();
+    const genericFirst = !firstSeg ||
+      ['cemetery', 'graveyard', 'grave yard', 'burial', 'tomb', 'mausoleum', 'memorial park'].includes(firstSeg) ||
+      ['usa', 'us', 'united states'].includes(firstSeg);
+    const isSpecificCemetery = !genericFirst &&
+      (firstSeg.includes('cemetery') || firstSeg.includes('memorial park') ||
+       firstSeg.includes('graveyard') || firstSeg.includes('burial') ||
+       firstSeg.includes('tomb') || firstSeg.includes('mausoleum'));
+    if (!isSpecificCemetery) return null;
+  }
+
   const passesGeoCheck = r => {
     if (!requireGeo) return true;
     const dn = (r.display_name || '').toLowerCase();

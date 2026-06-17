@@ -10,7 +10,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import { useRefresh } from '../lib/use-refresh';
-import { colors, fonts, radius } from '../lib/theme';
+import { colors, fonts, radius, space } from '../lib/theme';
 import { verifyIsGravestone, readGravestone, resolveSymbolMeanings } from '../lib/api-gemini';
 import { searchForPerson, extractFindAGraveDetail } from '../lib/api-tavily';
 import { searchWikiTree } from '../lib/api-wikitree';
@@ -747,14 +747,7 @@ export default function CameraScreen({ navigation, route }) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingBox}>
-          <CandleFlicker />
-          <Text style={styles.loadingTitle}>Researching this life…</Text>
-          <Text style={styles.loadingStep}>{STEPS[stepIndex]}</Text>
-          <View style={styles.dotsRow}>
-            {STEPS.map((_, i) => (
-              <View key={i} style={[styles.dot, i <= stepIndex && styles.dotActive]} />
-            ))}
-          </View>
+          <IlluminatedLedger stepIndex={stepIndex} />
         </View>
       </SafeAreaView>
     );
@@ -1003,52 +996,286 @@ function LibraryIcon() {
   );
 }
 
-function CandleFlicker() {
-  const opacity = useRef(new Animated.Value(1)).current;
-  const scale   = useRef(new Animated.Value(1)).current;
+// ── The Illuminated Ledger — the loading screen ──────────────────────────────
+// A candlelit vellum page. Five provenance lines map 1:1 to the pipeline's
+// stepIndex; each row's visual state is DERIVED (not animation-gated) from
+// (rowIndex vs stepIndex): pending hollow ring → active breathing gold ring →
+// struck gold wax seal. Because progress is a pure function of those two
+// numbers, every awkward pipeline path renders a correct final state for free:
+// the cache-hit 1→3 jump stamps two seals at once ("found in the archive"),
+// verify-bypass / sub-second completion show whatever final state is rendered,
+// and the 30s research dwell stays alive on four continuous, period-mismatched
+// motions with NO determinate bar to freeze at a fixed %.
+//
+// This is a self-contained child rendered ONLY inside `if (loading)`, so its
+// Animated.Values, loops, and cleanup live and die with the loading state
+// (and reset per-mount on a second scan) — it deliberately does NOT share the
+// parent's viewfinder effect.
+
+// Fixed row pitch — see geometry below; the traveling-light Svg's viewBox-y
+// coords are authored from this constant so they provably track the rendered
+// rows (FIXED height, not minHeight, is what makes that mapping exact).
+const LEDGER_ROW_H = 56;
+const LEDGER_PAD_V = 8;                                    // ledgerCard paddingVertical
+const CARD_H = LEDGER_PAD_V + 5 * LEDGER_ROW_H + LEDGER_PAD_V;  // 8 + 280 + 8 = 296
+// Row i center in viewBox-y: padTop + i*rowH + rowH/2 = 8 + i*56 + 28 = 36 + i*56.
+const TOP_Y = LEDGER_PAD_V + LEDGER_ROW_H / 2;            // 36  (row 0 center = lampY's A)
+const BOTTOM_Y = LEDGER_PAD_V + 4 * LEDGER_ROW_H + LEDGER_ROW_H / 2;  // 260 (row 4 center)
+
+// Editorial rewrites of STEPS (index-aligned 0–4). These are display-only; the
+// module-level STEPS array and the setStepIndex(0..4) call sites are untouched.
+const LEDGER_STAGES = [
+  'Verifying the stone',
+  'Reading the inscription',
+  'Searching the records',
+  'Composing the life',
+  'Sealing the page',
+];
+const LEDGER_REASSURE = [
+  'Confirming this is a memorial stone…',
+  'Transcribing the engraved names and dates…',
+  'Searching archives, newspapers and genealogies…',
+  'Drawing the threads into one account…',
+  'Setting the final details in place…',
+];
+
+// A single seal glyph (22×22). Pure function of `state` — no animation here; the
+// active variant is wrapped by its row in an Animated.View (opacity=sealBreathe).
+function Seal({ state }) {
+  if (state === 'done') {
+    // Struck gold wax seal with a stamped check. Steady — a sealed line is done.
+    return (
+      <Svg width={22} height={22} viewBox="0 0 22 22">
+        <Circle cx={11} cy={11} r={8} fill={colors.flame} />
+        <Path
+          d="M7 11 L10 14 L15 8"
+          fill="none"
+          stroke={colors.onFlame}
+          strokeWidth={1.7}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  }
+  if (state === 'active') {
+    // The "you are here" line: a softly lit gold ring over a gold haze. The ring
+    // uses a STROKE gradient — it MUST be userSpaceOnUse (objectBoundingBox
+    // stroke gradients silently paint nothing on Android RN-SVG), authored to
+    // span the 22×22 box vertically.
+    return (
+      <Svg width={22} height={22} viewBox="0 0 22 22">
+        <Defs>
+          <LinearGradient id="ldgStone" x1={11} y1={4} x2={11} y2={18} gradientUnits="userSpaceOnUse">
+            <Stop offset="0" stopColor="#e8d4a0" stopOpacity={0.95} />
+            <Stop offset="0.55" stopColor="#c9a84c" stopOpacity={0.9} />
+            <Stop offset="1" stopColor="#6b4f1e" stopOpacity={0.7} />
+          </LinearGradient>
+        </Defs>
+        <Circle cx={11} cy={11} r={4} fill={colors.glow} />
+        <Circle cx={11} cy={11} r={7} fill="none" stroke="url(#ldgStone)" strokeWidth={1.6} />
+      </Svg>
+    );
+  }
+  // pending — a faint hollow ring, the line not yet reached.
+  return (
+    <Svg width={22} height={22} viewBox="0 0 22 22">
+      <Circle cx={11} cy={11} r={7} fill="none" stroke={colors.line} strokeWidth={1.4} />
+    </Svg>
+  );
+}
+
+function IlluminatedLedger({ stepIndex }) {
+  // FOUR Animated.Values. Each looped value's INITIAL EQUALS its cycle's first
+  // toValue, and every loop is a CLOSED A→B→A cycle — so the Animated.loop
+  // restart is seamless (the project's documented snap-back gotcha).
+  const headerGlow  = useRef(new Animated.Value(0.45)).current; // header aura View opacity (native)
+  const sealBreathe = useRef(new Animated.Value(1)).current;    // active seal + label View opacity (native)
+  const lampPulse   = useRef(new Animated.Value(0.7)).current;  // traveling pool SVG opacity (JS)
+  const lampY       = useRef(new Animated.Value(TOP_Y)).current; // traveling pool SVG cy (JS)
+
+  // The card width must be measured so the absolute-fill light Svg's viewBox
+  // maps 1:1 to pixels (cy in viewBox units → row centers). Card height is
+  // deterministic (CARD_H) because rows are FIXED height; only width is unknown.
+  const [cardW, setCardW] = useState(0);
 
   useEffect(() => {
-    const anim = Animated.loop(
+    // headerGlow: 0.45 → 0.72 → 0.45 (init == A). View opacity → native driver.
+    const headerGlowLoop = Animated.loop(
       Animated.sequence([
-        Animated.delay(200),
-        Animated.timing(opacity, { toValue: 0.15, duration: 40, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1,    duration: 40, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.4,  duration: 40, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1,    duration: 40, useNativeDriver: true }),
-        Animated.delay(500),
-        Animated.parallel([
-          Animated.timing(opacity, { toValue: 0.5, duration: 350, useNativeDriver: true }),
-          Animated.timing(scale,   { toValue: 1.05, duration: 350, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(opacity, { toValue: 1,  duration: 250, useNativeDriver: true }),
-          Animated.timing(scale,   { toValue: 1,  duration: 250, useNativeDriver: true }),
-        ]),
-        Animated.delay(400),
-        Animated.timing(opacity, { toValue: 0.1, duration: 30, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1,   duration: 30, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.05, duration: 30, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1,   duration: 30, useNativeDriver: true }),
-        Animated.delay(600),
-        Animated.parallel([
-          Animated.timing(opacity, { toValue: 0.45, duration: 400, useNativeDriver: true }),
-          Animated.timing(scale,   { toValue: 0.97, duration: 400, useNativeDriver: true }),
-        ]),
-        Animated.parallel([
-          Animated.timing(opacity, { toValue: 1,  duration: 300, useNativeDriver: true }),
-          Animated.timing(scale,   { toValue: 1,  duration: 300, useNativeDriver: true }),
-        ]),
-        Animated.delay(300),
+        Animated.timing(headerGlow, { toValue: 0.72, duration: 2300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(headerGlow, { toValue: 0.45, duration: 3100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
-    anim.start();
-    return () => anim.stop();
+    // sealBreathe: 1 → 0.78 → 1 (init == A). Trough is 0.78 (NOT 0.55) so the
+    // 22px active glyph reads as steady-alive, never a rendering glitch. Native.
+    const sealBreatheLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(sealBreathe, { toValue: 0.78, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(sealBreathe, { toValue: 1,    duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    // lampPulse: 0.7 → 1 → 0.7 (init == A). Drives an SVG opacity prop → JS driver.
+    const lampPulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(lampPulse, { toValue: 1,   duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+        Animated.timing(lampPulse, { toValue: 0.7, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+      ])
+    );
+    // lampY: 36 → 260 → 36 (init == A). 12s round-trip — slow, contemplative;
+    // the pool drifts down the column like a reading finger. Drives an SVG cy
+    // prop → JS driver. Easing.sin gives the eased dwell at top/bottom. Its 12s
+    // period is non-integer-ratio with the 3s/~5.4s loops so nothing locks into
+    // a visible synchronized throb (same anti-sync rationale as the viewfinder).
+    const lampYLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(lampY, { toValue: BOTTOM_Y, duration: 6000, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(lampY, { toValue: TOP_Y,    duration: 6000, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+      ])
+    );
+    headerGlowLoop.start();
+    sealBreatheLoop.start();
+    lampPulseLoop.start();
+    lampYLoop.start();
+    return () => { headerGlowLoop.stop(); sealBreatheLoop.stop(); lampPulseLoop.stop(); lampYLoop.stop(); };
   }, []);
 
+  const CARD_CX = cardW / 2;
+  // Rounded-rect clip authored in the same `0 0 cardW 296` viewBox (Q corners
+  // radius 18 = radius.lg) so the traveling pool never bleeds past the page edge.
+  const clipPath =
+    `M18 0 H${cardW - 18} Q${cardW} 0 ${cardW} 18 V${CARD_H - 18} ` +
+    `Q${cardW} ${CARD_H} ${cardW - 18} ${CARD_H} H18 Q0 ${CARD_H} 0 ${CARD_H - 18} V18 Q0 0 18 0 Z`;
+
   return (
-    <Animated.Text style={{ fontSize: 64, opacity, transform: [{ scale }] }}>
-      🕯️
-    </Animated.Text>
+    <>
+      {/* (A) PAGE HEADER — header aura (breathes) under a static candle-flame mark. */}
+      <View style={styles.ledgerHeader}>
+        {/* Header aura: a View-opacity breath (native driver). */}
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerGlow }]}>
+          <Svg width={280} height={110} viewBox="0 0 280 110">
+            <Defs>
+              {/* byte-identical to vfAura */}
+              <RadialGradient id="ldgAura" cx="0.5" cy="0.5" r="0.5">
+                <Stop offset="0" stopColor="#f2d79a" stopOpacity={0.34} />
+                <Stop offset="0.45" stopColor="#f2b65c" stopOpacity={0.16} />
+                <Stop offset="1" stopColor="#f2b65c" stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Ellipse cx={140} cy={58} rx={150} ry={64} fill="url(#ldgAura)" />
+          </Svg>
+        </Animated.View>
+        {/* Header mark: a small carved candle-flame between two memorial rules.
+            Static — the aura breath carries the life, keeping JS-driven count low. */}
+        <Svg width={280} height={110} viewBox="0 0 280 110">
+          <Defs>
+            {/* Flame body — the vfBeam ramp, tightened. */}
+            <RadialGradient id="ldgFlame" cx="0.5" cy="0.5" r="0.5">
+              <Stop offset="0" stopColor="#fff4d2" stopOpacity={0.95} />
+              <Stop offset="0.45" stopColor="#ffe7ad" stopOpacity={0.6} />
+              <Stop offset="0.78" stopColor="#f2b65c" stopOpacity={0.2} />
+              <Stop offset="1" stopColor="#f2b65c" stopOpacity={0} />
+            </RadialGradient>
+            {/* Incandescent heart. */}
+            <RadialGradient id="ldgCore" cx="0.5" cy="0.5" r="0.5">
+              <Stop offset="0" stopColor="#ffffff" stopOpacity={0.9} />
+              <Stop offset="0.6" stopColor="#fff4d2" stopOpacity={0.5} />
+              <Stop offset="1" stopColor="#fff4d2" stopOpacity={0} />
+            </RadialGradient>
+            {/* Flanking rules — STROKE gradient, MUST be userSpaceOnUse, authored
+                across the full x46→x234 span so the fade-to-0 ends land at the tips. */}
+            <LinearGradient id="ldgRule" x1={46} y1={58} x2={234} y2={58} gradientUnits="userSpaceOnUse">
+              <Stop offset="0" stopColor="#c9a84c" stopOpacity={0} />
+              <Stop offset="0.15" stopColor="#c9a84c" stopOpacity={0.35} />
+              <Stop offset="0.85" stopColor="#c9a84c" stopOpacity={0.35} />
+              <Stop offset="1" stopColor="#c9a84c" stopOpacity={0} />
+            </LinearGradient>
+          </Defs>
+          {/* Flame: soft radial body + a sharpened teardrop tip so it reads as
+              flame, not a circle. */}
+          <Ellipse cx={140} cy={40} rx={7} ry={12} fill="url(#ldgFlame)" />
+          <Path d="M140 26 Q146 40 140 54 Q134 40 140 26" fill="url(#ldgFlame)" opacity={0.9} />
+          <Circle cx={140} cy={42} r={3.2} fill="url(#ldgCore)" />
+          {/* Wick. */}
+          <Line x1={140} y1={54} x2={140} y2={60} stroke="#6b4f1e" strokeWidth={2.2} strokeLinecap="round" />
+          {/* Two flanking memorial rules. */}
+          <Line x1={46} y1={58} x2={120} y2={58} stroke="url(#ldgRule)" strokeWidth={1.1} />
+          <Line x1={160} y1={58} x2={234} y2={58} stroke="url(#ldgRule)" strokeWidth={1.1} />
+        </Svg>
+      </View>
+
+      {/* (B) TITLE */}
+      <Text style={styles.ledgerTitle}>Composing this life</Text>
+
+      {/* (C) THE LEDGER CARD — a vellum page. Rows + traveling pool share a box. */}
+      <View
+        style={styles.ledgerCard}
+        onLayout={e => {
+          const w = e.nativeEvent.layout.width;
+          if (w && w !== cardW) setCardW(w);
+        }}
+      >
+        {LEDGER_STAGES.map((label, i) => {
+          const state = i < stepIndex ? 'done' : i === stepIndex ? 'active' : 'pending';
+          return (
+            <View key={i} style={styles.ledgerRow}>
+              {state === 'active' ? (
+                // Active seal + label breathe together on one shared value (only
+                // one row is active at a time, so no per-row Animated churn).
+                <Animated.View style={[styles.sealSlot, { opacity: sealBreathe }]}>
+                  <Seal state="active" />
+                </Animated.View>
+              ) : (
+                <View style={styles.sealSlot}>
+                  <Seal state={state} />
+                </View>
+              )}
+              {state === 'active' ? (
+                <Animated.Text style={[styles.labelActive, { opacity: sealBreathe }]}>{label}</Animated.Text>
+              ) : (
+                <Text style={state === 'done' ? styles.labelDone : styles.labelPending}>{label}</Text>
+              )}
+              {/* Bottom hairline divider on rows 0–3 (not the last row). */}
+              {i < LEDGER_STAGES.length - 1 && <View style={styles.ledgerDivider} />}
+            </View>
+          );
+        })}
+
+        {/* TRAVELING CANDLE-POOL — one absolute-fill Svg over the rows. Authored
+            with a measured-width viewBox so the AnimatedCircle's cy (viewBox
+            units) maps 1:1 to row centers. Hidden until cardW is measured. */}
+        {cardW > 0 && (
+          <Svg
+            style={StyleSheet.absoluteFill}
+            width={cardW}
+            height={CARD_H}
+            viewBox={`0 0 ${cardW} ${CARD_H}`}
+            pointerEvents="none"
+          >
+            <Defs>
+              {/* byte-identical to vfBeam */}
+              <RadialGradient id="ldgBeam" cx="0.5" cy="0.5" r="0.5">
+                <Stop offset="0" stopColor="#fff4d2" stopOpacity={0.9} />
+                <Stop offset="0.35" stopColor="#ffe7ad" stopOpacity={0.55} />
+                <Stop offset="0.7" stopColor="#f2b65c" stopOpacity={0.18} />
+                <Stop offset="1" stopColor="#f2b65c" stopOpacity={0} />
+              </RadialGradient>
+              <ClipPath id="ldgClip">
+                <Path d={clipPath} />
+              </ClipPath>
+            </Defs>
+            <G clipPath="url(#ldgClip)">
+              {/* r=40 so the 80px pool pools on roughly ONE row at the 56px pitch. */}
+              <AnimatedCircle cx={CARD_CX} cy={lampY} r={40} fill="url(#ldgBeam)" opacity={lampPulse} />
+            </G>
+          </Svg>
+        )}
+      </View>
+
+      {/* (D) REASSURANCE LINE — one honest per-step line; minHeight so swaps
+          never reflow. No animated ellipsis, no rotating patter. */}
+      <Text style={styles.ledgerReassure}>{LEDGER_REASSURE[stepIndex] || LEDGER_REASSURE[0]}</Text>
+    </>
   );
 }
 
@@ -1120,18 +1347,35 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3, textAlign: 'center', marginBottom: 8,
   },
 
+  // loadingBox is the outer wrapper for the IlluminatedLedger loading screen.
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  loadingTitle: {
-    color: colors.parchment, fontSize: 22, fontFamily: fonts.title,
-    letterSpacing: 0.5, marginTop: 20, marginBottom: 6, textAlign: 'center',
+
+  // ── The Illuminated Ledger loading screen ──────────────────────────────────
+  // A candlelit vellum page; rows are FIXED height (56 = LEDGER_ROW_H) so the
+  // traveling-pool SVG's viewBox-y coords provably track the rendered rows.
+  ledgerHeader: { alignSelf: 'center', marginBottom: space.lg },
+  ledgerTitle: {
+    color: colors.parchment, fontFamily: fonts.title, fontSize: 22,
+    letterSpacing: 0.5, textAlign: 'center', marginBottom: space.md,
   },
-  loadingStep: {
-    color: colors.ash, fontFamily: fonts.bodyItalic,
-    fontSize: 15, letterSpacing: 0.5, marginBottom: 28, textAlign: 'center',
+  ledgerCard: {
+    width: '100%', alignSelf: 'stretch', backgroundColor: colors.stone,
+    borderWidth: 1, borderColor: colors.line, borderRadius: radius.lg,
+    paddingVertical: 8, paddingHorizontal: 16, overflow: 'hidden', position: 'relative',
   },
-  dotsRow: { flexDirection: 'row', gap: 8 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(201,168,76,0.2)' },
-  dotActive: { backgroundColor: colors.flame },
+  ledgerRow: { flexDirection: 'row', alignItems: 'center', height: 56, gap: 12 },
+  ledgerDivider: {
+    height: StyleSheet.hairlineWidth, backgroundColor: colors.line, opacity: 0.4,
+    position: 'absolute', left: 16, right: 16, bottom: 0,
+  },
+  sealSlot: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
+  labelPending: { color: colors.ashDim, fontFamily: fonts.serif, fontSize: 16, flex: 1 },
+  labelActive:  { color: colors.parchment, fontFamily: fonts.name, fontSize: 16, flex: 1 },
+  labelDone:    { color: colors.ash, fontFamily: fonts.serif, fontSize: 16, flex: 1 },
+  ledgerReassure: {
+    color: colors.ash, fontFamily: fonts.bodyItalic, fontSize: 14,
+    letterSpacing: 0.5, textAlign: 'center', marginTop: space.lg, minHeight: 22,
+  },
 
   rejectedBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
   rejectedTitle: {

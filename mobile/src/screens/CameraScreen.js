@@ -73,20 +73,26 @@ export default function CameraScreen({ navigation, route }) {
   // A soft halo behind the stone that swells and fades on its own slow cycle —
   // the "haunting glow" (cousin of the home logo's catch-light), out of phase
   // with the breathe so the two never beat in lockstep.
-  const glow = useRef(new Animated.Value(0.45)).current;
+  const glow = useRef(new Animated.Value(0.28)).current;
   // A roaming flashlight — a soft pool of light that wanders over the stone in
   // the dark, like someone searching the inscription with a torch. Wherever it
   // falls the carved detail is lit; elsewhere the stone stays dim. The 2D wander
   // comes from two X/Y loops on different (coprime-ish) periods, so the path
   // never repeats on a tight cycle and reads as a hand-held drift, not a line.
   // Both are layout-driven (useNativeDriver:false) — they animate SVG transforms.
-  const beamX = useRef(new Animated.Value(160)).current;  // viewBox x of the pool centre
-  const beamY = useRef(new Animated.Value(150)).current;  // viewBox y of the pool centre
+  // IMPORTANT: each loop below is a closed A→B→A cycle and the initial value
+  // here MUST equal that cycle's A, or the first loop boundary snaps the beam
+  // from its resting value back to A (the "jump/reset" bug).
+  const beamX = useRef(new Animated.Value(120)).current;  // viewBox x of the pool centre (= A)
+  const beamY = useRef(new Animated.Value(124)).current;  // viewBox y of the pool centre (= A)
   // The beam also gently pulses brightness so the torch feels alive. This drives
   // an SVG element's `opacity` prop (not a View style), so it must be JS-driven —
   // the native driver only animates View transform/opacity, not SVG props.
-  const beamPulse = useRef(new Animated.Value(0.85)).current;
+  const beamPulse = useRef(new Animated.Value(0.78)).current;
   useEffect(() => {
+    // Every loop is a CLOSED cycle: it ends on the same value it began, so the
+    // Animated.loop restart is seamless (no snap-back at the loop boundary).
+    // breathe starts at 1.0 → dips → returns to 1.0.
     const breatheLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(breathe, { toValue: 0.62, duration: 2800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
@@ -94,30 +100,33 @@ export default function CameraScreen({ navigation, route }) {
       ])
     );
     // Aura is dimmer now — the torch is the star; the aura is just residual dark-glow.
+    // Starts at 0.28 (its initial value) → up → back to 0.28.
     const glowLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(glow, { toValue: 0.7,  duration: 2300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         Animated.timing(glow, { toValue: 0.28, duration: 3100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
-    // Horizontal wander: drift across the stone face and back, slowly.
+    // Horizontal wander, closed cycle 120 → 208 → 120 (initial value = 120).
     const beamXLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(beamX, { toValue: 206, duration: 3700, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
-        Animated.timing(beamX, { toValue: 114, duration: 4300, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(beamX, { toValue: 208, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(beamX, { toValue: 120, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
       ])
     );
-    // Vertical wander on a different period — sweeps crown → base → crown.
+    // Vertical wander on a DIFFERENT period (so X/Y don't sync into a straight
+    // diagonal), closed cycle 124 → 230 → 124 (initial value = 124).
     const beamYLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(beamY, { toValue: 232, duration: 5200, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
-        Animated.timing(beamY, { toValue: 118, duration: 4600, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(beamY, { toValue: 230, duration: 5400, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(beamY, { toValue: 124, duration: 5400, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
       ])
     );
+    // Brightness pulse, closed cycle 0.78 → 1.0 → 0.78 (initial value = 0.78).
     const beamPulseLoop = Animated.loop(
       Animated.sequence([
-        Animated.timing(beamPulse, { toValue: 1.0,  duration: 1300, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
-        Animated.timing(beamPulse, { toValue: 0.78, duration: 1700, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+        Animated.timing(beamPulse, { toValue: 1.0,  duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+        Animated.timing(beamPulse, { toValue: 0.78, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
       ])
     );
     breatheLoop.start();

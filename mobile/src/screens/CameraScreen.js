@@ -41,6 +41,10 @@ const RESEARCH_TIMEOUT = Symbol('research-timeout');
 
 // The roaming flashlight pool animates its cx/cy, so it needs an animatable Circle.
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+// The header candle flame flickers its luminance (SVG opacity), so its body and
+// tip need animatable Ellipse/Path wrappers.
+const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
+const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 // Resolves to RESEARCH_TIMEOUT if `promise` hasn't settled within ms. Never
 // rejects — research is best-effort, so a timeout degrades gracefully.
@@ -1021,6 +1025,15 @@ const CARD_H = LEDGER_PAD_V + 5 * LEDGER_ROW_H + LEDGER_PAD_V;  // 8 + 280 + 8 =
 // Row i center in viewBox-y: padTop + i*rowH + rowH/2 = 8 + i*56 + 28 = 36 + i*56.
 const TOP_Y = LEDGER_PAD_V + LEDGER_ROW_H / 2;            // 36  (row 0 center = lampY's A)
 const BOTTOM_Y = LEDGER_PAD_V + 4 * LEDGER_ROW_H + LEDGER_ROW_H / 2;  // 260 (row 4 center)
+// Bigger candle-pool: r=56 (was 40) so the light reads as a generous candle glow,
+// not a tight spot. The pool also WANDERS horizontally (lampX) on its own period
+// instead of riding the centerline — `cx` swings within ±LAMP_X_SWING of card
+// center, kept inset so the larger pool's bright heart never parks hard against
+// the rounded page edge. The X period (8300ms half) is deliberately non-integer-
+// ratio with the Y round-trip (6000ms half) so the combined cx/cy motion traces
+// an ever-shifting wandering path and never relocks into a straight up/down line.
+const LAMP_R = 56;
+const LAMP_X_SWING_FRAC = 0.16;   // fraction of card width the pool drifts each side
 
 // Editorial rewrites of STEPS (index-aligned 0–4). These are display-only; the
 // module-level STEPS array and the setStepIndex(0..4) call sites are untouched.
@@ -1086,12 +1099,14 @@ function Seal({ state }) {
 }
 
 function IlluminatedLedger({ stepIndex }) {
-  // FOUR Animated.Values. Each looped value's INITIAL EQUALS its cycle's first
+  // SIX Animated.Values. Each looped value's INITIAL EQUALS its cycle's first
   // toValue, and every loop is a CLOSED A→B→A cycle — so the Animated.loop
   // restart is seamless (the project's documented snap-back gotcha).
   const headerGlow  = useRef(new Animated.Value(0.45)).current; // header aura View opacity (native)
   const sealBreathe = useRef(new Animated.Value(1)).current;    // active seal + label View opacity (native)
+  const flameFlick  = useRef(new Animated.Value(0.86)).current; // header flame body opacity (JS — SVG opacity)
   const lampPulse   = useRef(new Animated.Value(0.7)).current;  // traveling pool SVG opacity (JS)
+  const lampX       = useRef(new Animated.Value(0)).current;    // traveling pool SVG cx offset, -1..1 (JS)
   const lampY       = useRef(new Animated.Value(TOP_Y)).current; // traveling pool SVG cy (JS)
 
   // The card width must be measured so the absolute-fill light Svg's viewBox
@@ -1115,11 +1130,34 @@ function IlluminatedLedger({ stepIndex }) {
         Animated.timing(sealBreathe, { toValue: 1,    duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
+    // flameFlick: 0.86 → 1 → 0.86 (init == A). A live candle flame never holds a
+    // fixed brightness; this is a gentle, fast-ish luminance flicker on the header
+    // flame body (SVG opacity → JS driver). Short 620/780ms legs read as a living
+    // flame without strobing. Period is small & non-integer-ratio to everything
+    // else so it never locks to the pool or aura.
+    const flameFlickLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(flameFlick, { toValue: 1,    duration: 620, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+        Animated.timing(flameFlick, { toValue: 0.86, duration: 780, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+      ])
+    );
     // lampPulse: 0.7 → 1 → 0.7 (init == A). Drives an SVG opacity prop → JS driver.
     const lampPulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(lampPulse, { toValue: 1,   duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
         Animated.timing(lampPulse, { toValue: 0.7, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+      ])
+    );
+    // lampX: 0 → 1 → -1 → 0 (init == A). A normalized -1..1 horizontal offset the
+    // render maps to ±LAMP_X_SWING px. A FULL closed cycle (centre → right → left
+    // → centre) keeps the loop seamless. 8300ms legs give a ~33s full sweep that
+    // is non-integer-ratio with lampY's 12s round-trip, so the pool's (cx,cy) path
+    // wanders — diagonals, gentle arcs — instead of tracking one vertical line.
+    const lampXLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(lampX, { toValue: 1,  duration: 4200, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(lampX, { toValue: -1, duration: 8300, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(lampX, { toValue: 0,  duration: 4200, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
       ])
     );
     // lampY: 36 → 260 → 36 (init == A). 12s round-trip — slow, contemplative;
@@ -1135,12 +1173,25 @@ function IlluminatedLedger({ stepIndex }) {
     );
     headerGlowLoop.start();
     sealBreatheLoop.start();
+    flameFlickLoop.start();
     lampPulseLoop.start();
+    lampXLoop.start();
     lampYLoop.start();
-    return () => { headerGlowLoop.stop(); sealBreatheLoop.stop(); lampPulseLoop.stop(); lampYLoop.stop(); };
+    return () => {
+      headerGlowLoop.stop(); sealBreatheLoop.stop(); flameFlickLoop.stop();
+      lampPulseLoop.stop(); lampXLoop.stop(); lampYLoop.stop();
+    };
   }, []);
 
   const CARD_CX = cardW / 2;
+  // Map the normalized -1..1 lampX onto a horizontal pixel offset around centre.
+  // Computed from measured cardW (so it's 0 until layout, matching the pool's own
+  // cardW>0 gate). The pool's bright heart stays well inside the rounded edge.
+  const lampSwing = cardW * LAMP_X_SWING_FRAC;
+  const lampCx = lampX.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [CARD_CX - lampSwing, CARD_CX + lampSwing],
+  });
   // Rounded-rect clip authored in the same `0 0 cardW 296` viewBox (Q corners
   // radius 18 = radius.lg) so the traveling pool never bleeds past the page edge.
   const clipPath =
@@ -1165,22 +1216,29 @@ function IlluminatedLedger({ stepIndex }) {
             <Ellipse cx={140} cy={58} rx={150} ry={64} fill="url(#ldgAura)" />
           </Svg>
         </Animated.View>
-        {/* Header mark: a small carved candle-flame between two memorial rules.
-            Static — the aura breath carries the life, keeping JS-driven count low. */}
+        {/* Header mark: a bigger, vibrant candle-flame between two memorial rules.
+            The flame body/tip flicker on `flameFlick`; the aura breathes underneath. */}
         <Svg width={280} height={110} viewBox="0 0 280 110">
           <Defs>
-            {/* Flame body — the vfBeam ramp, tightened. */}
-            <RadialGradient id="ldgFlame" cx="0.5" cy="0.5" r="0.5">
-              <Stop offset="0" stopColor="#fff4d2" stopOpacity={0.95} />
-              <Stop offset="0.45" stopColor="#ffe7ad" stopOpacity={0.6} />
-              <Stop offset="0.78" stopColor="#f2b65c" stopOpacity={0.2} />
+            {/* Warm halo bloom around the flame — gives the bigger, brighter flame
+                a glow that spills onto the page, not a hard-edged shape. */}
+            <RadialGradient id="ldgFlameHalo" cx="0.5" cy="0.5" r="0.5">
+              <Stop offset="0" stopColor="#ffe7ad" stopOpacity={0.5} />
+              <Stop offset="0.5" stopColor="#f2b65c" stopOpacity={0.22} />
               <Stop offset="1" stopColor="#f2b65c" stopOpacity={0} />
             </RadialGradient>
-            {/* Incandescent heart. */}
+            {/* Flame body — brighter, hotter ramp than before (was 0.95/0.6/0.2). */}
+            <RadialGradient id="ldgFlame" cx="0.5" cy="0.5" r="0.5">
+              <Stop offset="0" stopColor="#fff8e6" stopOpacity={1} />
+              <Stop offset="0.4" stopColor="#ffdf95" stopOpacity={0.92} />
+              <Stop offset="0.72" stopColor="#f2b65c" stopOpacity={0.5} />
+              <Stop offset="1" stopColor="#cf7a3a" stopOpacity={0} />
+            </RadialGradient>
+            {/* Incandescent white-hot heart — brighter and more opaque. */}
             <RadialGradient id="ldgCore" cx="0.5" cy="0.5" r="0.5">
-              <Stop offset="0" stopColor="#ffffff" stopOpacity={0.9} />
-              <Stop offset="0.6" stopColor="#fff4d2" stopOpacity={0.5} />
-              <Stop offset="1" stopColor="#fff4d2" stopOpacity={0} />
+              <Stop offset="0" stopColor="#ffffff" stopOpacity={1} />
+              <Stop offset="0.55" stopColor="#fff4d2" stopOpacity={0.78} />
+              <Stop offset="1" stopColor="#ffe7ad" stopOpacity={0} />
             </RadialGradient>
             {/* Flanking rules — STROKE gradient, MUST be userSpaceOnUse, authored
                 across the full x46→x234 span so the fade-to-0 ends land at the tips. */}
@@ -1191,13 +1249,21 @@ function IlluminatedLedger({ stepIndex }) {
               <Stop offset="1" stopColor="#c9a84c" stopOpacity={0} />
             </LinearGradient>
           </Defs>
-          {/* Flame: soft radial body + a sharpened teardrop tip so it reads as
-              flame, not a circle. */}
-          <Ellipse cx={140} cy={40} rx={7} ry={12} fill="url(#ldgFlame)" />
-          <Path d="M140 26 Q146 40 140 54 Q134 40 140 26" fill="url(#ldgFlame)" opacity={0.9} />
-          <Circle cx={140} cy={42} r={3.2} fill="url(#ldgCore)" />
+          {/* Bigger, more vibrant candle flame. A warm halo bloom sits behind a
+              taller teardrop body + sharpened tip; a white-hot core anchors it.
+              The body & tip flicker their luminance on `flameFlick` so it reads as
+              a living flame, not a static glyph. Geometry grew (rx 7→11, ry 12→18;
+              tip apex y26→18) while the wick base stays anchored at y58. */}
+          <Ellipse cx={140} cy={40} rx={30} ry={34} fill="url(#ldgFlameHalo)" />
+          <AnimatedEllipse cx={140} cy={40} rx={11} ry={18} fill="url(#ldgFlame)" opacity={flameFlick} />
+          <AnimatedPath
+            d="M140 18 Q150 38 140 58 Q130 38 140 18"
+            fill="url(#ldgFlame)"
+            opacity={flameFlick}
+          />
+          <Circle cx={140} cy={44} r={5} fill="url(#ldgCore)" />
           {/* Wick. */}
-          <Line x1={140} y1={54} x2={140} y2={60} stroke="#6b4f1e" strokeWidth={2.2} strokeLinecap="round" />
+          <Line x1={140} y1={56} x2={140} y2={62} stroke="#6b4f1e" strokeWidth={2.2} strokeLinecap="round" />
           {/* Two flanking memorial rules. */}
           <Line x1={46} y1={58} x2={120} y2={58} stroke="url(#ldgRule)" strokeWidth={1.1} />
           <Line x1={160} y1={58} x2={234} y2={58} stroke="url(#ldgRule)" strokeWidth={1.1} />
@@ -1265,8 +1331,10 @@ function IlluminatedLedger({ stepIndex }) {
               </ClipPath>
             </Defs>
             <G clipPath="url(#ldgClip)">
-              {/* r=40 so the 80px pool pools on roughly ONE row at the 56px pitch. */}
-              <AnimatedCircle cx={CARD_CX} cy={lampY} r={40} fill="url(#ldgBeam)" opacity={lampPulse} />
+              {/* Bigger candle-pool (r=LAMP_R) that WANDERS — cx rides lampCx,
+                  cy rides lampY on a different period, so the light traces an
+                  ever-shifting path across the page, not a straight column. */}
+              <AnimatedCircle cx={lampCx} cy={lampY} r={LAMP_R} fill="url(#ldgBeam)" opacity={lampPulse} />
             </G>
           </Svg>
         )}

@@ -237,7 +237,11 @@ export default function GlobalMapScreen({ navigation }) {
             )}
 
             {bioExpanded && !!selectedStory.biography && (
-              <ScrollView style={styles.calloutBioScroll} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={styles.calloutBioScroll}
+                contentContainerStyle={styles.calloutBioContent}
+                showsVerticalScrollIndicator={false}
+              >
                 <Text style={styles.calloutBioText}>
                   {selectedStory.biography.split('\n\n').filter(p => p.trim()).slice(0, 2).join('\n\n')}
                 </Text>
@@ -367,7 +371,11 @@ const styles = StyleSheet.create({
   calloutContrib: { color: colors.silver, fontSize: 11, fontFamily: fonts.body, fontStyle: 'italic', marginBottom: 4 },
   calloutWarn: { color: colors.ember, fontSize: 11, fontFamily: fonts.body, marginBottom: 6 },
   calloutBioScroll: { maxHeight: 140, marginBottom: 8 },
-  calloutBioText: { color: colors.ash, fontSize: 13, fontFamily: fonts.serif, lineHeight: 20 },
+  // Vertical padding on the scroll CONTENT (not the Text) so the serif font's
+  // first-line ascenders and last-line descenders aren't clipped by the
+  // ScrollView's clip rect on Android (mirrors CemeteryMapScreen).
+  calloutBioContent: { paddingTop: 3, paddingBottom: 6 },
+  calloutBioText: { color: colors.ash, fontSize: 13, fontFamily: fonts.serif, lineHeight: 21 },
   calloutButtons: { flexDirection: 'row', gap: 8, marginTop: 4 },
   calloutBtn: {
     borderWidth: 1, borderColor: colors.flame,

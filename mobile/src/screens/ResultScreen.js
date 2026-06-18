@@ -1242,16 +1242,24 @@ const styles = StyleSheet.create({
     color: colors.ash, fontSize: 13, fontFamily: fonts.body,
     marginBottom: 14, lineHeight: 18,
   },
-  markerTabRow: { flexGrow: 0, height: 48, marginBottom: 14 },
-  markerTabRowContent: { gap: 8, paddingRight: 8, alignItems: 'center' },
+  // Let the row size to its content instead of a fixed height — a fixed-height
+  // pill inside a horizontal ScrollView clips the tab text's top/bottom on
+  // Android. Pinning the text line via a fixed-height inner Text and padding the
+  // pill (rather than fighting font metrics) is the established fix.
+  markerTabRow: { flexGrow: 0, marginBottom: 14 },
+  markerTabRowContent: { gap: 8, paddingRight: 8, paddingVertical: 4, alignItems: 'center' },
   markerTab: {
-    height: 36, paddingHorizontal: 14,
+    paddingHorizontal: 14, paddingVertical: 8,
     borderWidth: 1, borderColor: colors.line, borderRadius: 999,
     backgroundColor: 'transparent',
     alignItems: 'center', justifyContent: 'center',
   },
   markerTabActive: { borderColor: colors.flame, backgroundColor: colors.stone2 },
-  markerTabText: { color: colors.ash, fontSize: 13, lineHeight: 16, fontFamily: fonts.bodyMedium },
+  markerTabText: {
+    color: colors.ash, fontSize: 13, lineHeight: 20, height: 20,
+    fontFamily: fonts.bodyMedium, textAlignVertical: 'center',
+    includeFontPadding: false,
+  },
   markerTabTextActive: { color: colors.flame },
   markerGridScroll: { flexGrow: 0 },
   markerGrid: {

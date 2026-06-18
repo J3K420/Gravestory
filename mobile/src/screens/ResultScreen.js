@@ -2,8 +2,9 @@ import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Linking, Share, Image, Alert, FlatList, Dimensions, Modal, Pressable, TextInput,
+  PanResponder,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
@@ -24,7 +25,29 @@ const SCREEN_W = Dimensions.get('window').width;
 const AI_DISCLAIMER_SEEN_KEY = 'gs_ai_disclaimer_seen';
 const SHARE_NOTICE_SEEN_KEY = 'gs_share_notice_seen';
 
+// Bottom-sheet grab-bar that dismisses the sheet on a downward swipe. The bar
+// was previously a decorative View with no gesture wired up, so dragging it did
+// nothing. A wide tap/drag target sits behind the visible 40px pill. The capture
+// threshold (downward, >6px, mostly vertical) ignores horizontal scrolls; the
+// release threshold (drag past ~50px or a fast downward flick) triggers onClose.
+function SwipeHandle({ onClose }) {
+  const responder = React.useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderRelease: (_e, g) => {
+        if (g.dy > 50 || g.vy > 0.5) onClose();
+      },
+    })
+  ).current;
+  return (
+    <View {...responder.panHandlers} style={styles.sheetHandleHit}>
+      <View style={styles.symbolSheetHandle} />
+    </View>
+  );
+}
+
 export default function ResultScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const [story, setStory]               = useState(route.params?.story);
   const [user, setUser]                 = useState(null);
   const [sharing, setSharing]           = useState(false);
@@ -758,8 +781,8 @@ export default function ResultScreen({ navigation, route }) {
         onRequestClose={() => setMarkerModal(false)}
       >
         <Pressable style={styles.symbolOverlay} onPress={() => setMarkerModal(false)}>
-          <Pressable style={styles.markerSheet} onPress={() => {}}>
-            <View style={styles.symbolSheetHandle} />
+          <Pressable style={[styles.markerSheet, { paddingBottom: insets.bottom + 28 }]} onPress={() => {}}>
+            <SwipeHandle onClose={() => setMarkerModal(false)} />
             <Text style={styles.symbolSheetName}>Choose a marker</Text>
             <Text style={styles.markerSheetHint}>
               {isUnsaved
@@ -826,8 +849,8 @@ export default function ResultScreen({ navigation, route }) {
         onRequestClose={() => setSymbolModal(null)}
       >
         <Pressable style={styles.symbolOverlay} onPress={() => setSymbolModal(null)}>
-          <Pressable style={styles.symbolSheet} onPress={() => {}}>
-            <View style={styles.symbolSheetHandle} />
+          <Pressable style={[styles.symbolSheet, { paddingBottom: insets.bottom + 36 }]} onPress={() => {}}>
+            <SwipeHandle onClose={() => setSymbolModal(null)} />
             <Text style={styles.symbolSheetName}>{symbolModal?.name}</Text>
             <Text style={styles.symbolSheetText}>{symbolModal?.text}</Text>
             <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setSymbolModal(null)}>
@@ -845,8 +868,8 @@ export default function ResultScreen({ navigation, route }) {
         onRequestClose={dismissAiModal}
       >
         <Pressable style={styles.symbolOverlay} onPress={dismissAiModal}>
-          <Pressable style={styles.symbolSheet} onPress={() => {}}>
-            <View style={styles.symbolSheetHandle} />
+          <Pressable style={[styles.symbolSheet, { paddingBottom: insets.bottom + 36 }]} onPress={() => {}}>
+            <SwipeHandle onClose={dismissAiModal} />
             <Text style={styles.symbolSheetName}>About these stories</Text>
             <Text style={styles.symbolSheetText}>
               GraveStory assembles each biography with AI from public records and historical
@@ -869,8 +892,8 @@ export default function ResultScreen({ navigation, route }) {
         onRequestClose={() => setReportModal(false)}
       >
         <Pressable style={styles.symbolOverlay} onPress={() => setReportModal(false)}>
-          <Pressable style={styles.symbolSheet} onPress={() => {}}>
-            <View style={styles.symbolSheetHandle} />
+          <Pressable style={[styles.symbolSheet, { paddingBottom: insets.bottom + 36 }]} onPress={() => {}}>
+            <SwipeHandle onClose={() => setReportModal(false)} />
             {reportDone ? (
               <>
                 <Text style={styles.symbolSheetName}>Thank you</Text>
@@ -938,8 +961,8 @@ export default function ResultScreen({ navigation, route }) {
         onRequestClose={() => setShareNoticeModal(false)}
       >
         <Pressable style={styles.symbolOverlay} onPress={() => setShareNoticeModal(false)}>
-          <Pressable style={styles.symbolSheet} onPress={() => {}}>
-            <View style={styles.symbolSheetHandle} />
+          <Pressable style={[styles.symbolSheet, { paddingBottom: insets.bottom + 36 }]} onPress={() => {}}>
+            <SwipeHandle onClose={() => setShareNoticeModal(false)} />
             <Text style={styles.symbolSheetName}>Sharing publicly</Text>
             <Text style={styles.symbolSheetText}>
               Public stories appear on the community map for anyone to see — including the
@@ -1146,9 +1169,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.stone, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingHorizontal: 24, paddingTop: 12, paddingBottom: 36,
   },
+  // Visible grab-bar pill. The surrounding sheetHandleHit gives it a tall,
+  // full-width drag/tap target so the swipe-to-close gesture is easy to grab.
+  sheetHandleHit: {
+    alignSelf: 'stretch', alignItems: 'center',
+    paddingTop: 4, paddingBottom: 16, marginTop: -8,
+  },
   symbolSheetHandle: {
     width: 40, height: 4, borderRadius: 2,
-    backgroundColor: colors.line, alignSelf: 'center', marginBottom: 20,
+    backgroundColor: colors.line,
   },
   symbolSheetName: {
     color: colors.flame, fontSize: 18, fontFamily: fonts.name,

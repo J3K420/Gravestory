@@ -1200,73 +1200,99 @@ function IlluminatedLedger({ stepIndex }) {
 
   return (
     <>
-      {/* (A) PAGE HEADER — header aura (breathes) under a static candle-flame mark. */}
+      {/* (A) PAGE HEADER — breathing aura under a small cemetery scene: a candle
+          (flickering flame) standing among gravestone silhouettes. */}
       <View style={styles.ledgerHeader}>
         {/* Header aura: a View-opacity breath (native driver). */}
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: headerGlow }]}>
           <Svg width={280} height={110} viewBox="0 0 280 110">
             <Defs>
-              {/* byte-identical to vfAura */}
+              {/* Header aura — slightly hotter than vfAura now (0.40/0.18) so the
+                  brighter candle washes over the cemetery silhouettes below. */}
               <RadialGradient id="ldgAura" cx="0.5" cy="0.5" r="0.5">
-                <Stop offset="0" stopColor="#f2d79a" stopOpacity={0.34} />
-                <Stop offset="0.45" stopColor="#f2b65c" stopOpacity={0.16} />
+                <Stop offset="0" stopColor="#f2d79a" stopOpacity={0.40} />
+                <Stop offset="0.45" stopColor="#f2b65c" stopOpacity={0.18} />
                 <Stop offset="1" stopColor="#f2b65c" stopOpacity={0} />
               </RadialGradient>
             </Defs>
-            <Ellipse cx={140} cy={58} rx={150} ry={64} fill="url(#ldgAura)" />
+            <Ellipse cx={140} cy={62} rx={150} ry={60} fill="url(#ldgAura)" />
           </Svg>
         </Animated.View>
         {/* Header mark: a bigger, vibrant candle-flame between two memorial rules.
             The flame body/tip flicker on `flameFlick`; the aura breathes underneath. */}
         <Svg width={280} height={110} viewBox="0 0 280 110">
           <Defs>
-            {/* Warm halo bloom around the flame — gives the bigger, brighter flame
-                a glow that spills onto the page, not a hard-edged shape. */}
+            {/* Warm halo bloom around the flame — brighter/bigger now so the candle
+                visibly washes light onto the nearest gravestones. */}
             <RadialGradient id="ldgFlameHalo" cx="0.5" cy="0.5" r="0.5">
-              <Stop offset="0" stopColor="#ffe7ad" stopOpacity={0.5} />
-              <Stop offset="0.5" stopColor="#f2b65c" stopOpacity={0.22} />
+              <Stop offset="0" stopColor="#fff1c8" stopOpacity={0.62} />
+              <Stop offset="0.5" stopColor="#f2b65c" stopOpacity={0.26} />
               <Stop offset="1" stopColor="#f2b65c" stopOpacity={0} />
             </RadialGradient>
-            {/* Flame body — brighter, hotter ramp than before (was 0.95/0.6/0.2). */}
+            {/* Flame body — brighter, hotter ramp (peak 1/0.95/0.55). */}
             <RadialGradient id="ldgFlame" cx="0.5" cy="0.5" r="0.5">
-              <Stop offset="0" stopColor="#fff8e6" stopOpacity={1} />
-              <Stop offset="0.4" stopColor="#ffdf95" stopOpacity={0.92} />
-              <Stop offset="0.72" stopColor="#f2b65c" stopOpacity={0.5} />
+              <Stop offset="0" stopColor="#fffaf0" stopOpacity={1} />
+              <Stop offset="0.4" stopColor="#ffe39a" stopOpacity={0.95} />
+              <Stop offset="0.72" stopColor="#f2b65c" stopOpacity={0.55} />
               <Stop offset="1" stopColor="#cf7a3a" stopOpacity={0} />
             </RadialGradient>
             {/* Incandescent white-hot heart — brighter and more opaque. */}
             <RadialGradient id="ldgCore" cx="0.5" cy="0.5" r="0.5">
               <Stop offset="0" stopColor="#ffffff" stopOpacity={1} />
-              <Stop offset="0.55" stopColor="#fff4d2" stopOpacity={0.78} />
+              <Stop offset="0.55" stopColor="#fff4d2" stopOpacity={0.85} />
               <Stop offset="1" stopColor="#ffe7ad" stopOpacity={0} />
             </RadialGradient>
-            {/* Flanking rules — STROKE gradient, MUST be userSpaceOnUse, authored
-                across the full x46→x234 span so the fade-to-0 ends land at the tips. */}
-            <LinearGradient id="ldgRule" x1={46} y1={58} x2={234} y2={58} gradientUnits="userSpaceOnUse">
+            {/* Ground line the cemetery stones sit on — STROKE gradient, MUST be
+                userSpaceOnUse, authored across the full x30→x250 span so the
+                fade-to-0 ends land at the tips. (Was the flanking rules at y58;
+                now one continuous ground line at y92 under the silhouettes.) */}
+            <LinearGradient id="ldgRule" x1={30} y1={92} x2={250} y2={92} gradientUnits="userSpaceOnUse">
               <Stop offset="0" stopColor="#c9a84c" stopOpacity={0} />
-              <Stop offset="0.15" stopColor="#c9a84c" stopOpacity={0.35} />
-              <Stop offset="0.85" stopColor="#c9a84c" stopOpacity={0.35} />
+              <Stop offset="0.18" stopColor="#c9a84c" stopOpacity={0.30} />
+              <Stop offset="0.82" stopColor="#c9a84c" stopOpacity={0.30} />
               <Stop offset="1" stopColor="#c9a84c" stopOpacity={0} />
             </LinearGradient>
           </Defs>
-          {/* Bigger, more vibrant candle flame. A warm halo bloom sits behind a
-              taller teardrop body + sharpened tip; a white-hot core anchors it.
-              The body & tip flicker their luminance on `flameFlick` so it reads as
-              a living flame, not a static glyph. Geometry grew (rx 7→11, ry 12→18;
-              tip apex y26→18) while the wick base stays anchored at y58. */}
-          <Ellipse cx={140} cy={40} rx={30} ry={34} fill="url(#ldgFlameHalo)" />
-          <AnimatedEllipse cx={140} cy={40} rx={11} ry={18} fill="url(#ldgFlame)" opacity={flameFlick} />
+          {/* A small cemetery in the header's dead space: a row of varied
+              gravestone silhouettes (drawn FIRST, so the candle sits in front),
+              standing on a ground line at y92. Stone opacity falls off from the
+              centre so the candlelight 'reaches' the near stones and the far ones
+              recede into the dark; the two stones flanking the flame get a faint
+              warm lit top-edge. */}
+          <Line x1={30} y1={92} x2={250} y2={92} stroke="url(#ldgRule)" strokeWidth={1.1} />
+
+          {/* far left — tilted old slab (dim) */}
+          <Path d="M40 92 L42 70 L54 68 L55 92 Z" fill="#2a2017" stroke="#3a2e22" strokeWidth={0.6} opacity={0.55} />
+          {/* left — cross */}
+          <Path d="M71 74 H75 V92 H71 Z" fill="#2a2017" opacity={0.72} />
+          <Path d="M66 79 H80 V82.5 H66 Z" fill="#2a2017" opacity={0.72} />
+          {/* centre-left — rounded headstone (lit, warm rim) */}
+          <Path d="M97 92 L97 74 Q97 66 105 66 Q113 66 113 74 L113 92 Z" fill="#2a2017" opacity={0.92} />
+          <Path d="M97 74 Q97 66 105 66 Q113 66 113 74" fill="none" stroke="#5a4a30" strokeWidth={0.8} opacity={0.9} />
+          {/* centre-right — flat-top headstone (lit, warm rim) */}
+          <Path d="M167 92 L167 70 Q167 66 171 66 L181 66 Q185 66 185 70 L185 92 Z" fill="#2a2017" opacity={0.92} />
+          <Path d="M167 70 Q167 66 171 66 L181 66 Q185 66 185 70" fill="none" stroke="#5a4a30" strokeWidth={0.8} opacity={0.9} />
+          {/* right — obelisk (medium) */}
+          <Path d="M205 92 L205 70 L208 64 L211 70 L211 92 Z" fill="#2a2017" stroke="#3a2e22" strokeWidth={0.6} opacity={0.7} />
+          {/* far right — small arched (dim) */}
+          <Path d="M232 92 L232 78 Q232 73 238 73 Q244 73 244 78 L244 92 Z" fill="#2a2017" opacity={0.5} />
+
+          {/* THE CANDLE — in front of the stones, brighter than before. A warm halo
+              bloom behind a taller teardrop body + tip (both flicker on flameFlick)
+              over a white-hot core, rising from a slim candle body among the stones. */}
+          <Ellipse cx={140} cy={46} rx={40} ry={40} fill="url(#ldgFlameHalo)" />
+          <AnimatedEllipse cx={140} cy={40} rx={12} ry={20} fill="url(#ldgFlame)" opacity={flameFlick} />
           <AnimatedPath
-            d="M140 18 Q150 38 140 58 Q130 38 140 18"
+            d="M140 16 Q151 38 140 60 Q129 38 140 16"
             fill="url(#ldgFlame)"
             opacity={flameFlick}
           />
-          <Circle cx={140} cy={44} r={5} fill="url(#ldgCore)" />
+          <Circle cx={140} cy={44} r={6} fill="url(#ldgCore)" />
+          {/* Slim candle body so the flame reads as a candle standing among the stones. */}
+          <Path d="M136.5 62 Q136.5 60 138.5 60 L141.5 60 Q143.5 60 143.5 62 L143.5 90 L136.5 90 Z" fill="#2a2017" stroke="#3a2e22" strokeWidth={0.6} />
+          <Path d="M136.5 62 Q136.5 60 138.5 60 L138.5 90 L136.5 90 Z" fill="#5a4a30" opacity={0.5} />
           {/* Wick. */}
-          <Line x1={140} y1={56} x2={140} y2={62} stroke="#6b4f1e" strokeWidth={2.2} strokeLinecap="round" />
-          {/* Two flanking memorial rules. */}
-          <Line x1={46} y1={58} x2={120} y2={58} stroke="url(#ldgRule)" strokeWidth={1.1} />
-          <Line x1={160} y1={58} x2={234} y2={58} stroke="url(#ldgRule)" strokeWidth={1.1} />
+          <Line x1={140} y1={56} x2={140} y2={61} stroke="#6b4f1e" strokeWidth={2.2} strokeLinecap="round" />
         </Svg>
       </View>
 

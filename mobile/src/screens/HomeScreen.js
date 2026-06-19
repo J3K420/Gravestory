@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, ScrollView,
   StyleSheet, StatusBar,
 } from 'react-native';
+import Svg, { Defs, RadialGradient, Stop, Ellipse } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
@@ -14,6 +15,35 @@ import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
 import { MapStack, Globe } from '../components/Icons';
+
+// Static candlelit aura that sits BEHIND the gravestone logo so the hero feels
+// lit from within — the same warm radial technique as the loading/viewfinder
+// glow (RN-SVG has no real blur, so the soft edge is the gradient falloff).
+// Deliberately static: the logo carries its own candle-flicker animation, and a
+// second moving light would fight it. Sized to bloom past the 240px logo.
+function LogoHalo({ size = 300 }) {
+  return (
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      // Centre the bloom on the stage: pull up/left by half the size so the
+      // halo radiates symmetrically around the logo rather than from a corner.
+      style={[styles.haloAbs, { marginLeft: -size / 2, marginTop: -size / 2 }]}
+      pointerEvents="none"
+    >
+      <Defs>
+        <RadialGradient id="homeHalo" cx="0.5" cy="0.5" r="0.5">
+          <Stop offset="0"    stopColor="#f2d79a" stopOpacity="0.30" />
+          <Stop offset="0.42" stopColor="#f2b65c" stopOpacity="0.14" />
+          <Stop offset="1"    stopColor="#f2b65c" stopOpacity="0" />
+        </RadialGradient>
+      </Defs>
+      {/* Slightly tall so the warmth pools around the tablet, not a flat disc. */}
+      <Ellipse cx="50" cy="50" rx="46" ry="50" fill="url(#homeHalo)" />
+    </Svg>
+  );
+}
 
 export default function HomeScreen({ navigation }) {
   const [user, setUser] = useState(null);
@@ -86,9 +116,12 @@ export default function HomeScreen({ navigation }) {
         refreshControl={refreshControl}
       >
 
-        {/* Logo */}
+        {/* Hero — candlelit aura behind the (untouched) flickering gravestone logo */}
         <View style={styles.logoArea}>
-          <GravestoneLogo size={240} />
+          <View style={styles.logoStage}>
+            <LogoHalo size={300} />
+            <GravestoneLogo size={240} />
+          </View>
           <Text style={styles.logoTitle}>GraveStory</Text>
           <Text style={styles.logoSubtitle}>every life deserves to be remembered</Text>
         </View>
@@ -120,11 +153,11 @@ export default function HomeScreen({ navigation }) {
 
         {/* Primary scan CTA */}
         <TouchableOpacity onPress={() => navigation.navigate('Camera')} activeOpacity={0.88} style={styles.scanBtn}>
-          <Text style={styles.scanBtnText}>✦ Scan a Gravestone ✦</Text>
+          <Text style={styles.scanBtnText}>Scan a Gravestone</Text>
         </TouchableOpacity>
 
         <Text style={styles.desc}>
-          Photograph a gravestone. We'll uncover the story of the life it marks.
+          Photograph a gravestone — we'll uncover the story of the life it marks.
         </Text>
 
         {/* Persistent example link (always available, not just first run) */}
@@ -156,8 +189,9 @@ export default function HomeScreen({ navigation }) {
         <TouchableOpacity
           style={styles.savedBtn}
           onPress={() => navigation.navigate('RememberedStories')}
+          activeOpacity={0.85}
         >
-          <Text style={styles.savedBtnText}>✦ Remembered Stories</Text>
+          <Text style={styles.savedBtnText}>Remembered Stories</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -176,7 +210,16 @@ const styles = StyleSheet.create({
   },
   userBtnText: { color: colors.flame, fontSize: 13, fontFamily: fonts.body },
 
-  logoArea: { marginTop: 20, marginBottom: 24, alignItems: 'center' },
+  logoArea: { marginTop: 24, marginBottom: 20, alignItems: 'center' },
+  // Stage holds the static halo (absolute fill) behind the flickering logo.
+  // Sized to the logo so the aura centres on the stone, not the title below.
+  logoStage: {
+    width: 240, height: 269, // 240 * 1.12 — matches GravestoneLogo's aspect
+    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
+  },
+  // Halo anchored to the stage centre (top/left 50%); the SVG's negative
+  // half-size margins then pull its own centre onto that point.
+  haloAbs: { position: 'absolute', top: '50%', left: '50%' },
   logoTitle: {
     fontSize: 42, color: colors.parchment, letterSpacing: 1, marginBottom: 8,
     fontFamily: fonts.title,
@@ -185,14 +228,18 @@ const styles = StyleSheet.create({
     fontSize: 13, color: colors.ash, fontFamily: fonts.bodyItalic, letterSpacing: 0.5,
   },
 
-  divider: { width: 120, height: 1, marginVertical: 24, backgroundColor: colors.flame, opacity: 0.4 },
+  divider: { width: 120, height: 1, marginVertical: 22, backgroundColor: colors.flame, opacity: 0.4 },
 
+  // Hero CTA — solid gold with a warm cast beneath it so it reads as lit, not a
+  // flat slab. Elevation on Android, soft shadow on iOS.
   scanBtn: {
-    width: '100%', paddingVertical: 16, paddingHorizontal: 32, borderRadius: radius.md,
+    width: '100%', paddingVertical: 17, paddingHorizontal: 32, borderRadius: radius.md,
     alignItems: 'center', justifyContent: 'center', backgroundColor: colors.flame,
+    shadowColor: colors.flame, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 14, elevation: 6,
   },
   scanBtnText: {
-    color: colors.onFlame, fontSize: 16, letterSpacing: 1.5, fontFamily: fonts.sansBold,
+    color: colors.onFlame, fontSize: 16, letterSpacing: 1.2, fontFamily: fonts.sansBold,
   },
 
   tipCard: {
@@ -229,15 +276,17 @@ const styles = StyleSheet.create({
   },
 
   desc: {
-    color: colors.ash, fontFamily: fonts.bodyItalic, marginTop: 20,
+    color: colors.ash, fontFamily: fonts.bodyItalic, marginTop: 18,
     textAlign: 'center', lineHeight: 22, maxWidth: 280,
   },
+  // Positioning line — relocated to bridge the scan CTA and the map/explore
+  // section (was a third restatement directly under the CTA). Quiet by design.
   tagline: {
     color: colors.flame, fontFamily: fonts.serifItalic, fontSize: 13,
-    textAlign: 'center', marginTop: 12, opacity: 0.45, maxWidth: 280, lineHeight: 20,
+    textAlign: 'center', marginTop: 28, opacity: 0.5, maxWidth: 280, lineHeight: 20,
   },
 
-  mapRow: { flexDirection: 'row', gap: 10, marginTop: 16, width: '100%' },
+  mapRow: { flexDirection: 'row', gap: 10, marginTop: 18, width: '100%' },
   mapHint: {
     color: colors.ashDim, fontFamily: fonts.bodyItalic, fontSize: 12,
     textAlign: 'center', marginTop: 10, lineHeight: 18, maxWidth: 300,

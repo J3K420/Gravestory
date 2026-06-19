@@ -1226,7 +1226,10 @@ function IlluminatedLedger({ stepIndex }) {
                 <Stop offset="1" stopColor="#f2b65c" stopOpacity={0} />
               </RadialGradient>
             </Defs>
-            <Ellipse cx={140} cy={210} rx={160} ry={95} fill="url(#ldgAura)" />
+            {/* rx kept ≤138 so the round glow fades to nothing INSIDE the 280-wide
+                viewBox — at rx=160 it was clipped flat at x=0/280 and read as a
+                square edge. ry bumped to keep the vertical spread generous. */}
+            <Ellipse cx={140} cy={210} rx={138} ry={108} fill="url(#ldgAura)" />
           </Svg>
         </Animated.View>
         {/* The hero-stone scene + foreground candle. Flame body/tip flicker on
@@ -1302,8 +1305,10 @@ function IlluminatedLedger({ stepIndex }) {
             </LinearGradient>
           </Defs>
 
-          {/* Broad warm spill so the candlelight reaches the background graveyard. */}
-          <Ellipse cx={140} cy={170} rx={150} ry={120} fill="url(#ldgSpill)" />
+          {/* Broad warm spill so the candlelight reaches the background graveyard.
+              rx kept ≤138 so its round falloff completes inside the 280 viewBox
+              (no clipped square edge); ry generous since the box is 320 tall. */}
+          <Ellipse cx={140} cy={170} rx={134} ry={135} fill="url(#ldgSpill)" />
 
           {/* ===== BACKGROUND GRAVEYARD — uniform rounded headstones in receding
               rows. ONE consistent silhouette (same arch as the hero), each row

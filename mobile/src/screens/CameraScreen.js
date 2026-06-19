@@ -1221,8 +1221,8 @@ function IlluminatedLedger({ stepIndex }) {
           <Svg width={280} height={320} viewBox="0 0 280 320">
             <Defs>
               <RadialGradient id="ldgAura" cx="0.5" cy="0.5" r="0.5">
-                <Stop offset="0" stopColor="#f2d79a" stopOpacity={0.34} />
-                <Stop offset="0.45" stopColor="#f2b65c" stopOpacity={0.14} />
+                <Stop offset="0" stopColor="#f2d79a" stopOpacity={0.40} />
+                <Stop offset="0.45" stopColor="#f2b65c" stopOpacity={0.18} />
                 <Stop offset="1" stopColor="#f2b65c" stopOpacity={0} />
               </RadialGradient>
             </Defs>
@@ -1270,31 +1270,75 @@ function IlluminatedLedger({ stepIndex }) {
               <Stop offset="0.55" stopColor="#0a0805" stopOpacity={0.34} />
               <Stop offset="1" stopColor="#0a0805" stopOpacity={0} />
             </RadialGradient>
-            {/* Vertical atmospheric haze — far graveyard dissolves into night. */}
+            {/* Vertical atmospheric haze — far graveyard dissolves into night.
+                Lifted (0.9 @ top → 0 by 0.6) so the brightened background rows
+                survive instead of being swallowed. */}
             <LinearGradient id="ldgFog" x1={0} y1={0} x2={0} y2={320} gradientUnits="userSpaceOnUse">
-              <Stop offset="0" stopColor="#14100b" stopOpacity={0.95} />
-              <Stop offset="0.30" stopColor="#14100b" stopOpacity={0.5} />
+              <Stop offset="0" stopColor="#14100b" stopOpacity={0.9} />
+              <Stop offset="0.20" stopColor="#14100b" stopOpacity={0.42} />
+              <Stop offset="0.42" stopColor="#14100b" stopOpacity={0.06} />
               <Stop offset="0.6" stopColor="#14100b" stopOpacity={0} />
+            </LinearGradient>
+            {/* Broad warm spill so the candle's light reaches the background graveyard. */}
+            <RadialGradient id="ldgSpill" cx="0.5" cy="0.62" r="0.5">
+              <Stop offset="0" stopColor="#f6c873" stopOpacity={0.30} />
+              <Stop offset="0.6" stopColor="#f2b65c" stopOpacity={0.10} />
+              <Stop offset="1" stopColor="#f2b65c" stopOpacity={0} />
+            </RadialGradient>
+            {/* Per-row top-lit stone gradients (lighter warm top → darker base);
+                cooler/dimmer the farther back the row is. Authored in userSpaceOnUse
+                across each row's y-band so every stone in the row is lit identically. */}
+            <LinearGradient id="ldgRowB" x1={0} y1={142} x2={0} y2={174} gradientUnits="userSpaceOnUse">
+              <Stop offset="0" stopColor="#5a4628" /><Stop offset="0.55" stopColor="#3c2e1b" /><Stop offset="1" stopColor="#2a2015" />
+            </LinearGradient>
+            <LinearGradient id="ldgRowC" x1={0} y1={122} x2={0} y2={146} gradientUnits="userSpaceOnUse">
+              <Stop offset="0" stopColor="#4a3a22" /><Stop offset="0.55" stopColor="#332817" /><Stop offset="1" stopColor="#241b12" />
+            </LinearGradient>
+            <LinearGradient id="ldgRowD" x1={0} y1={106} x2={0} y2={124} gradientUnits="userSpaceOnUse">
+              <Stop offset="0" stopColor="#3c301d" /><Stop offset="0.6" stopColor="#2a2114" /><Stop offset="1" stopColor="#1f1810" />
+            </LinearGradient>
+            <LinearGradient id="ldgRowE" x1={0} y1={90} x2={0} y2={104} gradientUnits="userSpaceOnUse">
+              <Stop offset="0" stopColor="#322817" /><Stop offset="0.6" stopColor="#241c12" /><Stop offset="1" stopColor="#1b150e" />
             </LinearGradient>
           </Defs>
 
-          {/* ===== BACKGROUND GRAVEYARD — dim stones fanning out + receding ===== */}
-          {/* far row (high, tiny, dim) */}
-          <G fill="#1f1813" opacity={0.34}>
-            <Path d="M40 150 L41 142 L47 141 L47 150 Z" />
-            <Path d="M66 150 L66 143 Q66 140 69 140 Q72 140 72 143 L72 150 Z" />
-            <Path d="M96 150 L96 142 Q96 139 99 139 Q102 139 102 142 L102 150 Z" />
-            <Path d="M180 150 L180 141 L182 138 L184 141 L184 150 Z" />
-            <Path d="M210 150 L210 142 L216 141 L216 150 Z" />
-            <Path d="M236 150 L236 143 Q236 140 239 140 Q242 140 242 143 L242 150 Z" />
+          {/* Broad warm spill so the candlelight reaches the background graveyard. */}
+          <Ellipse cx={140} cy={170} rx={150} ry={120} fill="url(#ldgSpill)" />
+
+          {/* ===== BACKGROUND GRAVEYARD — uniform rounded headstones in receding
+              rows. ONE consistent silhouette (same arch as the hero), each row
+              aligned to a shared baseline, shorter + dimmer + higher the farther
+              back it sits. Per-row top-lit gradient (ldgRow*) makes them read as
+              lit stone, not flat cutouts. Centre band (x≈96–184) left clear for the
+              hero + candle column. Coords baked from the marker-preview generator. */}
+          {/* ROW E — farthest: tiny, highest, dimmest */}
+          <G fill="url(#ldgRowE)" opacity={0.50}>
+            <Path d="M16.5 104 L16.5 95.5 Q16.5 90 22 90 Q27.5 90 27.5 95.5 L27.5 104 Z" />
+            <Path d="M46.5 104 L46.5 95.5 Q46.5 90 52 90 Q57.5 90 57.5 95.5 L57.5 104 Z" />
+            <Path d="M76.5 104 L76.5 95.5 Q76.5 90 82 90 Q87.5 90 87.5 95.5 L87.5 104 Z" />
+            <Path d="M196.5 104 L196.5 95.5 Q196.5 90 202 90 Q207.5 90 207.5 95.5 L207.5 104 Z" />
+            <Path d="M226.5 104 L226.5 95.5 Q226.5 90 232 90 Q237.5 90 237.5 95.5 L237.5 104 Z" />
           </G>
-          {/* mid row (flanking the hero, dimmer) */}
-          <G fill="#241c14" opacity={0.6}>
-            <Path d="M30 196 L33 168 L46 166 L48 196 Z" />
-            <Path d="M58 196 L58 176 Q58 168 68 168 Q78 168 78 176 L78 196 Z" />
-            <Path d="M202 196 L202 174 L206 167 L210 174 L210 196 Z" />
-            <Path d="M222 196 L222 172 Q222 165 230 165 Q238 165 238 172 L238 196 Z" />
-            <Path d="M250 196 L251 175 L264 174 L265 196 Z" />
+          {/* ROW D */}
+          <G fill="url(#ldgRowD)" opacity={0.62}>
+            <Path d="M21.5 124 L21.5 112.5 Q21.5 106 28 106 Q34.5 106 34.5 112.5 L34.5 124 Z" />
+            <Path d="M54.5 124 L54.5 112.5 Q54.5 106 61 106 Q67.5 106 67.5 112.5 L67.5 124 Z" />
+            <Path d="M87.5 124 L87.5 112.5 Q87.5 106 94 106 Q100.5 106 100.5 112.5 L100.5 124 Z" />
+            <Path d="M186.5 124 L186.5 112.5 Q186.5 106 193 106 Q199.5 106 199.5 112.5 L199.5 124 Z" />
+            <Path d="M219.5 124 L219.5 112.5 Q219.5 106 226 106 Q232.5 106 232.5 112.5 L232.5 124 Z" />
+          </G>
+          {/* ROW C */}
+          <G fill="url(#ldgRowC)" opacity={0.74}>
+            <Path d="M17 146 L17 130 Q17 122 25 122 Q33 122 33 130 L33 146 Z" />
+            <Path d="M55 146 L55 130 Q55 122 63 122 Q71 122 71 130 L71 146 Z" />
+            <Path d="M207 146 L207 130 Q207 122 215 122 Q223 122 223 130 L223 146 Z" />
+            <Path d="M245 146 L245 130 Q245 122 253 122 Q261 122 261 130 L261 146 Z" />
+          </G>
+          {/* ROW B — nearest background, flanking the hero shoulders */}
+          <G fill="url(#ldgRowB)" opacity={0.84}>
+            <Path d="M21 174 L21 152 Q21 142 31 142 Q41 142 41 152 L41 174 Z" />
+            <Path d="M67 174 L67 152 Q67 142 77 142 Q87 142 87 152 L87 174 Z" />
+            <Path d="M205 174 L205 152 Q205 142 215 142 Q225 142 225 152 L225 174 Z" />
           </G>
 
           {/* ground */}

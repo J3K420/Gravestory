@@ -17,7 +17,7 @@ import { useRefresh } from '../lib/use-refresh';
 import { deletePendingPhoto } from '../lib/pending';
 import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
-import { MapStack, ShareIcon, Globe } from '../components/Icons';
+import { MapStack, ShareIcon, Globe, Pin } from '../components/Icons';
 import { MARKER_STYLES, MARKER_PACKS, getMarker, GraveMarkerSvg } from '../components/GraveMarkers';
 import { SYMBOL_CONTEXT } from '../lib/biography';
 
@@ -571,14 +571,20 @@ export default function ResultScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* Header */}
+        {/* Header — memorial identity block */}
         <Text style={styles.name}>{name || 'Unknown'}</Text>
         {!!dates && (
           <View style={styles.datesRow}>
+            <View style={styles.datesRule} />
             <Text style={styles.datesText}>{dates}</Text>
           </View>
         )}
-        {!!location && <Text style={styles.location}>✦ {location}</Text>}
+        {!!location && (
+          <View style={styles.locationRow}>
+            <Pin size={13} color={colors.ashDim} />
+            <Text style={styles.location}>{location}</Text>
+          </View>
+        )}
         {story._isGlobal && (
           <Text style={styles.contributorLine}>Shared by {story._contributor || 'Anonymous'}</Text>
         )}
@@ -586,6 +592,12 @@ export default function ResultScreen({ navigation, route }) {
         <View style={styles.divider} />
 
         {/* Biography */}
+        {paragraphs.length > 0 && (
+          <View style={styles.sectionHeading}>
+            <Text style={styles.sectionHeadingText}>Life Story</Text>
+            <View style={styles.sectionHeadingRule} />
+          </View>
+        )}
         {paragraphs.map((para, i) => (
           <Text key={i} style={[styles.bio, i === 0 && styles.bioFirst]}>{para}</Text>
         ))}
@@ -612,7 +624,10 @@ export default function ResultScreen({ navigation, route }) {
 
         {/* Symbols */}
         {symbols.length > 0 && (
-          <Text style={styles.symbolsLabel}>Symbols on the stone</Text>
+          <View style={styles.sectionHeading}>
+            <Text style={styles.sectionHeadingText}>Symbols on the Stone</Text>
+            <View style={styles.sectionHeadingRule} />
+          </View>
         )}
         {hasTappableSymbol && (
           <Text style={styles.symbolsHint}>Tap a gold symbol to learn its traditional meaning.</Text>
@@ -642,11 +657,21 @@ export default function ResultScreen({ navigation, route }) {
         {/* Sources */}
         {sources.length > 0 && (
           <View style={styles.sourcesSection}>
-            <Text style={styles.sourcesLabel}>Sources</Text>
+            <View style={styles.sectionHeading}>
+              <Text style={styles.sectionHeadingText}>Sources & Research</Text>
+              <View style={styles.sectionHeadingRule} />
+            </View>
             {sources.map((src, i) => (
-              <TouchableOpacity key={i} onPress={() => source_urls[i] && Linking.openURL(source_urls[i])} disabled={!source_urls[i]}>
+              <TouchableOpacity
+                key={i}
+                style={styles.sourceRow}
+                onPress={() => source_urls[i] && Linking.openURL(source_urls[i])}
+                disabled={!source_urls[i]}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.sourceNum}>{i + 1}</Text>
                 <Text style={[styles.sourceItem, source_urls[i] && styles.sourceLink]}>
-                  [{i + 1}] {src}
+                  {src}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1019,21 +1044,35 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    color: colors.parchment, fontSize: 30, fontFamily: fonts.title,
-    marginBottom: 8, lineHeight: 34, letterSpacing: -0.3,
+    color: colors.parchment, fontSize: 31, fontFamily: fonts.title,
+    marginBottom: 10, lineHeight: 36, letterSpacing: -0.3,
   },
-  datesRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  datesText: { color: colors.flame, fontSize: 14, fontFamily: fonts.body, letterSpacing: 0.5 },
-  location: { color: colors.ash, fontSize: 13, fontFamily: fonts.body, marginBottom: 4, letterSpacing: 0.5 },
-  contributorLine: { color: colors.silver, fontSize: 12, fontFamily: fonts.bodyItalic, marginTop: 4 },
+  // Dates sit under the name with a short gold rule leading in — reads as an
+  // engraved lifespan line rather than a loose subtitle.
+  datesRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 9 },
+  datesRule: { width: 22, height: 1.5, backgroundColor: colors.flame, opacity: 0.7 },
+  datesText: { color: colors.flame, fontSize: 14.5, fontFamily: fonts.serifItalic, letterSpacing: 0.4 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  location: { color: colors.ash, fontSize: 13, fontFamily: fonts.body, letterSpacing: 0.4 },
+  contributorLine: { color: colors.silver, fontSize: 12, fontFamily: fonts.bodyItalic, marginTop: 6 },
 
-  divider: { height: 1, backgroundColor: colors.line, marginVertical: 20 },
+  divider: { height: 1, backgroundColor: colors.line, marginVertical: 22 },
+
+  // Shared titled-section eyebrow: small uppercase label + trailing hairline
+  // rule. Gives the bio, symbols, and sources the same scholarly section
+  // header so the page reads as one composed document, not stacked blocks.
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14, marginTop: 4 },
+  sectionHeadingText: {
+    color: colors.flame, fontSize: 11, letterSpacing: 2.5,
+    textTransform: 'uppercase', fontFamily: fonts.sansBold, opacity: 0.85,
+  },
+  sectionHeadingRule: { flex: 1, height: 1, backgroundColor: colors.line },
 
   bio: {
-    color: '#e3d6c0', lineHeight: 26, fontSize: 15, marginBottom: 14,
+    color: '#e3d6c0', lineHeight: 27, fontSize: 15, marginBottom: 15,
     fontFamily: fonts.serif,
   },
-  bioFirst: { fontSize: 16, lineHeight: 28 },
+  bioFirst: { fontSize: 16.5, lineHeight: 29, color: colors.parchment },
 
   // AI-honesty caption — muted gold, honest-research register (not a warning).
   aiCaption: {
@@ -1070,10 +1109,6 @@ const styles = StyleSheet.create({
   },
   inscriptionText: { color: colors.parchment, fontFamily: fonts.serifItalic, lineHeight: 22, fontSize: 14 },
 
-  symbolsLabel: {
-    color: colors.ashDim, fontSize: 10, letterSpacing: 3,
-    textTransform: 'uppercase', fontFamily: fonts.body, marginBottom: 6,
-  },
   symbolsHint: {
     color: colors.ashDim, fontSize: 12, fontFamily: fonts.bodyItalic,
     marginBottom: 10, lineHeight: 17,
@@ -1086,11 +1121,14 @@ const styles = StyleSheet.create({
   tagText: { color: colors.ash, fontSize: 12, fontFamily: fonts.body },
 
   sourcesSection: { marginTop: 4, marginBottom: 24 },
-  sourcesLabel: {
-    color: colors.ashDim, fontSize: 10, letterSpacing: 3,
-    textTransform: 'uppercase', fontFamily: fonts.body, marginBottom: 10,
+  // Numbered citation row: a small gold index badge + the source text, so the
+  // list reads as a reference apparatus rather than loose bracketed lines.
+  sourceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, marginBottom: 9 },
+  sourceNum: {
+    color: colors.flame, fontSize: 11, fontFamily: fonts.sansBold,
+    minWidth: 16, lineHeight: 19, textAlign: 'right', opacity: 0.85,
   },
-  sourceItem: { color: colors.ash, fontSize: 12, fontFamily: fonts.body, lineHeight: 20, marginBottom: 4 },
+  sourceItem: { flex: 1, color: colors.ash, fontSize: 12.5, fontFamily: fonts.body, lineHeight: 19 },
   sourceLink: { color: colors.flame, textDecorationLine: 'underline' },
 
   chipsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },

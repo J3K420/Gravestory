@@ -10,11 +10,14 @@
       <stop offset="1" stop-color="#241c10"/>
     </linearGradient>
   </defs>
-  <!-- Transparent canvas. Motif scaled to ~0.80 and centered: large enough to
-       fill the masked area on circle/squircle launchers, but still inside the
-       ~72% safe zone so the headstone is never clipped. (0.66 looked tiny once
-       the launcher mask shrank it further.) -->
-  <g transform="translate(512,512) scale(0.80) translate(-256,-256)">
+  <!-- Transparent canvas. Motif scaled to 1.25 and centered. The launcher
+       applies its OWN ~66% safe-zone mask ON TOP of this, so 0.80 stacked two
+       shrinks and the headstone came out tiny/lost on the home screen (next to
+       icons that fill their tiles). 1.25 is the max that keeps the art's
+       farthest corner (~268 from centre in 512-space) inside the 66% safe
+       circle (radius 338 in 1024-space): 268*1.25 = 335 < 338. Fills the tile
+       without clipping on circle OR squircle masks. -->
+  <g transform="translate(512,512) scale(1.25) translate(-256,-256)">
     <path d="M104 426 L104 178 Q104 64 256 64 Q408 64 408 178 L408 426 Z"
           fill="#1c160e" stroke="url(#gold)" stroke-width="12"/>
     <path d="M138 408 L138 184 Q138 96 256 96 Q374 96 374 184 L374 408"

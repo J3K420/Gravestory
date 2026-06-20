@@ -6,7 +6,7 @@
   <defs>
     <mask id="bookmask">
       <rect width="1024" height="1024" fill="white"/>
-      <g transform="translate(512,512) scale(0.80) translate(-256,-256)" fill="black">
+      <g transform="translate(512,512) scale(1.25) translate(-256,-256)" fill="black">
         <!-- book pages + spine gap, slightly inset so a thin solid border remains -->
         <path d="M150 214 L150 296 Q203 276 256 296 L256 226 Q203 206 150 214 Z"/>
         <path d="M256 226 Q309 206 362 214 L362 296 Q309 276 256 296 Z"/>
@@ -15,7 +15,7 @@
     </mask>
   </defs>
   <g mask="url(#bookmask)" fill="#000000">
-    <g transform="translate(512,512) scale(0.80) translate(-256,-256)">
+    <g transform="translate(512,512) scale(1.25) translate(-256,-256)">
       <path d="M104 426 L104 178 Q104 64 256 64 Q408 64 408 178 L408 426 Z"/>
       <rect x="80" y="424" width="352" height="34" rx="5"/>
     </g>

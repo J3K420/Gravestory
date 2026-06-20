@@ -4,6 +4,7 @@ import {
   StyleSheet, Alert, ScrollView, ActivityIndicator, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as StoreReview from 'expo-store-review';
 import { supabase } from '../lib/supabase';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
@@ -83,6 +84,27 @@ export default function SettingsScreen({ navigation }) {
         },
       ]
     );
+  }
+
+  // "Rate GraveStory": prefer Google's native in-app review overlay (rate
+  // without leaving the app), but it's quota-throttled and silently no-ops if
+  // the user already reviewed / it was shown recently / the device lacks Play
+  // Services — and the Expo docs warn it may do nothing from a button. So we
+  // always fall back to the Play Store listing, guaranteeing the tap does
+  // something visible. The listing deep-link works regardless of the native flow.
+  const PLAY_LISTING_URL = 'https://play.google.com/store/apps/details?id=com.gravestory.app';
+  async function handleRate() {
+    try {
+      if ((await StoreReview.isAvailableAsync()) && (await StoreReview.hasAction())) {
+        await StoreReview.requestReview();
+        return;
+      }
+    } catch (e) {
+      // fall through to the store listing
+    }
+    Linking.openURL(PLAY_LISTING_URL).catch(() => {
+      Alert.alert('Could not open the store', 'Please search for GraveStory in the Play Store.');
+    });
   }
 
   const provider = user?.app_metadata?.provider;
@@ -215,6 +237,12 @@ export default function SettingsScreen({ navigation }) {
 
             <View style={styles.separator} />
 
+            {/* Rate the app — tries Google's in-app review, falls back to the
+                Play listing. Sits above sign-out as a positive, encouraged action. */}
+            <TouchableOpacity style={styles.rateBtn} onPress={handleRate} activeOpacity={0.85}>
+              <Text style={styles.rateBtnText}>★  Rate GraveStory</Text>
+            </TouchableOpacity>
+
             {/* Sign out */}
             <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
               <Text style={styles.signOutText}>Sign Out</Text>
@@ -292,6 +320,16 @@ const styles = StyleSheet.create({
   saveBtnText: { color: colors.onFlame, fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.5 },
 
   separator: { height: 1, backgroundColor: colors.line, marginBottom: 24 },
+
+  // Rate button — gold-accented to invite the tap (a positive action), but not
+  // as loud as the solid-flame Save CTA. Sits just above Sign Out.
+  rateBtn: {
+    borderWidth: 1, borderColor: 'rgba(242,182,92,0.5)',
+    backgroundColor: 'rgba(242,182,92,0.08)',
+    paddingVertical: 15, borderRadius: radius.sm, alignItems: 'center',
+    marginBottom: 14,
+  },
+  rateBtnText: { color: colors.flame, fontSize: 14, fontFamily: fonts.bodyMedium, letterSpacing: 0.5 },
 
   signOutBtn: {
     borderWidth: 1, borderColor: colors.line,

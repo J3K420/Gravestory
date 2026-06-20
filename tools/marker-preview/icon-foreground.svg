@@ -32,12 +32,12 @@
   </defs>
 
   <!-- Transparent canvas. Headstone emblem true bbox centre (516.5,525),
-       half-height 311. Scaled 1.05 about that centre and recentred to (512,512).
-       At the old 1.12 the vertical tip landed at ~348px — just OUTSIDE the visible
-       adaptive circle (r~341) — so round launchers clipped the arch top + plinth.
-       1.05 puts the tip at ~327px, safely inside the circle with a small margin so
-       the gold rim isn't kissed by the mask edge. Still 64% tall (reads large). -->
-  <g transform="translate(512,512) scale(1.05) translate(-516.5,-525)">
+       half-height 311. Scaled 0.92 about that centre and recentred to (512,512).
+       Sizing history: 1.12 clipped on round masks (tip ~348px > circle r~341);
+       1.05 fit but read a touch large; 0.92 (owner pref, ~12% smaller) puts the
+       vertical tip at ~286px — generous margin inside the circle on every launcher
+       shape — while still ~56% tall, so it stays legible at 48px. -->
+  <g transform="translate(512,512) scale(0.92) translate(-516.5,-525)">
     <!-- shadow rim -->
     <path d="M 300 470 L 300 408 Q 300 214 512 214 Q 724 214 724 408 L 724 770 Q 724 792 702 792 L 322 792 Q 300 792 300 770 Z" fill="url(#stoneRimDark)" transform="translate(9,10)"/>
     <!-- lit gold bevel rim -->

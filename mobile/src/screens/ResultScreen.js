@@ -13,6 +13,7 @@ import { uploadGravestoneImage } from '../lib/api-r2';
 import { getTributes, setTribute } from '../lib/api-tributes';
 import { submitContentReport, REPORT_REASONS, REPORT_NOTE_MAX } from '../lib/api-reports';
 import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
+import { redactLivingNamesForPublic } from '../lib/api-gemini';
 import { useRefresh } from '../lib/use-refresh';
 import { deletePendingPhoto } from '../lib/pending';
 import { logEvent, EVENTS } from '../lib/analytics';
@@ -298,6 +299,20 @@ export default function ResultScreen({ navigation, route }) {
       const { _unsaved, _base64, _primaryName, ...clean } = story;
       let saved = { ...clean, grave_id: graveId, marker_style: markerStyle };
 
+      // If this story is saving straight to PUBLIC (default_visibility=public),
+      // it never passes through the share toggle — so redact living-relative
+      // names here, before its first cloud save reaches the global map. Same
+      // guard + fail-safe as _doTogglePublic.
+      if (saved.is_public && !saved.public_biography && saved.biography) {
+        try {
+          const subjects = Array.isArray(saved.subjects) ? saved.subjects
+            : (Array.isArray(saved.graveData?.subjects) ? saved.graveData.subjects : []);
+          saved.public_biography = await redactLivingNamesForPublic(saved.biography, subjects);
+        } catch (e) {
+          console.warn('public_biography redaction skipped on auto-public save (non-fatal):', e?.message || e);
+        }
+      }
+
       // Local save first so the story is always available offline.
       const existing = await loadStories(uid);
       await saveStories([saved, ...existing], uid);
@@ -394,6 +409,20 @@ export default function ResultScreen({ navigation, route }) {
     if (togglingPublic) return;
     setTogglingPublic(true);
     const updated = { ...story, is_public: !story.is_public };
+    // Before a story reaches the public global map, strip the names of any
+    // LIVING relatives from the bio prose (privacy/defamation guard). Done
+    // once and cached on the row; the redacted copy is what the global RPC
+    // serves. Fails safe: redactLivingNamesForPublic returns the original on
+    // any error, so sharing never breaks.
+    if (updated.is_public && !updated.public_biography && updated.biography) {
+      try {
+        const subjects = Array.isArray(updated.subjects) ? updated.subjects
+          : (Array.isArray(updated.graveData?.subjects) ? updated.graveData.subjects : []);
+        updated.public_biography = await redactLivingNamesForPublic(updated.biography, subjects);
+      } catch (e) {
+        console.warn('public_biography redaction skipped (non-fatal):', e?.message || e);
+      }
+    }
     const all = await loadStories(user?.id ?? null);
     const idx = all.findIndex(s => s.timestamp === story.timestamp);
     if (idx >= 0) { all[idx] = updated; await saveStories(all, user?.id ?? null); }

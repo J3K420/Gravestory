@@ -647,7 +647,28 @@ async function _applyVisibilityToggle(savedRow) {
   if (currentStory && currentStory.timestamp === savedRow.timestamp) {
     currentStory.is_public = savedRow.is_public;
   }
-  if (savedRow.is_public) logEvent(ANALYTICS_EVENTS.MADE_PUBLIC, {});
+  if (savedRow.is_public) {
+    logEvent(ANALYTICS_EVENTS.MADE_PUBLIC, {});
+    // Before a story reaches the public global map, strip the names of any
+    // LIVING relatives from the bio prose (privacy/defamation guard). Done
+    // once and cached on the row; the redacted copy is what the global RPC
+    // serves. Non-blocking-safe: on any failure redactLivingNamesForPublic
+    // returns the original, so sharing never breaks.
+    if (!savedRow.public_biography && savedRow.biography &&
+        typeof redactLivingNamesForPublic === 'function') {
+      if (btn) btn.textContent = 'Preparing…';
+      try {
+        const subjects = Array.isArray(savedRow.subjects) ? savedRow.subjects
+          : (Array.isArray(savedRow.graveData?.subjects) ? savedRow.graveData.subjects : []);
+        savedRow.public_biography = await redactLivingNamesForPublic(savedRow.biography, subjects);
+        if (currentStory && currentStory.timestamp === savedRow.timestamp) {
+          currentStory.public_biography = savedRow.public_biography;
+        }
+      } catch (e) {
+        console.warn('public_biography redaction skipped (non-fatal):', e?.message || e);
+      }
+    }
+  }
   await persistUpdate(savedRow);
   renderVisibilityControls(currentStory || savedRow, true);
 }

@@ -27,7 +27,7 @@ export default {
     },
     android: {
       package: 'com.gravestory.app',
-      versionCode: 9,
+      versionCode: 10,
       adaptiveIcon: {
         backgroundColor: '#14100b',
         foregroundImage: './assets/android-icon-foreground.png',

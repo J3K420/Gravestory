@@ -32,12 +32,7 @@ export default {
         backgroundColor: '#14100b',
         foregroundImage: './assets/android-icon-foreground.png',
         backgroundImage: './assets/android-icon-background.png',
-        // No monochromeImage: omitting the themed-icon layer makes Android always
-        // render the full-color gold foreground, even when the user has Android 13+
-        // "Themed icons" enabled. With a monochrome layer present, themed mode
-        // replaced the gold book with a flat wallpaper-tinted silhouette (book
-        // knocked out as a hollow hole) — the "book isn't gold" report. Premium
-        // brand icon > themed silhouette, so we opt out of theming entirely.
+        monochromeImage: './assets/android-icon-monochrome.png',
       },
       config: {
         googleMaps: {

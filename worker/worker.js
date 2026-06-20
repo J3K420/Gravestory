@@ -7,6 +7,7 @@
 //   POST /wikitree                body: WikiTree searchPerson params as JSON
 //   POST /overpass                body: { query: <QL string> }
 //   POST /upload-image            body: { data: <base64>, contentType: <mime> }
+//   POST /delete-account          header: Authorization: Bearer <user JWT>  (irreversible)
 //   POST /revenuecat-webhook      body: RevenueCat event payload (server-to-server)
 //
 // Secrets (set via `wrangler secret put`):
@@ -117,6 +118,9 @@ export default {
       }
       if (url.pathname === '/upload-image') {
         return await handleUpload(request, env, origin, allowed);
+      }
+      if (url.pathname === '/delete-account') {
+        return await handleDeleteAccount(request, env, origin, allowed);
       }
       return json({ error: 'Not found', path: url.pathname }, 404, origin, allowed);
     } catch (err) {
@@ -476,6 +480,156 @@ async function handleRevenueCatWebhook(request, env, origin, allowed) {
   return json({ ok: true, user_id: userId, credits_added: credits }, 200, origin, allowed);
 }
 
+// ── Account deletion: POST /delete-account ────────────────────────
+// IRREVERSIBLE. Deletes the caller's auth user + ALL their data + their R2
+// images. Required by Google Play's account-deletion policy (in-app path).
+//
+// AUTH MODEL: the caller proves identity with their OWN Supabase JWT
+// (Authorization: Bearer <access_token>). We verify it against Supabase's
+// /auth/v1/user endpoint to resolve the real user_id — we NEVER trust a
+// user_id sent in the body. Only AFTER verification do we use the service-role
+// key (which bypasses RLS) to delete, and every delete is scoped to that
+// verified user_id, so a valid token can only ever delete its own account.
+//
+// ORDER: R2 images first (need the URLs, which live in rows we're about to
+// delete) → child/data rows → finally the auth user. We delete data rows
+// explicitly rather than relying on FK cascade so this is correct regardless
+// of each table's ON DELETE rule, and so it also works for tables keyed on
+// reporter_id (content_reports) which has ON DELETE SET NULL, not cascade.
+async function handleDeleteAccount(request, env, origin, allowed) {
+  if (request.method !== 'POST') {
+    return json({ error: 'Method not allowed' }, 405, origin, allowed);
+  }
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+    return json({ error: 'Supabase not configured' }, 500, origin, allowed);
+  }
+
+  // 1. Verify the caller's JWT → resolve the authoritative user_id.
+  const authHeader = request.headers.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) {
+    return json({ error: 'Missing bearer token' }, 401, origin, allowed);
+  }
+
+  const userRes = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'apikey': env.SUPABASE_SERVICE_KEY,
+    },
+  });
+  if (!userRes.ok) {
+    return json({ error: 'Invalid or expired session' }, 401, origin, allowed);
+  }
+  let userId;
+  try {
+    const u = await userRes.json();
+    userId = u?.id;
+  } catch {
+    userId = null;
+  }
+  if (!userId) {
+    return json({ error: 'Could not resolve user' }, 401, origin, allowed);
+  }
+
+  const sb = (path, init) => fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      ...(init && init.headers),
+    },
+  });
+
+  // 2. Collect this user's R2 image keys from stories + grave_photos, then
+  //    delete those objects from R2. Keys are random UUIDs with no user prefix
+  //    (handleUpload), so we can only find them via the stored URLs. Best-effort:
+  //    a failed R2 delete must NOT block account deletion (orphan blob at worst).
+  if (env.IMAGES && env.R2_PUBLIC_URL) {
+    const urls = new Set();
+    try {
+      // Pull image_url + portrait URLs. Portraits are Wikimedia/file:// URLs
+      // today (not in R2), but the prefix guard below skips any non-bucket URL,
+      // so including the portrait columns future-proofs this against a later
+      // change that uploads portraits to R2 without orphaning blobs.
+      const sRes = await sb(`stories?user_id=eq.${userId}&select=image_url,portrait_left_url,portrait_right_url`, { method: 'GET' });
+      if (sRes.ok) for (const r of await sRes.json()) {
+        if (r.image_url) urls.add(r.image_url);
+        if (r.portrait_left_url) urls.add(r.portrait_left_url);
+        if (r.portrait_right_url) urls.add(r.portrait_right_url);
+      }
+      const pRes = await sb(`grave_photos?user_id=eq.${userId}&select=image_url`, { method: 'GET' });
+      if (pRes.ok) for (const r of await pRes.json()) { if (r.image_url) urls.add(r.image_url); }
+    } catch { /* non-fatal — proceed to row deletion regardless */ }
+
+    const base = env.R2_PUBLIC_URL.replace(/\/$/, '');
+    for (const url of urls) {
+      // Only delete objects that live in OUR bucket (prefix match), and derive
+      // the key as everything after the public base URL. Strip any query suffix
+      // (cache-busting / CDN rewrite) before deriving the key.
+      if (typeof url === 'string' && url.startsWith(base + '/')) {
+        const key = url.slice(base.length + 1).split('?')[0].split('#')[0];
+        if (key && !key.includes('..')) {
+          try { await env.IMAGES.delete(key); } catch { /* orphan at worst */ }
+        }
+      }
+    }
+  }
+
+  // 3. Delete all of this user's data rows (service-role bypasses RLS). Order
+  //    children → parents where it matters; each scoped to the verified userId.
+  //    content_reports is keyed on reporter_id (nullable, SET NULL on user
+  //    delete) — we delete the user's own reports explicitly here.
+  const deletes = [
+    `grave_photos?user_id=eq.${userId}`,
+    `tributes?user_id=eq.${userId}`,
+    `scan_events?user_id=eq.${userId}`,
+    `scan_credits?user_id=eq.${userId}`,
+    `content_reports?reporter_id=eq.${userId}`,
+    `analytics_events?user_id=eq.${userId}`,
+    `stories?user_id=eq.${userId}`,
+    `user_prefs?user_id=eq.${userId}`,
+  ];
+  const failures = [];
+  for (const path of deletes) {
+    try {
+      const res = await sb(path, { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        // Tolerate ONLY a genuinely-missing table, identified by the response
+        // BODY (not the status code — an infra 404/406 must still abort so we
+        // never delete the auth user while data rows survive).
+        if (!/relation .* does not exist|undefined_table|PGRST20[05]/i.test(detail)) {
+          failures.push({ path, status: res.status, detail: detail.slice(0, 200) });
+        }
+      }
+    } catch (e) {
+      failures.push({ path, error: String(e && e.message || e) });
+    }
+  }
+
+  // If any DATA delete genuinely failed, do NOT delete the auth user — we don't
+  // want an orphaned auth-less data row set. Surface it so the client can retry.
+  if (failures.length) {
+    return json({ error: 'Data deletion incomplete', failures }, 500, origin, allowed);
+  }
+
+  // 4. Finally, delete the auth user itself (admin API, service-role).
+  const authDel = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+    method: 'DELETE',
+    headers: {
+      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+  });
+  if (!authDel.ok) {
+    const detail = await authDel.text().catch(() => '');
+    return json({ error: 'Auth user deletion failed', status: authDel.status, detail: detail.slice(0, 200) }, 500, origin, allowed);
+  }
+
+  return json({ ok: true, deleted: true, user_id: userId }, 200, origin, allowed);
+}
+
 // ── helpers ───────────────────────────────────────────────────────
 function corsHeaders(origin, allowed) {
   let acao;
@@ -489,7 +643,7 @@ function corsHeaders(origin, allowed) {
   return {
     'Access-Control-Allow-Origin': acao,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Client-Key',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Client-Key, Authorization',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };

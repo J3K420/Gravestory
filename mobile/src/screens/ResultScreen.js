@@ -435,7 +435,21 @@ export default function ResultScreen({ navigation, route }) {
     const idx = all.findIndex(s => s.timestamp === story.timestamp);
     if (idx >= 0) { all[idx] = updated; await saveStories(all, uid); }
     setStory(updated);
-    if (updated.id && user) setStory(await cloudUpdateStory(updated, user));
+    // Persist the marker to the cloud stories row so it survives a device
+    // switch / reinstall (the new phone rebuilds every pin from the cloud, so a
+    // pick that never reached `stories.marker_style` reverts to the book
+    // default). Previously this only ran when `updated.id` already existed, so a
+    // pick on a saved-but-not-yet-cloud-synced story silently stayed local-only.
+    // Now: cloudUpdate when we have an id, else cloudSave to MINT one, so the
+    // marker always lands in the cloud. (`graves.marker_style` below is a
+    // SEPARATE table for the global pin — it never backed the per-story map.)
+    if (user) {
+      const synced = updated.id
+        ? await cloudUpdateStory(updated, user)
+        : await cloudSaveStory(updated, user);
+      setStory(synced);
+      updated.id = synced.id; // keep the local ref's id for the stake call below
+    }
     // Stake this grave's permanent global-map pin (first-wins, NULL-guarded
     // server-side). No-ops if already staked or the story has no grave_id.
     if (updated.grave_id && user) setGraveMarker(updated.grave_id, styleId);

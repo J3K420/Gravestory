@@ -561,10 +561,17 @@ function openMarkerPicker(savedRow) {
           if (currentStory && currentStory.timestamp === savedRow.timestamp) currentStory.grave_id = gid;
         }
       }
-      // Persist to the story row only when it's already saved (persistUpdate
-      // no-ops without an id). A pre-save pick just lives on the in-memory
-      // story and is written when the user taps Save.
+      // Persist the marker to the cloud stories row so it survives a device
+      // switch / reinstall (a fresh client rebuilds every pin from the cloud, so
+      // a pick that never reached `stories.marker_style` reverts to the book
+      // default). Previously this only ran when an `id` already existed, so a
+      // pick on a saved-but-not-yet-cloud-synced story silently stayed local-
+      // only. Now: persistUpdate when we have an id, else persistSave to MINT
+      // one, so the marker always lands in the cloud. (An unsaved story — no
+      // savedRow in savedStories — still defers to Save as before, since this
+      // picker only opens for staked graves.)
       if (savedRow.id) await persistUpdate(savedRow);
+      else if (currentUser) await persistSave(savedRow);
       // Stake this grave's permanent global-map pin (first-wins, NULL-guarded
       // server-side). The grave already exists from the pipeline, so this
       // works even before the story row is saved. No-ops without a grave_id.

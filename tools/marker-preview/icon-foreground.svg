@@ -1,0 +1,65 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="stoneFace2" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#42382b"/><stop offset="48%" stop-color="#2c2317"/><stop offset="100%" stop-color="#19130c"/>
+    </linearGradient>
+    <linearGradient id="stoneRim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fff3cf"/><stop offset="40%" stop-color="#dcbb66"/><stop offset="100%" stop-color="#6f561f"/>
+    </linearGradient>
+    <linearGradient id="stoneRimDark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9a7a32"/><stop offset="100%" stop-color="#4a3814"/>
+    </linearGradient>
+    <linearGradient id="book" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6e6b4"/><stop offset="45%" stop-color="#e6c970"/><stop offset="100%" stop-color="#bd9740"/>
+    </linearGradient>
+    <linearGradient id="bookDim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#dcc079"/><stop offset="100%" stop-color="#a8852f"/>
+    </linearGradient>
+    <linearGradient id="bookInk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2a2014"/><stop offset="100%" stop-color="#18120a"/>
+    </linearGradient>
+    <linearGradient id="plinth" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a3022"/><stop offset="100%" stop-color="#16110a"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.14"/><stop offset="35%" stop-color="#ffffff" stop-opacity="0.03"/><stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="bookRaise" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="5" result="b"/><feOffset in="b" dx="4" dy="6" result="o"/>
+      <feFlood flood-color="#000000" flood-opacity="0.5"/><feComposite in2="o" operator="in" result="sh"/>
+      <feMerge><feMergeNode in="sh"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Transparent canvas. Headstone emblem (native centre ~512,520, half-height ~306)
+       scaled 1.12 about its centre and recentred to 512,512 so it fills the launcher
+       ~66% safe zone without clipping on circle/squircle masks. 306*1.12 = 343 ~ safe. -->
+  <g transform="translate(512,512) scale(1.12) translate(-512,-520)">
+    <!-- shadow rim -->
+    <path d="M 300 470 L 300 408 Q 300 214 512 214 Q 724 214 724 408 L 724 770 Q 724 792 702 792 L 322 792 Q 300 792 300 770 Z" fill="url(#stoneRimDark)" transform="translate(9,10)"/>
+    <!-- lit gold bevel rim -->
+    <path d="M 300 470 L 300 408 Q 300 214 512 214 Q 724 214 724 408 L 724 770 Q 724 792 702 792 L 322 792 Q 300 792 300 770 Z" fill="url(#stoneRim)"/>
+    <!-- stone face -->
+    <path d="M 322 470 L 322 412 Q 322 240 512 240 Q 702 240 702 412 L 702 760 Q 702 776 686 776 L 338 776 Q 322 776 322 760 Z" fill="url(#stoneFace2)"/>
+    <path d="M 322 470 L 322 412 Q 322 240 512 240 Q 702 240 702 412 L 702 470 Z" fill="url(#sheen)"/>
+    <!-- inner top-rim catch-light -->
+    <path d="M 336 412 Q 336 256 512 256 Q 688 256 688 412" fill="none" stroke="#cda94e" stroke-opacity="0.3" stroke-width="4"/>
+
+    <!-- open book emblem (nudged down 24) -->
+    <g filter="url(#bookRaise)" transform="translate(0,24)">
+      <path d="M 512 410 Q 452 384 392 392 Q 376 394 372 408 L 372 520 Q 376 534 392 532 Q 452 524 512 548 Z" fill="url(#book)"/>
+      <path d="M 512 410 Q 572 384 632 392 Q 648 394 652 408 L 652 520 Q 648 534 632 532 Q 572 524 512 548 Z" fill="url(#bookDim)"/>
+      <path d="M 372 520 Q 452 510 512 540 Q 572 510 652 520 L 652 540 Q 572 530 512 560 Q 452 530 372 540 Z" fill="url(#bookDim)"/>
+      <path d="M 512 410 Q 506 478 512 548 Q 518 478 512 410 Z" fill="url(#bookInk)"/>
+      <line x1="512" y1="412" x2="512" y2="546" stroke="#8a6c2a" stroke-width="3" opacity="0.7"/>
+      <g stroke="url(#bookInk)" stroke-width="8" stroke-linecap="round" opacity="0.85">
+        <line x1="408" y1="436" x2="486" y2="442"/><line x1="408" y1="462" x2="486" y2="468"/><line x1="408" y1="488" x2="478" y2="494"/>
+        <line x1="538" y1="442" x2="616" y2="436"/><line x1="538" y1="468" x2="616" y2="462"/><line x1="546" y1="494" x2="616" y2="488"/>
+      </g>
+    </g>
+
+    <!-- ground plinth -->
+    <rect x="276" y="792" width="472" height="34" rx="8" fill="url(#plinth)"/>
+    <rect x="276" y="792" width="472" height="5" rx="2.5" fill="#cda94e" opacity="0.4"/>
+  </g>
+</svg>

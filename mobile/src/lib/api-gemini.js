@@ -253,3 +253,69 @@ Return only JSON.`;
     return {};
   }
 }
+
+// ── GEMINI: REDACT LIVING-RELATIVE NAMES FOR PUBLIC SHARING ───────
+// Mirror of the web js/api-gemini.js function (keep in sync). When a user
+// makes a story PUBLIC (it then appears on the community global map with a
+// precise GPS pin), we must not re-identify or defame a LIVING person named
+// in the bio prose. The deceased cannot be defamed; living relatives named in
+// the prose ("survived by her son Michael Thompson") can.
+//
+// Fails SAFE: any named person NOT confirmed deceased by a death year is
+// generalized to their relationship. The deceased subjects' names and story
+// are preserved. On any hard error, returns the ORIGINAL biography so sharing
+// never silently breaks (the report button is the backstop). `subjects` is
+// the OCR subjects array (each {name, birth_date, death_date}) — names we keep.
+// Non-billable; reuses geminiCallWithFallback.
+export async function redactLivingNamesForPublic(biography, subjects) {
+  if (typeof biography !== 'string' || !biography.trim()) return biography;
+
+  // OCR subject shape is {name, birth_date, death_date}; derive a date hint
+  // from those (subjects don't carry a `dates` field).
+  const allowed = [];
+  if (Array.isArray(subjects)) {
+    for (const s of subjects) {
+      if (s && typeof s.name === 'string' && s.name.trim()) {
+        const d = [s.birth_date, s.death_date].filter(Boolean).join('–') || s.dates || '';
+        allowed.push(`${s.name.trim()}${d ? ` (${d})` : ''}`);
+      }
+    }
+  }
+
+  const prompt = `You are preparing a biography for PUBLIC display on a map that anyone can see. The biography is about one or more DECEASED people, but its prose may also name OTHER people — spouses, children, parents, siblings — who could still be ALIVE. Naming a living private person publicly is a privacy and legal risk, so we must remove or generalize them.
+
+THE DECEASED SUBJECT(S) OF THIS BIOGRAPHY — you MUST keep their names exactly as written:
+${allowed.length ? allowed.map(n => `- ${n}`).join('\n') : '- (none explicitly listed — infer the subject from the text and keep that person\'s name)'}
+
+YOUR TASK — rewrite the biography for public display following these rules EXACTLY:
+1. Keep the deceased subject(s) named above fully intact — their names, dates, and entire story.
+2. For ANY OTHER specific person named in the prose who is NOT one of the deceased subjects above and is NOT confirmed dead by an explicit death year in the text, REMOVE their proper name and replace it with their relationship only.
+   - "survived by her son, Michael Thompson, of Atlanta" -> "survived by her son"
+   - "married John Doe in 1952" -> keep ONLY if the text shows John Doe is also deceased (e.g. a death year); otherwise -> "married in 1952"
+   - "her daughter Sarah and grandson Liam" -> "her daughter and grandson"
+3. A person explicitly shown as deceased in the text (has a death year, is described as "the late", "predeceased", buried, etc.) is NOT living — keep their name.
+4. If unsure whether a named relative is living or dead, treat them as LIVING and generalize the name. When in doubt, remove the name.
+5. Do NOT add new facts, do NOT change the deceased's story, do NOT add disclaimers. Preserve paragraph breaks, tone, and any [N] citation markers exactly.
+6. If the biography names no living relatives, return it essentially unchanged.
+
+Return ONLY a JSON object: { "public_biography": "the rewritten text" }
+
+BIOGRAPHY TO REWRITE:
+${biography}
+
+Return only JSON.`;
+
+  try {
+    const { data } = await geminiCallWithFallback({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+    });
+    if (!data || data.error || !data.candidates?.[0]?.content?.parts?.[0]?.text) return biography;
+    const parsed = safeParseJSON(data.candidates[0].content.parts[0].text, {});
+    const out = parsed && typeof parsed.public_biography === 'string' ? parsed.public_biography.trim() : '';
+    return out.length >= 20 ? out : biography;
+  } catch (e) {
+    console.warn('redactLivingNamesForPublic failed (non-fatal, using original):', e?.message || e);
+    return biography;
+  }
+}

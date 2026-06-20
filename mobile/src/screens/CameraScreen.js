@@ -702,6 +702,12 @@ export default function CameraScreen({ navigation, route }) {
         // global bios — graveData itself is not a persisted column. Mirrors web.
         symbols: Array.isArray(graveData.symbols) && graveData.symbols.length ? graveData.symbols : null,
         symbol_meanings: symbolMeanings || null,
+        // Deceased subjects (name + own dates) — used at public-share time to
+        // tell the living-name redactor which names it may keep. Transient (no
+        // DB column; storyToRow's allowlist excludes it). Mirrors web index.html.
+        subjects: Array.isArray(graveData.subjects)
+          ? graveData.subjects.filter(s => s && s.name)
+          : undefined,
         portraits: resolvedPortraits,
         gps: refinedGps,
         _lowConfidence: lowConfidence,

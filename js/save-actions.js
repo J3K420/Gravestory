@@ -49,6 +49,20 @@ async function saveStory() {
     else if (vis === 'private') currentStory.is_public = false;
   }
 
+  // If this story is being saved straight to PUBLIC (default_visibility=public),
+  // it bypasses the share toggle — so redact living-relative names here too,
+  // before it can reach the global map. Same guard + fail-safe as the toggle.
+  if (currentStory.is_public && !currentStory.public_biography && currentStory.biography &&
+      typeof redactLivingNamesForPublic === 'function') {
+    try {
+      const subjects = Array.isArray(currentStory.subjects) ? currentStory.subjects
+        : (Array.isArray(currentStory.graveData?.subjects) ? currentStory.graveData.subjects : []);
+      currentStory.public_biography = await redactLivingNamesForPublic(currentStory.biography, subjects);
+    } catch (e) {
+      console.warn('public_biography redaction skipped on auto-public save (non-fatal):', e?.message || e);
+    }
+  }
+
   const btn = document.getElementById('save-btn');
 
   // Upload the image to R2 before saving (only if we have pending base64 and no URL yet)

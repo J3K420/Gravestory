@@ -1,0 +1,23 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Monochrome themed-icon silhouette: ONE solid color on transparent. Android
+       tints it to the wallpaper theme. The open book is punched OUT of the solid
+       headstone (via a mask) so the silhouette still reads as stone-with-a-book.
+       Same ~0.66 safe-zone scale as the foreground. -->
+  <defs>
+    <mask id="bookmask">
+      <rect width="1024" height="1024" fill="white"/>
+      <g transform="translate(512,512) scale(0.80) translate(-256,-256)" fill="black">
+        <!-- book pages + spine gap, slightly inset so a thin solid border remains -->
+        <path d="M150 214 L150 296 Q203 276 256 296 L256 226 Q203 206 150 214 Z"/>
+        <path d="M256 226 Q309 206 362 214 L362 296 Q309 276 256 296 Z"/>
+        <rect x="252" y="220" width="8" height="78"/>
+      </g>
+    </mask>
+  </defs>
+  <g mask="url(#bookmask)" fill="#000000">
+    <g transform="translate(512,512) scale(0.80) translate(-256,-256)">
+      <path d="M104 426 L104 178 Q104 64 256 64 Q408 64 408 178 L408 426 Z"/>
+      <rect x="80" y="424" width="352" height="34" rx="5"/>
+    </g>
+  </g>
+</svg>

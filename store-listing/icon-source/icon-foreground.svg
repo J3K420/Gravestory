@@ -1,0 +1,35 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#f0dca0"/>
+      <stop offset="0.5" stop-color="#cda94e"/>
+      <stop offset="1"   stop-color="#9a7a32"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a2f1c"/>
+      <stop offset="1" stop-color="#241c10"/>
+    </linearGradient>
+  </defs>
+  <!-- Transparent canvas. Motif scaled to ~0.80 and centered: large enough to
+       fill the masked area on circle/squircle launchers, but still inside the
+       ~72% safe zone so the headstone is never clipped. (0.66 looked tiny once
+       the launcher mask shrank it further.) -->
+  <g transform="translate(512,512) scale(0.80) translate(-256,-256)">
+    <path d="M104 426 L104 178 Q104 64 256 64 Q408 64 408 178 L408 426 Z"
+          fill="#1c160e" stroke="url(#gold)" stroke-width="12"/>
+    <path d="M138 408 L138 184 Q138 96 256 96 Q374 96 374 184 L374 408"
+          fill="none" stroke="url(#gold)" stroke-width="4.5" stroke-opacity="0.55"/>
+    <path d="M150 214 L150 296 Q203 276 256 296 L256 226 Q203 206 150 214 Z"
+          fill="url(#page)" stroke="url(#gold)" stroke-width="7.5"/>
+    <path d="M256 226 Q309 206 362 214 L362 296 Q309 276 256 296 Z"
+          fill="url(#page)" stroke="url(#gold)" stroke-width="7.5"/>
+    <line x1="256" y1="220" x2="256" y2="296" stroke="url(#gold)" stroke-width="5.5" stroke-opacity="0.9"/>
+    <line x1="172" y1="236" x2="240" y2="243" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.72"/>
+    <line x1="172" y1="252" x2="240" y2="259" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.6"/>
+    <line x1="172" y1="268" x2="240" y2="275" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.48"/>
+    <line x1="272" y1="243" x2="340" y2="236" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.72"/>
+    <line x1="272" y1="259" x2="340" y2="252" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.6"/>
+    <line x1="272" y1="275" x2="340" y2="268" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.48"/>
+    <rect x="80" y="424" width="352" height="34" rx="5" fill="#1c160e" stroke="url(#gold)" stroke-width="11"/>
+  </g>
+</svg>

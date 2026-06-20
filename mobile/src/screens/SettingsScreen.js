@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Switch,
-  StyleSheet, Alert, ScrollView, ActivityIndicator, Linking,
+  StyleSheet, Alert, ScrollView, ActivityIndicator, Linking, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as StoreReview from 'expo-store-review';
+import Purchases from 'react-native-purchases';
 import { supabase } from '../lib/supabase';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import { checkSaveLimit } from '../lib/save-limit';
 import { checkScanLimit, SCAN_LIMIT_FREE_USER } from '../lib/scan-limit';
+import { deleteAccount } from '../lib/api-account';
+import { saveStories } from '../lib/storage';
 
 export default function SettingsScreen({ navigation }) {
   const [user, setUser]                 = useState(null);
@@ -19,6 +23,14 @@ export default function SettingsScreen({ navigation }) {
   const [saveCount, setSaveCount]       = useState(null);
   const [scanCount, setScanCount]       = useState(null);
   const [scanLimit, setScanLimit]       = useState(SCAN_LIMIT_FREE_USER);
+  const [deleteModal, setDeleteModal]   = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting]         = useState(false);
+  // Synchronous re-entry lock for the irreversible delete — `deleting` state
+  // updates async, so a fast double-tap could fire two requests before the
+  // re-render lands. The ref blocks the second tap immediately. (Same pattern
+  // as ResultScreen's markerStyleRef.)
+  const deletingRef = useRef(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -83,6 +95,47 @@ export default function SettingsScreen({ navigation }) {
           },
         },
       ]
+    );
+  }
+
+  // Permanently delete the account. Gated behind a type-to-confirm modal
+  // (the user must type DELETE) so it can't be tapped by accident — Google
+  // Play requires a deliberate in-app deletion path. On success we clear the
+  // local story cache and sign out; the account + all cloud data are already
+  // gone server-side.
+  async function handleDeleteAccount() {
+    // Synchronous re-entry guard — blocks a double-tap before the async
+    // `deleting` state (and the disabled prop) has a chance to update.
+    if (deletingRef.current) return;
+    deletingRef.current = true;
+    setDeleting(true);
+    const result = await deleteAccount();
+    if (!result.ok) {
+      deletingRef.current = false;
+      setDeleting(false);
+      // Re-require typing DELETE before any retry — re-confirms intent and
+      // closes the primed one-tap retry window.
+      setDeleteConfirmText('');
+      Alert.alert('Could not delete account', result.error);
+      return;
+    }
+    // Wipe ALL of this user's local, identity-scoped data, then detach the
+    // RevenueCat identity and sign out. Guard each step so a post-delete
+    // hiccup never leaves the user staring at a spinner. The cloud + auth
+    // user are already gone server-side at this point.
+    if (user?.id) {
+      try { await saveStories([], user.id); } catch { /* ignore */ }
+      try { await AsyncStorage.removeItem(`gs_last_sync_${user.id}`); } catch { /* ignore */ }
+    }
+    try { await Purchases.logOut(); } catch { /* RC not configured / anon — fine */ }
+    try { await supabase.auth.signOut(); } catch { /* session is already invalid */ }
+    deletingRef.current = false;
+    setDeleting(false);
+    setDeleteModal(false);
+    Alert.alert(
+      'Account deleted',
+      'Your account and all associated data have been permanently deleted.',
+      [{ text: 'OK', onPress: () => navigation.goBack() }]
     );
   }
 
@@ -261,11 +314,70 @@ export default function SettingsScreen({ navigation }) {
             >
               <Text style={styles.privacyLinkText}>Terms of Service</Text>
             </TouchableOpacity>
+
+            {/* Delete account — destructive, set apart at the very bottom.
+                Opens a type-to-confirm modal; never deletes on a single tap. */}
+            <TouchableOpacity
+              style={styles.deleteLink}
+              onPress={() => { setDeleteConfirmText(''); setDeleteModal(true); }}
+            >
+              <Text style={styles.deleteLinkText}>Delete Account</Text>
+            </TouchableOpacity>
           </>
         ) : (
           <Text style={styles.notSignedIn}>Not signed in.</Text>
         )}
       </ScrollView>
+
+      {/* Type-to-confirm account deletion */}
+      <Modal
+        visible={deleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deleting && setDeleteModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete Account</Text>
+            <Text style={styles.modalBody}>
+              This permanently deletes your account, every story you've saved
+              (including those on the community map), your photos, and any unused
+              purchased scans. Unused scans are non-refundable. This cannot be undone.
+            </Text>
+            <Text style={styles.modalPrompt}>Type DELETE to confirm:</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={deleteConfirmText}
+              onChangeText={setDeleteConfirmText}
+              placeholder="DELETE"
+              placeholderTextColor={colors.ashDim}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              keyboardAppearance="dark"
+              editable={!deleting}
+            />
+            <TouchableOpacity
+              style={[
+                styles.modalDeleteBtn,
+                (deleteConfirmText.trim().toUpperCase() !== 'DELETE' || deleting) && styles.modalDeleteBtnDisabled,
+              ]}
+              disabled={deleteConfirmText.trim().toUpperCase() !== 'DELETE' || deleting}
+              onPress={handleDeleteAccount}
+            >
+              {deleting
+                ? <ActivityIndicator color={colors.parchment} />
+                : <Text style={styles.modalDeleteText}>Permanently Delete</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              disabled={deleting}
+              onPress={() => setDeleteModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -342,6 +454,47 @@ const styles = StyleSheet.create({
 
   privacyLink: { alignItems: 'center', paddingVertical: 20 },
   privacyLinkText: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, textDecorationLine: 'underline' },
+
+  deleteLink: { alignItems: 'center', paddingTop: 4, paddingBottom: 24 },
+  deleteLinkText: {
+    color: 'rgba(207,122,58,0.85)', fontSize: 12, fontFamily: fonts.body,
+    textDecorationLine: 'underline', letterSpacing: 0.3,
+  },
+
+  modalBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center', padding: 28,
+  },
+  modalCard: {
+    backgroundColor: colors.stone, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.line, padding: 22,
+  },
+  modalTitle: {
+    color: colors.parchment, fontSize: 20, fontFamily: fonts.title,
+    marginBottom: 12,
+  },
+  modalBody: {
+    color: colors.ash, fontSize: 14, fontFamily: fonts.body,
+    lineHeight: 21, marginBottom: 18,
+  },
+  modalPrompt: {
+    color: colors.ashDim, fontSize: 11, letterSpacing: 1.5,
+    textTransform: 'uppercase', fontFamily: fonts.body, marginBottom: 8,
+  },
+  modalInput: {
+    color: colors.parchment, fontSize: 16, fontFamily: fonts.name,
+    borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm,
+    backgroundColor: colors.ink, paddingHorizontal: 14, paddingVertical: 12,
+    marginBottom: 18, letterSpacing: 2,
+  },
+  modalDeleteBtn: {
+    backgroundColor: '#7a2e1c', borderRadius: radius.md,
+    paddingVertical: 14, alignItems: 'center', marginBottom: 10,
+  },
+  modalDeleteBtnDisabled: { opacity: 0.4 },
+  modalDeleteText: { color: colors.parchment, fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.5 },
+  modalCancelBtn: { paddingVertical: 12, alignItems: 'center' },
+  modalCancelText: { color: colors.ash, fontSize: 14, fontFamily: fonts.body },
 
   progressRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

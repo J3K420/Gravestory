@@ -1,0 +1,214 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,700;1,9..144,400&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#14100b; --stone:#1f1812; --stone2:#2a2017; --line:#3a2e22;
+    --ash:#b7a892; --ashDim:#8a7d6c; --parchment:#efe4d2;
+    --flame:#f2b65c; --gold:#c9a84c; --ember:#cf7a3a; --silver:#aabedc; --moss:#7c8a68;
+    --title:'Fraunces',serif; --body:'Hanken Grotesk',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#333;}
+  /* Each screen is exactly a 1080x1920 canvas */
+  .screen{
+    width:1080px;height:1920px;position:relative;overflow:hidden;
+    background:radial-gradient(ellipse 90% 60% at 50% 30%, #221a10 0%, #14100b 60%);
+    display:flex;flex-direction:column;
+    font-family:var(--body);
+  }
+  /* Caption band (the "overlay text" testers asked for) */
+  .cap{padding:90px 80px 40px;text-align:center;flex:0 0 auto;}
+  .cap h1{font-family:var(--title);font-weight:700;color:var(--parchment);
+    font-size:74px;line-height:1.12;letter-spacing:-0.5px;}
+  .cap h1 .gold{color:var(--flame);}
+  .cap p{font-family:var(--title);font-style:italic;color:var(--ash);
+    font-size:36px;margin-top:24px;line-height:1.3;}
+  /* Phone device frame holding the app screen */
+  .device{flex:1 1 auto;display:flex;align-items:center;justify-content:center;padding:0 90px 70px;}
+  .phone{width:760px;height:1480px;border-radius:62px;background:#000;
+    border:14px solid #000;box-shadow:0 30px 90px rgba(0,0,0,0.6),0 0 0 2px #2a2017;
+    overflow:hidden;position:relative;}
+  .app{width:100%;height:100%;background:var(--ink);position:relative;overflow:hidden;
+    display:flex;flex-direction:column;}
+
+  /* ---- shared app bits ---- */
+  .halo{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
+  .appbar{padding:46px 44px 0;display:flex;align-items:center;justify-content:space-between;}
+  .appbar .back{color:var(--ashDim);font-size:30px;}
+  .appbar .signin{border:1px solid var(--line);background:var(--stone);color:var(--flame);
+    font-size:26px;padding:14px 26px;border-radius:18px;}
+
+  /* ===== Screen 1: Scan / viewfinder ===== */
+  .vf{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:60px;position:relative;}
+  .vf .frame{width:520px;height:660px;border-radius:36px;position:relative;
+    background:radial-gradient(ellipse 70% 55% at 50% 42%, rgba(242,182,92,0.16), transparent 70%);}
+  .vf .corner{position:absolute;width:70px;height:70px;border:6px solid var(--flame);}
+  .vf .tl{top:0;left:0;border-right:0;border-bottom:0;border-radius:24px 0 0 0;}
+  .vf .tr{top:0;right:0;border-left:0;border-bottom:0;border-radius:0 24px 0 0;}
+  .vf .bl{bottom:0;left:0;border-right:0;border-top:0;border-radius:0 0 0 24px;}
+  .vf .br{bottom:0;right:0;border-left:0;border-top:0;border-radius:0 0 24px 0;}
+  .scanbtn{width:560px;background:var(--flame);color:#2a1808;font-family:var(--body);
+    font-weight:600;font-size:34px;letter-spacing:1px;text-align:center;padding:38px;
+    border-radius:30px;box-shadow:0 10px 34px rgba(242,182,92,0.35);}
+
+  /* ===== Result-screen shared ===== */
+  .res{flex:1;overflow:hidden;padding:40px 50px;}
+  .res .name{font-family:var(--title);font-weight:700;color:var(--parchment);font-size:62px;line-height:1.05;}
+  .res .dates{display:flex;align-items:center;gap:18px;margin-top:18px;}
+  .res .dates .rule{width:44px;height:3px;background:var(--flame);opacity:0.7;}
+  .res .dates span{font-family:var(--title);font-style:italic;color:var(--flame);font-size:38px;}
+  .res .loc{color:var(--ash);font-size:30px;margin-top:14px;}
+  .res .divider{height:2px;background:var(--line);margin:36px 0;}
+  .eyebrow{display:flex;align-items:center;gap:24px;margin-bottom:28px;}
+  .eyebrow b{font-family:var(--body);font-weight:600;color:var(--flame);font-size:26px;
+    letter-spacing:4px;text-transform:uppercase;opacity:0.9;}
+  .eyebrow .r{flex:1;height:2px;background:var(--line);}
+  .res p{font-family:var(--title);color:#e3d6c0;font-size:33px;line-height:1.5;margin-bottom:26px;}
+  .res p.lead{color:var(--parchment);font-size:35px;}
+  .cite{color:var(--flame);font-size:24px;vertical-align:super;}
+
+  /* sources */
+  .srcrow{display:flex;gap:22px;align-items:flex-start;margin-bottom:24px;}
+  .srcnum{color:var(--flame);font-family:var(--body);font-weight:600;font-size:28px;min-width:30px;text-align:right;}
+  .srctext{color:var(--ash);font-size:30px;line-height:1.35;text-decoration:underline;text-decoration-color:rgba(183,168,146,0.4);}
+
+  /* ===== Map screens ===== */
+  .map{flex:1;position:relative;background:#0f1410;}
+  .maptile{position:absolute;inset:0;
+    background:
+      linear-gradient(rgba(58,46,34,0.5) 2px,transparent 2px) 0 0/120px 120px,
+      linear-gradient(90deg,rgba(58,46,34,0.5) 2px,transparent 2px) 0 0/120px 120px,
+      radial-gradient(circle at 30% 40%, #1a2418, #0f1410 70%);
+    opacity:0.6;}
+  .pin{position:absolute;transform:translate(-50%,-100%);filter:drop-shadow(0 6px 8px rgba(0,0,0,0.5));}
+  .mapcard{position:absolute;left:40px;right:40px;bottom:46px;background:var(--stone);
+    border:1px solid var(--line);border-radius:26px;padding:34px 38px;}
+  .mapcard .t{font-family:var(--title);color:var(--parchment);font-size:38px;}
+  .mapcard .s{color:var(--ash);font-size:28px;margin-top:10px;font-style:italic;font-family:var(--title);}
+  .mapcount{position:absolute;top:44px;left:44px;background:rgba(20,16,11,0.8);
+    border:1px solid var(--line);border-radius:18px;padding:18px 30px;color:var(--flame);
+    font-family:var(--body);font-weight:600;font-size:28px;}
+</style></head>
+<body>
+
+<!-- ============ SCREEN 1 — SCAN ============ -->
+<div class="screen" id="s1">
+  <div class="cap">
+    <h1>Photograph any <span class="gold">gravestone</span></h1>
+    <p>Point your camera. That's the whole job.</p>
+  </div>
+  <div class="device"><div class="phone"><div class="app">
+    <div class="appbar"><span class="back">‹ Back</span><span></span></div>
+    <div class="vf">
+      <div class="frame">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <!-- gravestone silhouette inside the viewfinder -->
+        <svg width="300" height="380" viewBox="0 0 100 112" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);" fill="none">
+          <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#f0dca0"/><stop offset="1" stop-color="#8a6f3a"/></linearGradient></defs>
+          <rect x="22" y="84" width="56" height="6" stroke="url(#g1)" stroke-width="1.5"/>
+          <path d="M30 84 L30 35 Q30 18 50 18 Q70 18 70 35 L70 84 Z" stroke="url(#g1)" stroke-width="1.5"/>
+          <path d="M38 40 L38 56 Q44 54 49 56 L49 42 Q44 40 38 40 Z" stroke="url(#g1)" stroke-width="1.8" fill="rgba(180,145,80,0.18)"/>
+          <path d="M51 42 Q56 40 62 40 L62 56 Q56 54 51 56 Z" stroke="url(#g1)" stroke-width="1.8" fill="rgba(180,145,80,0.18)"/>
+          <line x1="50" y1="41" x2="50" y2="56" stroke="url(#g1)" stroke-width="1.2"/>
+        </svg>
+      </div>
+      <div class="scanbtn">Scan a Gravestone</div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- ============ SCREEN 2 — BIOGRAPHY ============ -->
+<div class="screen" id="s2">
+  <div class="cap">
+    <h1>A name and two dates<br>become a <span class="gold">life story</span></h1>
+    <p>AI-written, in seconds.</p>
+  </div>
+  <div class="device"><div class="phone"><div class="app">
+    <div class="appbar"><span class="back">‹ Back</span><span class="signin">Share</span></div>
+    <div class="res">
+      <div class="name">Marie Skłodowska Curie</div>
+      <div class="dates"><span class="rule"></span><span>1867 – 1934</span></div>
+      <div class="loc">◍ The Panthéon, Paris, France</div>
+      <div class="divider"></div>
+      <div class="eyebrow"><b>Life Story</b><span class="r"></span></div>
+      <p class="lead">Born Maria Skłodowska in Warsaw in 1867, under a Russian occupation that barred women from its universities, she taught herself in a clandestine "Flying University." <span class="cite">[1]</span></p>
+      <p>In 1891 she travelled to Paris and enrolled at the Sorbonne, where she often studied so late and ate so little that she fainted from hunger over her books. <span class="cite">[2]</span></p>
+      <p>Investigating the mysterious rays given off by uranium, she coined the term "radioactivity" and isolated two new elements — polonium and radium. <span class="cite">[1][3]</span></p>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- ============ SCREEN 3 — SOURCES ============ -->
+<div class="screen" id="s3">
+  <div class="cap">
+    <h1>Every fact backed by a <span class="gold">real source</span></h1>
+    <p>Genealogy records, newspapers, archives — cited, never invented.</p>
+  </div>
+  <div class="device"><div class="phone"><div class="app">
+    <div class="appbar"><span class="back">‹ Back</span><span class="signin">Share</span></div>
+    <div class="res">
+      <div class="eyebrow" style="margin-top:10px;"><b>Sources &amp; Research</b><span class="r"></span></div>
+      <div class="srcrow"><span class="srcnum">1</span><span class="srctext">Wikipedia — Marie Curie</span></div>
+      <div class="srcrow"><span class="srcnum">2</span><span class="srctext">Nobel Prize biographical archive</span></div>
+      <div class="srcrow"><span class="srcnum">3</span><span class="srctext">Encyclopædia Britannica — Marie Curie</span></div>
+      <div class="divider"></div>
+      <div class="eyebrow"><b>Symbols on the Stone</b><span class="r"></span></div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;">
+        <span style="border:1px solid rgba(201,168,76,0.4);background:rgba(201,168,76,0.08);color:var(--flame);font-size:28px;padding:14px 26px;border-radius:40px;">laurel ›</span>
+        <span style="border:1px solid rgba(201,168,76,0.4);background:rgba(201,168,76,0.08);color:var(--flame);font-size:28px;padding:14px 26px;border-radius:40px;">open book ›</span>
+      </div>
+      <p style="margin-top:36px;color:var(--ash);font-size:28px;font-style:italic;">Tap a gold symbol to learn its traditional meaning.</p>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- ============ SCREEN 4 — CEMETERY MAP ============ -->
+<div class="screen" id="s4">
+  <div class="cap">
+    <h1>Every grave you find, <span class="gold">on your map</span></h1>
+    <p>GPS-pinned to the cemetery where it stands.</p>
+  </div>
+  <div class="device"><div class="phone"><div class="app">
+    <div class="map">
+      <div class="maptile"></div>
+      <div class="mapcount">7 stories · Oakwood Cemetery</div>
+      <!-- pins -->
+      <svg class="pin" style="top:34%;left:40%" width="76" height="96" viewBox="0 0 24 30"><path d="M12 0C6 0 2 4 2 10c0 7 10 20 10 20s10-13 10-20C22 4 18 0 12 0z" fill="#c9a84c" stroke="#8a6f3a"/><circle cx="12" cy="10" r="4" fill="#1f1812"/></svg>
+      <svg class="pin" style="top:52%;left:62%" width="68" height="86" viewBox="0 0 24 30"><path d="M12 0C6 0 2 4 2 10c0 7 10 20 10 20s10-13 10-20C22 4 18 0 12 0z" fill="#c9a84c" stroke="#8a6f3a"/><circle cx="12" cy="10" r="4" fill="#1f1812"/></svg>
+      <svg class="pin" style="top:44%;left:24%" width="64" height="80" viewBox="0 0 24 30"><path d="M12 0C6 0 2 4 2 10c0 7 10 20 10 20s10-13 10-20C22 4 18 0 12 0z" fill="#c9a84c" stroke="#8a6f3a"/><circle cx="12" cy="10" r="4" fill="#1f1812"/></svg>
+      <svg class="pin" style="top:62%;left:46%" width="60" height="76" viewBox="0 0 24 30"><path d="M12 0C6 0 2 4 2 10c0 7 10 20 10 20s10-13 10-20C22 4 18 0 12 0z" fill="#c9a84c" stroke="#8a6f3a"/><circle cx="12" cy="10" r="4" fill="#1f1812"/></svg>
+      <div class="mapcard">
+        <div class="t">Marie Skłodowska Curie</div>
+        <div class="s">1867 – 1934 · tap to read her story</div>
+      </div>
+    </div>
+  </div></div></div>
+</div>
+
+<!-- ============ SCREEN 5 — COMMUNITY MAP ============ -->
+<div class="screen" id="s5">
+  <div class="cap">
+    <h1>Explore stories shared by<br><span class="gold">visitors everywhere</span></h1>
+    <p>A growing map of remembered lives.</p>
+  </div>
+  <div class="device"><div class="phone"><div class="app">
+    <div class="map">
+      <div class="maptile"></div>
+      <div class="mapcount" style="color:var(--silver);">Community Map · 1,240 stories</div>
+      <svg class="pin" style="top:30%;left:30%" width="60" height="76" viewBox="0 0 24 30"><path d="M12 0C6 0 2 4 2 10c0 7 10 20 10 20s10-13 10-20C22 4 18 0 12 0z" fill="#aabedc" stroke="#5a6a82"/><circle cx="12" cy="10" r="4" fill="#1f1812"/></svg>
+      <svg class="pin" style="top:42%;left:58%" width="60" height="76" viewBox="0 0 24 30"><path d="M12 0C6 0 2 4 2 10c0 7 10 20 10 20s10-13 10-20C22 4 18 0 12 0z" fill="#aabedc" stroke="#5a6a82"/><circle cx="12" cy="10" r="4" fill="#1f1812"/></svg>
+      <svg class="pin" style="top:55%;left:38%" width="56" height="70" viewBox="0 0 24 30"><path d="M12 0C6 0 2 4 2 10c0 7 10 20 10 20s10-13 10-20C22 4 18 0 12 0z" fill="#aabedc" stroke="#5a6a82"/><circle cx="12" cy="10" r="4" fill="#1f1812"/></svg>
+      <svg class="pin" style="top:36%;left:72%" width="54" height="68" viewBox="0 0 24 30"><path d="M12 0C6 0 2 4 2 10c0 7 10 20 10 20s10-13 10-20C22 4 18 0 12 0z" fill="#aabedc" stroke="#5a6a82"/><circle cx="12" cy="10" r="4" fill="#1f1812"/></svg>
+      <svg class="pin" style="top:64%;left:64%" width="52" height="66" viewBox="0 0 24 30"><path d="M12 0C6 0 2 4 2 10c0 7 10 20 10 20s10-13 10-20C22 4 18 0 12 0z" fill="#aabedc" stroke="#5a6a82"/><circle cx="12" cy="10" r="4" fill="#1f1812"/></svg>
+      <div class="mapcard">
+        <div class="t" style="color:var(--silver);">Shared by a visitor in Ohio</div>
+        <div class="s">"Found my great-grandmother's grave."</div>
+      </div>
+    </div>
+  </div></div></div>
+</div>
+
+</body></html>

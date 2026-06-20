@@ -51,11 +51,22 @@ Character count: ~1,450 ✓ (well within 4,000 limit)
 
 ---
 
-## Screenshot Captions (optional, shown below each screenshot on Play Store)
+## Screenshots (feature-focused, with overlay captions baked in — Session 60)
 
-1. "Scan any gravestone with your camera"
-2. "Receive a sourced biography in seconds"
-3. "Map every story to its cemetery"
+Source: `tools/marker-preview/store-screens.html` → rendered to 1080×1920 PNGs
+in `store-listing/screenshots/`. Each has a branded gold/parchment caption band
+baked in (the "overlay text" testers asked for). Old raw WhatsApp photos
+archived in `store-listing/screenshots/_old-raw-photos/`.
+
+Upload order + the caption baked into each:
+1. `01-scan.png` — "Photograph any gravestone — point your camera, that's the whole job"
+2. `02-biography.png` — "A name and two dates become a life story — AI-written, in seconds"
+3. `03-sources.png` — "Every fact backed by a real source — cited, never invented"
+4. `04-cemetery-map.png` — "Every grave you find, on your map — GPS-pinned to the cemetery"
+5. `05-community-map.png` — "Explore stories shared by visitors everywhere"
+
+(Captions are baked INTO the images, so the optional per-screenshot caption
+field in Play Console can be left blank.)
 
 ---
 

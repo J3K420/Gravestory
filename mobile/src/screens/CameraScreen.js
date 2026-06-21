@@ -214,28 +214,31 @@ export default function CameraScreen({ navigation, route }) {
     // is impossible. (Earlier code had this inverted, which broke EXIF mapping.)
     const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true };
 
-    let result;
     if (fromCamera) {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) { Alert.alert('Permission needed', 'Camera access is required.'); return; }
-      result = await ImagePicker.launchCameraAsync(opts);
-    } else {
-      result = await ImagePicker.launchImageLibraryAsync(opts);
     }
 
-    if (result.canceled) return;
-
-    // Photo confirmed — show the loading screen NOW, before the GPS read and
-    // image compression below (~1-2s of work). Previously setLoading(true) only
-    // fired at the top of runPipeline, AFTER this prep, so the camera/"take a
-    // photo" screen stayed visible for those seconds. runPipeline sets it again
-    // (idempotent); the offline branch resets it before navigating away.
-    setLoading(true);
-
-    // Wrap the GPS read + compression prep so a throw here (now that the loading
-    // screen is already up) can't strand it — reset loading and surface the
-    // failure via the same pipelineError panel runPipeline uses.
+    // Wrap from the picker launch through the GPS/compression prep. We show the
+    // loading screen BEFORE launching the OS picker: launching it backgrounds
+    // the app, and on return the Camera screen re-renders (buttons live) for the
+    // ~1-2s before the picker promise resolves and our code runs — that
+    // re-render was the "take a photo page pops back up" flash. With loading
+    // already true, the loading view is what re-renders on resume. The try
+    // ensures any failure (picker throw, compression throw) resets loading and
+    // surfaces via the pipelineError panel instead of stranding the spinner.
     try {
+      setLoading(true);
+      const result = fromCamera
+        ? await ImagePicker.launchCameraAsync(opts)
+        : await ImagePicker.launchImageLibraryAsync(opts);
+
+      if (result.canceled) {
+        // User backed out of the picker — clear the spinner, no error.
+        setLoading(false);
+        return;
+      }
+
       const asset = result.assets[0];
 
       // Pull GPS from the photo's own EXIF before ImageManipulator strips it.

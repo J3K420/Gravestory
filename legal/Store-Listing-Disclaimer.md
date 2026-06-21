@@ -51,7 +51,7 @@ Confirmation: *Your report has been sent. We review flagged stories and will tak
 | In-app caption (every bio) | ✅ shipped | web `render-result.js`, mobile `ResultScreen.js` |
 | First-view modal | ✅ shipped | same files (one-time, flag `gs_ai_disclaimer_seen`) |
 | In-app report button → DB | ✅ shipped | `api-reports.js` (both), `content_reports` table (migration 013) |
-| Store-listing line | ⬜ to add | Play Console → Full description |
+| Store-listing line | ✅ in repo copy (`store-listing/description.md`, "ABOUT THE STORIES") — paste into Play Console → Full description | Play Console → Full description |
 | Terms of Service clause | ✅ drafted | `legal/Terms-of-Service.md` §2 |
 
 Keep all wording mutually consistent and consistent with the Privacy Policy and

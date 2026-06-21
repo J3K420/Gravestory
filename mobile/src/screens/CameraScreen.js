@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Animated, ScrollView, Alert, Easing,
+  Animated, ScrollView, Alert, Easing, AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, RadialGradient, Stop, Rect, Path, Line, Circle, Ellipse, ClipPath, G } from 'react-native-svg';
@@ -68,6 +68,14 @@ export default function CameraScreen({ navigation, route }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [rejected, setRejected] = useState(null);
   const [pipelineError, setPipelineError] = useState(null);
+
+  // True while the OS picker (camera/library) is open. The picker backgrounds
+  // the app; when it closes the app returns to 'active'. We use that resume
+  // signal — not a setLoading before/after the picker — to show the loading
+  // screen at exactly the right moment: the instant the camera CLOSES, so it
+  // never blips before the camera opens and never lets the camera screen flash
+  // back on return. Cleared once the picker promise resolves.
+  const pickInProgressRef = useRef(false);
 
   // The headstone inside the viewfinder slowly "breathes" — a reverent ~5.6s
   // opacity swell, NOT the old harsh candle-flicker (which read as a rendering
@@ -139,6 +147,22 @@ export default function CameraScreen({ navigation, route }) {
     beamYLoop.start();
     beamPulseLoop.start();
     return () => { breatheLoop.stop(); glowLoop.stop(); beamXLoop.stop(); beamYLoop.stop(); beamPulseLoop.stop(); };
+  }, []);
+
+  // Show the loading screen the moment the camera/library picker CLOSES. The
+  // picker is a fullscreen OS activity that backgrounds the app; closing it
+  // (after the user confirms a photo) brings the app back to 'active'. Flipping
+  // loading here — rather than before the picker (blips a fake spinner before
+  // the camera opens) or after it resolves (lets the camera screen flash back
+  // for the ~1-2s of GPS/compression) — puts the spinner up exactly on return.
+  // Gated on pickInProgressRef so unrelated app resumes don't trigger it.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && pickInProgressRef.current) {
+        setLoading(true);
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const { refreshControl } = useRefresh(() => {
@@ -219,25 +243,35 @@ export default function CameraScreen({ navigation, route }) {
       if (!perm.granted) { Alert.alert('Permission needed', 'Camera access is required.'); return; }
     }
 
-    // Wrap from the picker launch through the GPS/compression prep. We show the
-    // loading screen BEFORE launching the OS picker: launching it backgrounds
-    // the app, and on return the Camera screen re-renders (buttons live) for the
-    // ~1-2s before the picker promise resolves and our code runs — that
-    // re-render was the "take a photo page pops back up" flash. With loading
-    // already true, the loading view is what re-renders on resume. The try
-    // ensures any failure (picker throw, compression throw) resets loading and
-    // surfaces via the pipelineError panel instead of stranding the spinner.
+    // Wrap from the picker launch through the GPS/compression prep. We do NOT
+    // setLoading here — the AppState 'active' handler flips loading the instant
+    // the picker closes (see the effect above), gated on pickInProgressRef. That
+    // shows the spinner exactly on return: no fake blip before the camera opens,
+    // no camera-screen flash on the way back. The try ensures any failure
+    // (picker throw, compression throw) clears the ref + loading and surfaces
+    // via the pipelineError panel instead of stranding the spinner.
     try {
-      setLoading(true);
+      pickInProgressRef.current = true;
       const result = fromCamera
         ? await ImagePicker.launchCameraAsync(opts)
         : await ImagePicker.launchImageLibraryAsync(opts);
+      // Picker closed; the resume handler has already shown the spinner (on
+      // confirm) or it'll be cleared just below (on cancel).
+      pickInProgressRef.current = false;
 
       if (result.canceled) {
-        // User backed out of the picker — clear the spinner, no error.
+        // User backed out — clear the spinner the resume handler may have set.
         setLoading(false);
         return;
       }
+
+      // Belt-and-suspenders: the resume handler normally shows the spinner the
+      // instant the picker closes, but if the picker promise resolves BEFORE the
+      // AppState 'active' event fires, the ref is already false by then. Setting
+      // it here (only after a confirmed, non-canceled photo) guarantees the
+      // spinner is up for the GPS/compression prep regardless of event ordering.
+      // This never blips before the camera because it's after the picker.
+      setLoading(true);
 
       const asset = result.assets[0];
 
@@ -287,6 +321,7 @@ export default function CameraScreen({ navigation, route }) {
 
       await runPipeline(manipResult.base64, false, gps, fromCamera);
     } catch (err) {
+      pickInProgressRef.current = false;
       setLoading(false);
       console.warn('Photo prep failed:', err?.message || err);
       setPipelineError({

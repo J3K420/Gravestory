@@ -4,18 +4,28 @@
       <stop offset="0%" stop-color="#1a1410"/>
       <stop offset="100%" stop-color="#0e0b08"/>
     </linearGradient>
+    <!-- Gold used for the wordmark -->
     <linearGradient id="goldGlow" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#e8c97a"/>
       <stop offset="100%" stop-color="#a07830"/>
     </linearGradient>
-    <linearGradient id="stoneGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#3a3028"/>
-      <stop offset="100%" stop-color="#1f1812"/>
+    <!-- Icon gold (matches the app icon source: app-icon.svg #gold) -->
+    <linearGradient id="iconGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#f0dca0"/>
+      <stop offset="0.5" stop-color="#cda94e"/>
+      <stop offset="1"   stop-color="#9a7a32"/>
     </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="4" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+    <!-- Page gradient (matches app icon source #page) -->
+    <linearGradient id="iconPage" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a2f1c"/>
+      <stop offset="1" stop-color="#241c10"/>
+    </linearGradient>
+    <!-- Candlelit aura behind the stone (matches app icon source #halo) -->
+    <radialGradient id="iconHalo" cx="0.5" cy="0.45" r="0.6">
+      <stop offset="0"    stop-color="#f2d79a" stop-opacity="0.34"/>
+      <stop offset="0.45" stop-color="#f2b65c" stop-opacity="0.14"/>
+      <stop offset="1"    stop-color="#f2b65c" stop-opacity="0"/>
+    </radialGradient>
     <filter id="softGlow">
       <feGaussianBlur stdDeviation="12" result="blur"/>
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -25,7 +35,7 @@
   <!-- Background -->
   <rect width="1024" height="500" fill="url(#bg)"/>
 
-  <!-- Subtle texture lines -->
+  <!-- Subtle diagonal texture lines -->
   <line x1="0" y1="0" x2="1024" y2="500" stroke="#c9a84c" stroke-width="0.3" stroke-opacity="0.06"/>
   <line x1="1024" y1="0" x2="0" y2="500" stroke="#c9a84c" stroke-width="0.3" stroke-opacity="0.06"/>
 
@@ -41,73 +51,82 @@
     <path d="M974 450 L974 470 L954 470"/>
   </g>
 
-  <!-- Gravestone silhouette (left side) -->
-  <g transform="translate(155, 60)">
-    <!-- Stone body with arch top -->
-    <path d="M0,80 Q0,0 60,0 Q120,0 120,80 L120,280 Q120,295 105,295 L15,295 Q0,295 0,280 Z"
-          fill="url(#stoneGrad)" stroke="#c9a84c" stroke-width="1.5" stroke-opacity="0.6"/>
-    <!-- Stone base -->
-    <rect x="-15" y="290" width="150" height="18" rx="3"
-          fill="#2a2017" stroke="#c9a84c" stroke-width="1" stroke-opacity="0.4"/>
-    <!-- Cross on stone -->
-    <rect x="52" y="40" width="16" height="80" rx="3" fill="#c9a84c" fill-opacity="0.25"/>
-    <rect x="30" y="70" width="60" height="16" rx="3" fill="#c9a84c" fill-opacity="0.25"/>
-    <!-- Open book on stone -->
-    <path d="M25,200 Q60,185 60,190 Q60,185 95,200 L95,240 Q60,225 60,230 Q60,225 25,240 Z"
-          fill="none" stroke="#c9a84c" stroke-width="1.2" stroke-opacity="0.5"/>
-    <line x1="60" y1="190" x2="60" y2="240" stroke="#c9a84c" stroke-width="1" stroke-opacity="0.4"/>
-    <!-- Lines of text on book -->
-    <line x1="32" y1="210" x2="56" y2="204" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.35"/>
-    <line x1="32" y1="218" x2="56" y2="212" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.3"/>
-    <line x1="32" y1="226" x2="56" y2="220" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.25"/>
-    <line x1="64" y1="204" x2="88" y2="210" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.35"/>
-    <line x1="64" y1="212" x2="88" y2="218" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.3"/>
-    <line x1="64" y1="220" x2="88" y2="226" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.25"/>
+  <!-- ════════════════════════════════════════════════════════════
+       CURRENT APP ICON ART (engraved headstone + open book, v8+).
+       Transplanted from store-listing/icon-source/app-icon.svg, which
+       is a 512×512 viewBox. Placed left and scaled to ~0.74 so the
+       456px-tall stone art fits the 500px banner with margin, and
+       nudged up slightly so the plinth clears the lower frame.
+       ════════════════════════════════════════════════════════════ -->
+  <g transform="translate(95, 22) scale(0.74)">
+    <!-- Candlelit aura (kept compact so it doesn't wash the whole panel) -->
+    <ellipse cx="256" cy="250" rx="240" ry="250" fill="url(#iconHalo)"/>
+
+    <!-- Headstone tablet -->
+    <path d="M104 426 L104 178 Q104 64 256 64 Q408 64 408 178 L408 426 Z"
+          fill="#1c160e" stroke="url(#iconGold)" stroke-width="12"/>
+
+    <!-- Inner carved border -->
+    <path d="M138 408 L138 184 Q138 96 256 96 Q374 96 374 184 L374 408"
+          fill="none" stroke="url(#iconGold)" stroke-width="4.5" stroke-opacity="0.55"/>
+
+    <!-- Open book — left page -->
+    <path d="M150 214 L150 296 Q203 276 256 296 L256 226 Q203 206 150 214 Z"
+          fill="url(#iconPage)" stroke="url(#iconGold)" stroke-width="7.5"/>
+    <!-- Open book — right page -->
+    <path d="M256 226 Q309 206 362 214 L362 296 Q309 276 256 296 Z"
+          fill="url(#iconPage)" stroke="url(#iconGold)" stroke-width="7.5"/>
+    <!-- Spine -->
+    <line x1="256" y1="220" x2="256" y2="296" stroke="url(#iconGold)" stroke-width="5.5" stroke-opacity="0.9"/>
+
+    <!-- Page lines (left) -->
+    <line x1="172" y1="236" x2="240" y2="243" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.72"/>
+    <line x1="172" y1="252" x2="240" y2="259" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.6"/>
+    <line x1="172" y1="268" x2="240" y2="275" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.48"/>
+    <!-- Page lines (right) -->
+    <line x1="272" y1="243" x2="340" y2="236" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.72"/>
+    <line x1="272" y1="259" x2="340" y2="252" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.6"/>
+    <line x1="272" y1="275" x2="340" y2="268" stroke="#e8d4a0" stroke-width="5" stroke-opacity="0.48"/>
+
+    <!-- Base / plinth -->
+    <rect x="80" y="424" width="352" height="34" rx="5" fill="#1c160e" stroke="url(#iconGold)" stroke-width="11"/>
   </g>
 
-  <!-- Candle (right of stone) -->
-  <g transform="translate(305, 220)">
-    <rect x="0" y="0" width="14" height="60" rx="2" fill="#2a2017" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.4"/>
-    <!-- Flame -->
-    <path d="M7,-2 Q14,8 10,18 Q7,22 4,18 Q0,8 7,-2 Z" fill="#f2b65c" fill-opacity="0.85" filter="url(#glow)"/>
-    <path d="M7,2 Q11,9 9,16 Q7,19 5,16 Q3,9 7,2 Z" fill="#fff8ee" fill-opacity="0.7"/>
-  </g>
-
-  <!-- Divider line -->
-  <line x1="370" y1="80" x2="370" y2="420" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.2"/>
+  <!-- Divider between art and text -->
+  <line x1="470" y1="80" x2="470" y2="420" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.2"/>
 
   <!-- App name — right side -->
-  <text x="700" y="175" text-anchor="middle"
+  <text x="748" y="180" text-anchor="middle"
         font-family="Georgia, 'Times New Roman', serif"
-        font-size="72" font-weight="400" letter-spacing="6"
+        font-size="74" font-weight="400" letter-spacing="6"
         fill="url(#goldGlow)" filter="url(#softGlow)">GraveStory</text>
 
   <!-- Tagline -->
-  <text x="700" y="220" text-anchor="middle"
+  <text x="748" y="224" text-anchor="middle"
         font-family="Georgia, 'Times New Roman', serif"
         font-size="20" font-weight="400" letter-spacing="2"
-        fill="#e8d4a0" fill-opacity="0.75">Every stone has a story to tell.</text>
+        fill="#e8d4a0" fill-opacity="0.78">Every stone has a story to tell.</text>
 
   <!-- Thin divider under tagline -->
-  <line x1="510" y1="242" x2="890" y2="242" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.3"/>
+  <line x1="558" y1="246" x2="938" y2="246" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.3"/>
 
   <!-- Feature bullets -->
   <g font-family="Georgia, 'Times New Roman', serif" font-size="17" fill="#b7a892" fill-opacity="0.85">
-    <text x="530" y="284">✦  AI-generated biographies from real sources</text>
-    <text x="530" y="316">✦  Genealogy records, historical newspapers</text>
-    <text x="530" y="348">✦  GPS-linked cemetery maps</text>
-    <text x="530" y="380">✦  Community global map</text>
+    <text x="580" y="288">✦  AI-generated biographies from real sources</text>
+    <text x="580" y="320">✦  Genealogy records, historical newspapers</text>
+    <text x="580" y="352">✦  GPS-linked cemetery maps</text>
+    <text x="580" y="384">✦  Community global map</text>
   </g>
 
   <!-- Bottom gold rule -->
-  <line x1="510" y1="408" x2="890" y2="408" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.3"/>
+  <line x1="558" y1="410" x2="938" y2="410" stroke="#c9a84c" stroke-width="0.8" stroke-opacity="0.3"/>
 
-  <!-- Subtle stars/sparkles -->
+  <!-- Subtle sparkles -->
   <g fill="#c9a84c" fill-opacity="0.3">
-    <circle cx="440" cy="100" r="1.5"/>
-    <circle cx="960" cy="140" r="1.5"/>
-    <circle cx="420" cy="390" r="1"/>
-    <circle cx="950" cy="420" r="1"/>
-    <circle cx="470" cy="450" r="1.5"/>
+    <circle cx="510" cy="100" r="1.5"/>
+    <circle cx="980" cy="140" r="1.5"/>
+    <circle cx="500" cy="392" r="1"/>
+    <circle cx="970" cy="424" r="1"/>
+    <circle cx="540" cy="452" r="1.5"/>
   </g>
 </svg>

@@ -225,49 +225,74 @@ export default function CameraScreen({ navigation, route }) {
 
     if (result.canceled) return;
 
-    const asset = result.assets[0];
+    // Photo confirmed — show the loading screen NOW, before the GPS read and
+    // image compression below (~1-2s of work). Previously setLoading(true) only
+    // fired at the top of runPipeline, AFTER this prep, so the camera/"take a
+    // photo" screen stayed visible for those seconds. runPipeline sets it again
+    // (idempotent); the offline branch resets it before navigating away.
+    setLoading(true);
 
-    // Pull GPS from the photo's own EXIF before ImageManipulator strips it.
-    // Only fall back to device GPS for camera shots — for library photos the device
-    // is not physically at the grave, so device location would be wrong.
-    let gps = extractExifGps(asset.exif);
+    // Wrap the GPS read + compression prep so a throw here (now that the loading
+    // screen is already up) can't strand it — reset loading and surface the
+    // failure via the same pipelineError panel runPipeline uses.
+    try {
+      const asset = result.assets[0];
 
-    // Android redacts GPS tags from picker-read EXIF (asset.exif never has them).
-    // For library picks, recover the location via expo-media-library, which can
-    // read the unredacted original. No-op on iOS / camera shots / missing assetId.
-    // A miss here is non-fatal (getLibraryAssetGps logs the reason); the user can
-    // correct the pin on the map.
-    if (!gps && !fromCamera) {
-      const media = await getLibraryAssetGps(asset.assetId);
-      if (media.gps) gps = media.gps;
+      // Pull GPS from the photo's own EXIF before ImageManipulator strips it.
+      // Only fall back to device GPS for camera shots — for library photos the device
+      // is not physically at the grave, so device location would be wrong.
+      let gps = extractExifGps(asset.exif);
+
+      // Android redacts GPS tags from picker-read EXIF (asset.exif never has them).
+      // For library picks, recover the location via expo-media-library, which can
+      // read the unredacted original. No-op on iOS / camera shots / missing assetId.
+      // A miss here is non-fatal (getLibraryAssetGps logs the reason); the user can
+      // correct the pin on the map.
+      if (!gps && !fromCamera) {
+        const media = await getLibraryAssetGps(asset.assetId);
+        if (media.gps) gps = media.gps;
+      }
+
+      const needsDeviceGps = !gps && fromCamera;
+
+      const [manipResult, deviceGps] = await Promise.all([
+        ImageManipulator.manipulateAsync(
+          asset.uri,
+          [{ resize: { width: 1024 } }],
+          { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+        ),
+        needsDeviceGps ? getDeviceGps() : Promise.resolve(null),
+      ]);
+
+      if (!gps && deviceGps) {
+        gps = deviceGps;
+      }
+
+      // A library pick with no recoverable GPS is expected for cloud-only photos,
+      // screenshots, and denied photo-location permission — degrade silently and let
+      // the user correct the pin on the map. (The legacy:true/assetId root cause that
+      // once broke this for ALL library photos was fixed; getLibraryAssetGps still
+      // logs the failure reason to the console, but it's no longer surfaced as an Alert.)
+      if (offline) {
+        // Offline path navigates to Result (or alerts on failure and stays here);
+        // clear the loading screen we showed at confirmation so the Camera screen
+        // isn't stranded in the loading state if the user comes back.
+        setLoading(false);
+        await createPendingStory(manipResult.base64, gps, fromCamera);
+        return;
+      }
+
+      await runPipeline(manipResult.base64, false, gps, fromCamera);
+    } catch (err) {
+      setLoading(false);
+      console.warn('Photo prep failed:', err?.message || err);
+      setPipelineError({
+        message: err?.message || 'Could not process that photo. Please try again.',
+        base64: null,
+        gps: null,
+        fromCamera,
+      });
     }
-
-    const needsDeviceGps = !gps && fromCamera;
-
-    const [manipResult, deviceGps] = await Promise.all([
-      ImageManipulator.manipulateAsync(
-        asset.uri,
-        [{ resize: { width: 1024 } }],
-        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-      ),
-      needsDeviceGps ? getDeviceGps() : Promise.resolve(null),
-    ]);
-
-    if (!gps && deviceGps) {
-      gps = deviceGps;
-    }
-
-    // A library pick with no recoverable GPS is expected for cloud-only photos,
-    // screenshots, and denied photo-location permission — degrade silently and let
-    // the user correct the pin on the map. (The legacy:true/assetId root cause that
-    // once broke this for ALL library photos was fixed; getLibraryAssetGps still
-    // logs the failure reason to the console, but it's no longer surfaced as an Alert.)
-    if (offline) {
-      await createPendingStory(manipResult.base64, gps, fromCamera);
-      return;
-    }
-
-    await runPipeline(manipResult.base64, false, gps, fromCamera);
   }
 
   // Saves an offline scan as a local-only placeholder story. The photo goes to

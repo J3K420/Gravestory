@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, AppState } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
@@ -32,6 +32,17 @@ import RememberedStoriesScreen from './src/screens/RememberedStoriesScreen';
 import PaywallScreen from './src/screens/PaywallScreen';
 
 const Stack = createNativeStackNavigator();
+
+// Ref so the AppState/OTA handler can read the active route on resume.
+const navigationRef = createNavigationContainerRef();
+
+// Screens where an OTA reload-on-resume would destroy in-progress work (the
+// reload restarts the JS bundle at Home, dropping a scan/unsaved result/active
+// purchase). On these we DEFER the reload; the next foreground from an idle
+// screen (Home, lists, maps, settings) applies it. Opening the system camera
+// backgrounds the app, so without this guard returning to confirm a photo
+// reloads mid-scan straight to Home.
+const NO_RELOAD_SCREENS = new Set(['Camera', 'Result', 'Paywall']);
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -147,8 +158,18 @@ export default function App() {
       try {
         const result = await Updates.checkForUpdateAsync();
         if (result.isAvailable) {
+          // Fetch is safe to do anywhere (download only). But only RELOAD when
+          // the user isn't mid-task — reloadAsync restarts the bundle at Home,
+          // which would destroy an in-progress scan / unsaved result / active
+          // purchase. On a mid-task screen we just fetch and let the next
+          // foreground from an idle screen apply it.
           await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync();
+          const current = navigationRef.isReady() ? navigationRef.getCurrentRoute()?.name : null;
+          if (!NO_RELOAD_SCREENS.has(current)) {
+            await Updates.reloadAsync();
+          } else {
+            console.log('OTA ready — deferring reload (mid-task screen:', current, ')');
+          }
         }
       } catch (e) {
         // Offline, mid-flight, or transient — next foreground retries.
@@ -176,7 +197,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="Auth" component={AuthScreen} />

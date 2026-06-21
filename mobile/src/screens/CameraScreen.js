@@ -14,7 +14,7 @@ import { colors, fonts, radius, space } from '../lib/theme';
 import { verifyIsGravestone, readGravestone, resolveSymbolMeanings } from '../lib/api-gemini';
 import { searchForPerson, extractFindAGraveDetail } from '../lib/api-tavily';
 import { searchWikiTree } from '../lib/api-wikitree';
-import { queryWikidata } from '../lib/api-wikidata';
+import { queryWikidata, queryWikidataByBurialPlace } from '../lib/api-wikidata';
 import { searchChroniclingAmerica } from '../lib/api-chroniclingamerica';
 import { searchInternetArchive } from '../lib/api-internetarchive';
 import { fetchWikipediaPortraits, fetchWikipediaArticleSummary } from '../lib/api-wikipedia';
@@ -655,8 +655,64 @@ export default function CameraScreen({ navigation, route }) {
           }
         }
 
+        // ── Famous-interment recovery (gate A) ──────────────────────────────
+        // A bare surname banner (e.g. "BOOTH") with no first name and no dates is
+        // unresolvable by the name-first paths: WikiTree needs two tokens, and
+        // Wikidata-by-name has no death year to pick the right namesake. When we
+        // have a resolved cemetery name AND the whole name-first fan-out came back
+        // empty, ask Wikidata the reverse question — "who notable of this surname
+        // is buried at this cemetery?" — which recovers Booth at Green Mount.
+        // Strictly a rescue: only fires when nothing else found the person, so it
+        // can never override a confident identification. The query itself aborts
+        // on >1 same-surname interment (no guessing between family-plot Booths).
+        let burialCandidate = null;
+        // Gate against the MERGED set the bio actually sees (Tavily + FindAGrave
+        // extract + Chronicling America + Internet Archive) — chron/archive are
+        // part of the name-first fan-out, so a pre-1928 ordinary person CA already
+        // documented must NOT trigger the famous-grave rescue. [review M2]
+        const _nameFirstEmpty =
+          mergedSearchResults.length === 0 &&
+          (Array.isArray(wikiData) ? wikiData.length === 0 : !wikiData) &&
+          !wikidataResult &&
+          (Array.isArray(wikipediaSummary) ? !wikipediaSummary.some(Boolean) : !wikipediaSummary);
+        // ONLY a real surname keys the lookup. graveData.family_name is left empty
+        // by OCR for a first-name-only stone ("GEORGE") — falling back to
+        // primary_name there would pass a GIVEN name as the surname and match any
+        // notable whose first name collides. No surname → no rescue. [review H2]
+        const _surnameForLookup = graveData.family_name || '';
+        if (_nameFirstEmpty && cemeteryName && _surnameForLookup) {
+          try {
+            burialCandidate = await queryWikidataByBurialPlace(cemeteryName, _surnameForLookup, {
+              deathYear: effectiveDeath || null,
+              userGps: gps || null,   // rejects a same-named distant cemetery [review M6]
+            });
+            // Corroborate against an INDEPENDENT source (Wikipedia) before the
+            // candidate may be named. Confirmation must be a real identity check,
+            // not just "a sitelink exists" — the returned article must actually
+            // mention the surname (knownTitle bypasses the title-match guard, so
+            // without this _wikiConfirmed would be near-vacuous). [review M4]
+            // Only AFTER confirmation do we let the candidate flow into the main
+            // prompt / portrait / map-pin path via wikidataResult. [review H1]
+            if (burialCandidate) {
+              const confirm = await fetchWikipediaArticleSummary(
+                burialCandidate.name, '', burialCandidate.wikipediaTitle);
+              const _lcSurname = _surnameForLookup.toLowerCase();
+              const _confirmsIdentity = confirm &&
+                (((confirm.title || '') + ' ' + (confirm.extract || '')).toLowerCase().includes(_lcSurname));
+              if (_confirmsIdentity) {
+                if (Array.isArray(wikipediaSummary)) wikipediaSummary[0] = confirm;
+                else wikipediaSummary = confirm;
+                burialCandidate._wikiConfirmed = true;
+                wikidataResult = wikidataResult || burialCandidate;
+              }
+            }
+          } catch (e) {
+            console.warn('Burial-place recovery failed (non-fatal):', e?.message || e);
+          }
+        }
+
         setStepIndex(3);
-        bioResult = await generateBiography(graveData, mergedSearchResults, wikiData, locationHint, wikipediaSummary, wikidataResult);
+        bioResult = await generateBiography(graveData, mergedSearchResults, wikiData, locationHint, wikipediaSummary, wikidataResult, burialCandidate);
 
         // Funnel: which research sources actually returned hits on this scan.
         // Tavily is ~85% of variable cost — track its (and the free sources')

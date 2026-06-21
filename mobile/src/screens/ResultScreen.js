@@ -136,6 +136,10 @@ export default function ResultScreen({ navigation, route }) {
   // would be churn, and a stale closure would read the wrong value).
   const speechGen = useRef(0);
   const isSpeakingRef = useRef(false);
+  // Holds the pending "did the engine actually start?" watchdog timer (see
+  // handleListen). Cleared whenever we stop or a chunk reports onStart, so a
+  // stale watchdog can never fire against a later run.
+  const speechWatchdog = useRef(null);
   // Mirrors the chosen marker synchronously so handleSave reads the latest pick
   // even if the user taps Save before the setStory re-render lands (a pre-save
   // pick must reach findOrCreateGrave to stake the grave). Refs update instantly.
@@ -215,6 +219,7 @@ export default function ResultScreen({ navigation, route }) {
   // nothing is speaking. Stable identity (refs + setState are stable).
   const stopSpeech = useCallback(() => {
     speechGen.current += 1;
+    if (speechWatchdog.current) { clearTimeout(speechWatchdog.current); speechWatchdog.current = null; }
     Speech.stop();
     setIsSpeaking(false);
   }, []);
@@ -235,6 +240,8 @@ export default function ResultScreen({ navigation, route }) {
     return () => {
       blurSub();
       appSub.remove();
+      // Cancel any pending start-watchdog so it can't fire after we're gone.
+      if (speechWatchdog.current) { clearTimeout(speechWatchdog.current); speechWatchdog.current = null; }
       // Unconditional stop on unmount: the global engine outlives this screen,
       // so a half-read bio must not keep playing after we're gone.
       Speech.stop();
@@ -373,30 +380,65 @@ export default function ResultScreen({ navigation, route }) {
   // moved on (a stop, a re-tap, a story/app/nav change), so stale async
   // callbacks can never flip the button back. Only the LAST chunk's onDone
   // clears the speaking state — the engine plays queued chunks in order.
+  //
+  // expo-speech's Speech.stop() is ASYNC (it just kicks Android's
+  // TextToSpeech.stop(), which flushes the queue on a background thread). The
+  // previous code fired Speech.stop() and then Speech.speak() in the SAME tick,
+  // so on a SECOND bio the new chunks were QUEUE_ADD-appended onto an engine
+  // still flushing the first bio's queue — Android silently DROPS them, no
+  // onStart/onDone ever returns, and the button stranded on "Stop" with no
+  // audio until the app was killed. Two guards fix that here:
+  //   1. AWAIT Speech.stop() before queuing, so utterances are never stacked
+  //      behind an unsettled flush.
+  //   2. An onStart watchdog: if no chunk reports it started within ~1.2s,
+  //      treat the engine as wedged, reset the button, and stop cleanly so the
+  //      next tap starts fresh (the engine recovers once it finishes flushing).
   // A plain function (not useCallback): it lives after the early returns, so it
   // can't be a hook, and onPress doesn't need a stable identity.
-  function handleListen() {
+  async function handleListen() {
     if (isSpeaking) { stopSpeech(); return; }
     const chunks = chunkForSpeech(speakableText);
     if (chunks.length === 0) return;
     // New utterance run — claim a fresh generation so any prior callbacks die,
-    // and flush any queue a rapid double-tap might have left in the engine so
-    // we never stack two overlapping reads.
+    // and flush any queue a rapid double-tap (or a still-flushing previous bio)
+    // left in the engine so we never stack two overlapping reads.
     speechGen.current += 1;
-    Speech.stop();
     const myGen = speechGen.current;
+    if (speechWatchdog.current) { clearTimeout(speechWatchdog.current); speechWatchdog.current = null; }
     setIsSpeaking(true);
+    // Wait for the engine to finish flushing before queuing — this is the line
+    // that prevents the dropped-utterance wedge on the second bio.
+    try { await Speech.stop(); } catch {}
+    // A stop / re-tap / story-swap / blur during the await bumped the generation;
+    // if so this run is stale — undo our optimistic flag (only if still ours)
+    // and bail without queuing anything.
+    if (speechGen.current !== myGen) { if (isSpeakingRef.current) setIsSpeaking(false); return; }
+    let started = false;
     const reset = () => { if (speechGen.current === myGen) setIsSpeaking(false); };
     chunks.forEach((chunk, i) => {
       const isLast = i === chunks.length - 1;
       Speech.speak(chunk, {
         language: 'en-US',
         rate: 0.92, // a touch slower than default — these are reflective stories
+        onStart:   () => {
+          started = true;
+          if (speechWatchdog.current) { clearTimeout(speechWatchdog.current); speechWatchdog.current = null; }
+        },
         onDone:    () => { if (isLast) reset(); },
         onStopped: reset,
         onError:   reset,
       });
     });
+    // If the engine never reports a start, it dropped our utterances — un-strand
+    // the button and stop cleanly so the next tap can start over.
+    speechWatchdog.current = setTimeout(() => {
+      speechWatchdog.current = null;
+      if (!started && speechGen.current === myGen) {
+        speechGen.current += 1; // invalidate this run's callbacks
+        Speech.stop();
+        setIsSpeaking(false);
+      }
+    }, 1200);
   }
 
   // Global map bios: show all community photos of this stone when available.

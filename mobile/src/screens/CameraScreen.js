@@ -1259,6 +1259,22 @@ function IlluminatedLedger({ stepIndex }) {
   // deterministic (CARD_H) because rows are FIXED height; only width is unknown.
   const [cardW, setCardW] = useState(0);
 
+  // Background-resume reassurance: a calm note that fades in only AFTER a few
+  // seconds, so fast scans never show it. It reframes the freeze-on-background
+  // behaviour as expected — "stay on this page; if you switch away the scan
+  // resumes when you return" — killing the "frozen = broken" read on long scans.
+  // (Honest framing: a backgrounded scan really does pause + resume; it does not
+  // run server-side. See the shelved Option B brief for the full server fix.)
+  const resumeFade = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      Animated.timing(resumeFade, {
+        toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true,
+      }).start();
+    }, 5000);
+    return () => clearTimeout(t);
+  }, []);
+
   useEffect(() => {
     // headerGlow: 0.45 → 0.72 → 0.45 (init == A). View opacity → native driver.
     const headerGlowLoop = Animated.loop(
@@ -1621,6 +1637,16 @@ function IlluminatedLedger({ stepIndex }) {
       {/* (D) REASSURANCE LINE — one honest per-step line; minHeight so swaps
           never reflow. No animated ellipsis, no rotating patter. */}
       <Text style={styles.ledgerReassure}>{LEDGER_REASSURE[stepIndex] || LEDGER_REASSURE[0]}</Text>
+
+      {/* (E) BACKGROUND-RESUME NOTE — fades in after ~5s on long scans only.
+          Reserves its space from the start (the Animated.View is always laid out;
+          only its opacity animates) so the fade-in never reflows the screen. */}
+      <Animated.View style={[styles.resumeNote, { opacity: resumeFade }]}>
+        <Text style={styles.resumeNoteText}>
+          Keep this page open while we work. If you switch apps, your scan pauses
+          and picks up right where it left off when you return.
+        </Text>
+      </Animated.View>
     </>
   );
 }
@@ -1721,6 +1747,15 @@ const styles = StyleSheet.create({
   ledgerReassure: {
     color: colors.ash, fontFamily: fonts.bodyItalic, fontSize: 14,
     letterSpacing: 0.5, textAlign: 'center', marginTop: space.lg, minHeight: 22,
+  },
+  resumeNote: {
+    marginTop: space.md, paddingHorizontal: space.lg,
+    // Reserve height so the fade-in never reflows: two lines of 18px line-height.
+    minHeight: 36,
+  },
+  resumeNoteText: {
+    color: colors.ashDim, fontFamily: fonts.body, fontSize: 12.5,
+    lineHeight: 18, textAlign: 'center',
   },
 
   rejectedBox: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },

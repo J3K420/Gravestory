@@ -303,7 +303,7 @@ export default function SettingsScreen({ navigation }) {
 
             <TouchableOpacity
               style={styles.privacyLink}
-              onPress={() => Linking.openURL('https://j3k420.github.io/gravestory-privacy/')}
+              onPress={() => Linking.openURL('https://j3k420.github.io/Gravestory/privacy-policy/')}
             >
               <Text style={styles.privacyLinkText}>Privacy Policy</Text>
             </TouchableOpacity>

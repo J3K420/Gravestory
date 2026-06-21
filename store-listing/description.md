@@ -36,7 +36,7 @@ GraveStory searches genealogy records in parallel with every scan. Famous figure
 
 YOUR PRIVACY
 
-Photos are only shared if you choose to make a story public. GPS coordinates are used to place your stories on your personal map and are never sold or shared with advertisers. See our full privacy policy at https://j3k420.github.io/gravestory-privacy/
+Photos are only shared if you choose to make a story public. GPS coordinates are used to place your stories on your personal map and are never sold or shared with advertisers. See our full privacy policy at https://j3k420.github.io/Gravestory/privacy-policy/
 
 FREE TO START
 

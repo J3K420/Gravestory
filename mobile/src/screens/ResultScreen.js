@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Linking, Share, Image, Alert, FlatList, Dimensions, Modal, Pressable, TextInput,
-  PanResponder,
+  PanResponder, AppState,
 } from 'react-native';
+import * as Speech from 'expo-speech';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
@@ -25,6 +26,60 @@ import { SYMBOL_CONTEXT } from '../lib/biography';
 const SCREEN_W = Dimensions.get('window').width;
 const AI_DISCLAIMER_SEEN_KEY = 'gs_ai_disclaimer_seen';
 const SHARE_NOTICE_SEEN_KEY = 'gs_share_notice_seen';
+
+// Android caps a single Speech.speak() utterance at maxSpeechInputLength
+// (4000 chars on every device; iOS reports Number.MAX_VALUE). Over the cap the
+// native call throws and NO callback fires, so the button would stick on "Stop"
+// with no audio. We chunk well under the cap and queue the pieces (expo-speech
+// appends queued utterances), so a 2500-word famous-figure bio reads in full.
+// Stay comfortably below 4000 to leave room for the intro and any voice that
+// counts bytes rather than code points.
+const TTS_CHUNK_LIMIT = 3500;
+
+// Strip the on-page citation apparatus and markup that reads badly aloud, then
+// collapse the whitespace that leaves behind. Handles single AND grouped
+// citation forms ([1], [1, 2], [1-3]), normalises the chevron used in chips
+// (›) and a bare ampersand so the voice says "and" instead of "ampersand".
+function cleanBioForSpeech(text) {
+  return (text || '')
+    .replace(/\[[\d\s,&–-]+\]/g, '')   // [1], [1, 2], [1-3], [1–3] citation groups
+    .replace(/\s*›\s*/g, ' ')           // chevron chip separator → space
+    .replace(/\s*&\s*/g, ' and ')       // bare ampersand → spoken "and"
+    .replace(/\s+/g, ' ')               // collapse the gaps the strips leave
+    .trim();
+}
+
+// Split text into queueable utterances no longer than TTS_CHUNK_LIMIT, breaking
+// on sentence boundaries so the pauses fall naturally. A single sentence longer
+// than the limit (rare) is hard-split on whitespace as a fallback. Returns [] for
+// empty input.
+function chunkForSpeech(text) {
+  if (!text) return [];
+  if (text.length <= TTS_CHUNK_LIMIT) return [text];
+  // Keep the delimiter with its sentence so periods/?!/ are spoken naturally.
+  const sentences = text.match(/[^.!?]+[.!?]*\s*/g) || [text];
+  const chunks = [];
+  let buf = '';
+  const flush = () => { if (buf.trim()) chunks.push(buf.trim()); buf = ''; };
+  for (const sentence of sentences) {
+    if (sentence.length > TTS_CHUNK_LIMIT) {
+      // Pathologically long sentence: flush what we have, then hard-split it.
+      flush();
+      for (const word of sentence.split(/\s+/)) {
+        if ((buf + ' ' + word).length > TTS_CHUNK_LIMIT) flush();
+        buf = buf ? `${buf} ${word}` : word;
+      }
+      flush();
+    } else if ((buf + sentence).length > TTS_CHUNK_LIMIT) {
+      flush();
+      buf = sentence;
+    } else {
+      buf += sentence;
+    }
+  }
+  flush();
+  return chunks;
+}
 
 // Bottom-sheet grab-bar that dismisses the sheet on a downward swipe. The bar
 // was previously a decorative View with no gesture wired up, so dragging it did
@@ -70,6 +125,17 @@ export default function ResultScreen({ navigation, route }) {
   const [reportDone, setReportDone]     = useState(false);
   const [shareNoticeModal, setShareNoticeModal] = useState(false); // first-share public notice
   const [savingMarker, setSavingMarker] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false); // bio read-aloud (TTS) active
+  // expo-speech is a single global engine but isSpeaking is per-instance state.
+  // speechGen is bumped on every start/stop so that a stale onDone/onStopped
+  // from a previous (or chunked) utterance can't flip the button back — the
+  // callback compares its captured generation against the current one and bails
+  // if they differ. isSpeakingRef mirrors the latest value for the long-lived
+  // AppState/blur/param-swap listeners, which must read "are we speaking now?"
+  // without re-subscribing on every toggle (a fresh subscription each render
+  // would be churn, and a stale closure would read the wrong value).
+  const speechGen = useRef(0);
+  const isSpeakingRef = useRef(false);
   // Mirrors the chosen marker synchronously so handleSave reads the latest pick
   // even if the user taps Save before the setStory re-render lands (a pre-save
   // pick must reach findOrCreateGrave to stake the grave). Refs update instantly.
@@ -138,6 +204,51 @@ export default function ResultScreen({ navigation, route }) {
     const fresh = all.find(s => s.timestamp === story?.timestamp);
     if (fresh) setStory(fresh);
   });
+
+  // Keep the ref in lock-step with the state so the long-lived listeners below
+  // (which capture the ref, not the state) always see the current value.
+  useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
+
+  // Single stop helper: bumping the generation invalidates any in-flight
+  // utterance callbacks (so a late onStopped from the engine can't re-toggle
+  // the button), halts the engine, and resets the button. Safe to call when
+  // nothing is speaking. Stable identity (refs + setState are stable).
+  const stopSpeech = useCallback(() => {
+    speechGen.current += 1;
+    Speech.stop();
+    setIsSpeaking(false);
+  }, []);
+
+  // Stop read-aloud on every path that takes the user away from this content:
+  //  • navigation blur (back, tab-away, a new screen pushed on top)
+  //  • app backgrounded mid-listen (matches App.js's AppState pattern — RN
+  //    suspends JS when backgrounded and TTS would otherwise keep playing)
+  //  • unmount (returned cleanup)
+  // Listeners read isSpeakingRef so they don't need to re-subscribe per toggle.
+  useEffect(() => {
+    const blurSub = navigation.addListener('blur', () => {
+      if (isSpeakingRef.current) stopSpeech();
+    });
+    const appSub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' && isSpeakingRef.current) stopSpeech();
+    });
+    return () => {
+      blurSub();
+      appSub.remove();
+      // Unconditional stop on unmount: the global engine outlives this screen,
+      // so a half-read bio must not keep playing after we're gone.
+      Speech.stop();
+    };
+  }, [navigation, stopSpeech]);
+
+  // A new story can replace the current one in-place (CameraScreen navigates
+  // back with a researched story → setStory on the SAME mounted instance, no
+  // blur/remount). If we're mid-listen when that happens, the old narration
+  // would keep reading over the new content — so stop on every story switch.
+  const storyKey = story?.timestamp;
+  useEffect(() => {
+    return () => { if (isSpeakingRef.current) stopSpeech(); };
+  }, [storyKey, stopSpeech]);
 
   if (!story) {
     return (
@@ -246,6 +357,47 @@ export default function ResultScreen({ navigation, route }) {
     return (fromAi && typeof fromAi === 'string' && fromAi.trim()) ? fromAi.trim() : null;
   };
   const paragraphs = (biography || '').split('\n\n').filter(Boolean);
+
+  // The text the read-aloud narrates: the person's name, their lifespan, then
+  // the cleaned biography prose. Computed once per render (the render guard and
+  // handleListen both read this const, so the regexes run once, not per call).
+  const speakBio = cleanBioForSpeech(biography);
+  const speakIntro = [name, dates].filter(Boolean).join('. ');
+  const speakableText = speakBio
+    ? (speakIntro ? `${speakIntro}. ${speakBio}` : speakBio)
+    : '';
+
+  // Toggle read-aloud: stop if narrating, else chunk the bio and queue the
+  // pieces. Each Speech.speak captures the generation that was current when it
+  // started; its onDone/onStopped/onError no-ops if the generation has since
+  // moved on (a stop, a re-tap, a story/app/nav change), so stale async
+  // callbacks can never flip the button back. Only the LAST chunk's onDone
+  // clears the speaking state — the engine plays queued chunks in order.
+  // A plain function (not useCallback): it lives after the early returns, so it
+  // can't be a hook, and onPress doesn't need a stable identity.
+  function handleListen() {
+    if (isSpeaking) { stopSpeech(); return; }
+    const chunks = chunkForSpeech(speakableText);
+    if (chunks.length === 0) return;
+    // New utterance run — claim a fresh generation so any prior callbacks die,
+    // and flush any queue a rapid double-tap might have left in the engine so
+    // we never stack two overlapping reads.
+    speechGen.current += 1;
+    Speech.stop();
+    const myGen = speechGen.current;
+    setIsSpeaking(true);
+    const reset = () => { if (speechGen.current === myGen) setIsSpeaking(false); };
+    chunks.forEach((chunk, i) => {
+      const isLast = i === chunks.length - 1;
+      Speech.speak(chunk, {
+        language: 'en-US',
+        rate: 0.92, // a touch slower than default — these are reflective stories
+        onDone:    () => { if (isLast) reset(); },
+        onStopped: reset,
+        onError:   reset,
+      });
+    });
+  }
 
   // Global map bios: show all community photos of this stone when available.
   // Own stories: show only the user's own gravestone photo. For a freshly
@@ -640,6 +792,24 @@ export default function ResultScreen({ navigation, route }) {
             <Text style={styles.sectionHeadingText}>Life Story</Text>
             <View style={styles.sectionHeadingRule} />
           </View>
+        )}
+        {/* Read-aloud — narrates the name, dates, and bio via on-device TTS.
+            Only shown when there's actual bio prose to read. */}
+        {paragraphs.length > 0 && speakableText !== '' && (
+          <TouchableOpacity
+            style={[styles.listenBtn, isSpeaking && styles.listenBtnActive]}
+            onPress={handleListen}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={isSpeaking ? 'Stop reading the story aloud' : 'Read the story aloud'}
+          >
+            <Text style={[styles.listenBtnIcon, isSpeaking && styles.listenBtnTextActive]}>
+              {isSpeaking ? '◼' : '▶'}
+            </Text>
+            <Text style={[styles.listenBtnText, isSpeaking && styles.listenBtnTextActive]}>
+              {isSpeaking ? 'Stop' : 'Listen to this story'}
+            </Text>
+          </TouchableOpacity>
         )}
         {paragraphs.map((para, i) => (
           <Text key={i} style={[styles.bio, i === 0 && styles.bioFirst]}>{para}</Text>
@@ -1116,6 +1286,20 @@ const styles = StyleSheet.create({
     fontFamily: fonts.serif,
   },
   bioFirst: { fontSize: 16.5, lineHeight: 29, color: colors.parchment },
+
+  // Read-aloud control — sits under the Life Story heading. A quiet gold-tinted
+  // pill (matches the symbol-chip/tribute language); turns into a "Stop" state
+  // with the active gold fill while narrating.
+  listenBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start',
+    paddingVertical: 9, paddingHorizontal: 14, marginBottom: 18,
+    borderWidth: 1, borderColor: 'rgba(242,182,92,0.35)',
+    backgroundColor: 'rgba(242,182,92,0.07)', borderRadius: radius.md,
+  },
+  listenBtnActive: { borderColor: colors.flame, backgroundColor: 'rgba(242,182,92,0.16)' },
+  listenBtnIcon: { color: colors.flame, fontSize: 12, lineHeight: 16 },
+  listenBtnText: { color: colors.flame, fontSize: 13.5, fontFamily: fonts.bodyMedium, letterSpacing: 0.3 },
+  listenBtnTextActive: { color: colors.flame },
 
   // AI-honesty caption — muted gold, honest-research register (not a warning).
   aiCaption: {

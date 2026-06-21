@@ -438,11 +438,21 @@ async function handleRevenueCatWebhook(request, env, origin, allowed) {
     return json({ ok: true, action: 'ignored', type: event.type }, 200, origin, allowed);
   }
 
-  const userId   = event.app_user_id;
+  const userId    = event.app_user_id;
   const productId = event.product_id;
+  // event.id is RevenueCat's idempotency key: unique per event and STABLE across
+  // retries/redeliveries, so we use it to grant each purchase at most once.
+  const eventId   = event.id;
 
   if (!userId || !productId) {
     return json({ error: 'Missing app_user_id or product_id' }, 400, origin, allowed);
+  }
+
+  // No event id means we cannot dedupe safely. Acknowledge (2xx) so RC does not
+  // retry a request we would only re-process unsafely; this is not expected in
+  // practice (RC always sends event.id).
+  if (!eventId) {
+    return json({ ok: true, action: 'ignored', reason: 'missing event id' }, 200, origin, allowed);
   }
 
   const CREDIT_MAP = {
@@ -462,6 +472,10 @@ async function handleRevenueCatWebhook(request, env, origin, allowed) {
     return json({ error: 'Supabase not configured' }, 500, origin, allowed);
   }
 
+  // Idempotent grant: the RPC records event.id and grants credits in one
+  // transaction. It returns true on the first time we see this event, false if
+  // the event was already processed (a retry/redelivery) — in which case we must
+  // NOT grant again. Either way the work is done, so both are a 200.
   const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/add_scan_credits`, {
     method: 'POST',
     headers: {
@@ -469,15 +483,24 @@ async function handleRevenueCatWebhook(request, env, origin, allowed) {
       'apikey': env.SUPABASE_SERVICE_KEY,
       'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     },
-    body: JSON.stringify({ p_user_id: userId, p_amount: credits }),
+    body: JSON.stringify({ p_user_id: userId, p_amount: credits, p_event_id: eventId }),
   });
 
   if (!rpcRes.ok) {
+    // A genuine transient Supabase failure: return 5xx so RevenueCat RETRIES.
+    // The retry carries the same event.id, so the dedupe still prevents a
+    // double-grant once Supabase recovers.
     const detail = await rpcRes.text().catch(() => '');
     return json({ error: 'Supabase RPC failed', status: rpcRes.status, detail }, 500, origin, allowed);
   }
 
-  return json({ ok: true, user_id: userId, credits_added: credits }, 200, origin, allowed);
+  // RPC body is the boolean return value: true = granted, false = duplicate.
+  const granted = await rpcRes.json().catch(() => null);
+  if (granted === false) {
+    return json({ ok: true, action: 'duplicate', user_id: userId, event_id: eventId }, 200, origin, allowed);
+  }
+
+  return json({ ok: true, user_id: userId, credits_added: credits, event_id: eventId }, 200, origin, allowed);
 }
 
 // ── Account deletion: POST /delete-account ────────────────────────

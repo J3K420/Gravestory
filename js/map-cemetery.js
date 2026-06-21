@@ -83,10 +83,12 @@ async function handleMarkerDragEnd(marker, story) {
     marker.setLatLng([story.gps.lat, story.gps.lng]);
     return;
   }
-  // 1. Update the story in savedStories
-  const idx = savedStories.findIndex(s =>
-    s.name === story.name && s.dates === story.dates && s.location === story.location
-  );
+  // 1. Update the story in savedStories — match on the UNIQUE timestamp, not
+  // name+dates+location (which collide for family plots / two scans of one
+  // shared stone, so dragging pin B could write B's coords onto story A). The
+  // bound `story` carries timestamp, used as the identity key everywhere else
+  // in this module.
+  const idx = savedStories.findIndex(s => s.timestamp === story.timestamp);
   if (idx >= 0) {
     savedStories[idx].gps = { lat: newLat, lng: newLng };
     savedStories[idx].userCorrected = true;

@@ -305,7 +305,12 @@ async function generateBiography(graveData, searchResults, wikiData, location, w
   // Confidence floor — if no web results, no WikiTree record, and no Wikipedia
   // summary came back, do not call the LLM at all: return a short biography drawn
   // strictly from the stone itself to prevent hallucination.
-  const hasRealSources = (searchResults && searchResults.length > 0) || (wikiData != null) ||
+  // wikiData is an ARRAY on multi-subject stones (wikiTreeResults.filter(Boolean)),
+  // which is [] when every lookup failed — and [] != null is true, which would
+  // wrongly count it as a real source and skip the stone-only no-LLM fallback,
+  // calling Gemini with zero sources. Treat an empty array as no source.
+  const hasRealSources = (searchResults && searchResults.length > 0) ||
+    (Array.isArray(wikiData) ? wikiData.length > 0 : wikiData != null) ||
     (Array.isArray(wikipediaSummary) ? wikipediaSummary.some(Boolean) : wikipediaSummary != null);
   if (!hasRealSources) {
     console.log('📜 No real sources — returning stone-only biography, skipping LLM.');

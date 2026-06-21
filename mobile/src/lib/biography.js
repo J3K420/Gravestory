@@ -301,6 +301,23 @@ function validateCitations(parsed) {
 
 const PRIMARY  = 'gemini-3.1-flash-lite';
 const FALLBACK = 'gemini-2.5-flash';
+const TIMEOUT_MS = 30000;
+
+// Duplicated locally rather than imported from api-gemini.js: api-gemini.js
+// imports SYMBOL_CONTEXT from this module, so importing back would create a
+// circular dependency. The biography call has the largest payload / longest
+// generation, so it's the call most likely to hang on flaky cellular — without
+// a timeout a stall would freeze the whole scan pipeline indefinitely. The
+// reject is caught by CameraScreen's pipelineError handler ("Analysis Failed" +
+// queue-for-later), same as any other failed Gemini call.
+function fetchWithTimeout(url, init) {
+  return Promise.race([
+    fetch(url, init),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Gemini request timed out')), TIMEOUT_MS)
+    ),
+  ]);
+}
 
 async function geminiText(payload) {
   const init = {
@@ -309,17 +326,22 @@ async function geminiText(payload) {
     body: JSON.stringify(payload),
   };
   try {
-    const res = await fetch(`${PROXY_BASE}/gemini/${PRIMARY}`, init);
+    const res = await fetchWithTimeout(`${PROXY_BASE}/gemini/${PRIMARY}`, init);
     const data = await res.json().catch(() => ({ error: {} }));
     if (res.status !== 503 && res.status !== 429 && !data.error) return data;
   } catch {}
-  const res2 = await fetch(`${PROXY_BASE}/gemini/${FALLBACK}`, init);
+  const res2 = await fetchWithTimeout(`${PROXY_BASE}/gemini/${FALLBACK}`, init);
   return res2.json().catch(() => ({ error: { message: 'Invalid JSON' } }));
 }
 
 // wikidataResult: optional result from queryWikidata() — structured dates + burial place.
 export async function generateBiography(graveData, searchResults, wikiData, location, wikipediaSummary, wikidataResult) {
-  const hasRealSources = (searchResults && searchResults.length > 0) || (wikiData != null) ||
+  // wikiData is an ARRAY on multi-subject stones (wikiTreeResults.filter(Boolean)),
+  // which is [] when every lookup failed — and [] != null is true, which would
+  // wrongly count it as a real source and skip the stone-only no-LLM fallback,
+  // calling Gemini with zero sources. Treat an empty array as no source.
+  const hasRealSources = (searchResults && searchResults.length > 0) ||
+    (Array.isArray(wikiData) ? wikiData.length > 0 : wikiData != null) ||
     (Array.isArray(wikipediaSummary) ? wikipediaSummary.some(Boolean) : wikipediaSummary != null);
   if (!hasRealSources) {
     // Prefer the deceased-subjects list so a shared family stone with no web sources

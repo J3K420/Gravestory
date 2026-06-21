@@ -158,7 +158,7 @@ export default function ResultScreen({ navigation, route }) {
 
   useEffect(() => {
     if (story?.grave_id) {
-      getTributes(story.grave_id).then(setTributes);
+      getTributes(story.grave_id).then(setTributes).catch(() => {});
     }
   }, [story?.grave_id]);
 
@@ -666,14 +666,21 @@ export default function ResultScreen({ navigation, route }) {
   async function handleTribute(type) {
     if (!user || !story.grave_id || tributeLoading) return;
     setTributeLoading(true);
-    // Tapping the same type toggles it off; tapping a different type switches
-    const newType = tributes.userTribute === type ? null : type;
-    await setTribute(story.grave_id, newType);
-    // Log only when a tribute is added (not toggled off), so the count tracks engagement.
-    if (newType) logEvent(EVENTS.TRIBUTE_LEFT, { type: newType });
-    const fresh = await getTributes(story.grave_id);
-    setTributes(fresh);
-    setTributeLoading(false);
+    // try/finally so a thrown error can never leave tributeLoading stuck true
+    // (which would permanently disable the candle/flower buttons until remount).
+    try {
+      // Tapping the same type toggles it off; tapping a different type switches
+      const newType = tributes.userTribute === type ? null : type;
+      await setTribute(story.grave_id, newType);
+      // Log only when a tribute is added (not toggled off), so the count tracks engagement.
+      if (newType) logEvent(EVENTS.TRIBUTE_LEFT, { type: newType });
+      const fresh = await getTributes(story.grave_id);
+      setTributes(fresh);
+    } catch (e) {
+      console.warn('handleTribute failed:', e?.message || e);
+    } finally {
+      setTributeLoading(false);
+    }
   }
 
   const isUnsaved = !!story._unsaved;

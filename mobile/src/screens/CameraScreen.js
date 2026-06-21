@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Animated, ScrollView, Alert, Easing, AppState,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, RadialGradient, Stop, Rect, Path, Line, Circle, Ellipse, ClipPath, G } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
@@ -76,6 +77,22 @@ export default function CameraScreen({ navigation, route }) {
   // never blips before the camera opens and never lets the camera screen flash
   // back on return. Cleared once the picker promise resolves.
   const pickInProgressRef = useRef(false);
+
+  // On the success path runPipeline navigates to Result WITHOUT clearing `loading`,
+  // so the loading screen — not the viewfinder — stays underneath while Result
+  // slides in over it (clearing it on navigate flashed the viewfinder beside the
+  // sliding Result screen — the bug). We reset to the default state here when
+  // CameraScreen regains focus, i.e. the user navigated back from Result, so the
+  // viewfinder is ready for them. The picker guard prevents wiping the loader if a
+  // focus event fires while the OS picker round-trip is mid-flight.
+  useFocusEffect(
+    useCallback(() => {
+      if (!pickInProgressRef.current) {
+        setLoading(false);
+        setStepIndex(0);
+      }
+    }, [])
+  );
 
   // The headstone inside the viewfinder slowly "breathes" — a reverent ~5.6s
   // opacity swell, NOT the old harsh candle-flicker (which read as a rendering
@@ -874,14 +891,15 @@ export default function CameraScreen({ navigation, route }) {
         sources: Array.isArray(bioResult.sources) ? bioResult.sources.length : 0,
       });
 
-      // Navigate FIRST, then clear loading. If we cleared loading before
-      // navigating, CameraScreen would re-render as the "Take a photo" UI for one
-      // frame before Result is pushed on top — the camera screen briefly flashes.
-      // Navigating while still in the loading state keeps the loading screen up
-      // until Result covers it; clearing loading afterward leaves CameraScreen in
-      // its default state for when the user navigates back.
+      // Navigate and DELIBERATELY leave `loading` true. With the native-stack push
+      // animation, Result slides in over ~300ms while CameraScreen stays mounted
+      // underneath. If we cleared loading here, CameraScreen would re-render as the
+      // "Photograph the Stone" viewfinder for that whole slide — visible beside the
+      // incoming Result screen — which is the flash. Keeping the loader up means the
+      // thing showing underneath stays the loading screen until Result fully covers
+      // it. Loading is reset to false on the next focus (back-navigation) via the
+      // useFocusEffect below, so the viewfinder is ready when the user returns.
       navigation.navigate('Result', { story });
-      setLoading(false);
     } catch (err) {
       setLoading(false);
       logEvent(EVENTS.PIPELINE_ERROR, { stage: 'pipeline', message: err?.message });

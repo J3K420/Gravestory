@@ -27,9 +27,9 @@ function renderResult(story) {
     const hasPortraits = !!(leftSrc || rightSrc);
     imgContainer.innerHTML = `
       <div class="result-image-row ${hasPortraits ? '' : 'solo'}">
-        ${leftSrc ? `<div class="result-image-slot portrait"><img src="${leftSrc}" alt="Portrait" loading="lazy"></div>` : ''}
-        ${graveSrc ? `<div class="result-image-slot gravestone"><img src="${graveSrc}" alt="Gravestone" loading="lazy"></div>` : ''}
-        ${rightSrc ? `<div class="result-image-slot portrait"><img src="${rightSrc}" alt="Portrait" loading="lazy"></div>` : ''}
+        ${leftSrc ? `<div class="result-image-slot portrait"><img src="${escapeHtml(leftSrc)}" alt="Portrait" loading="lazy"></div>` : ''}
+        ${graveSrc ? `<div class="result-image-slot gravestone"><img src="${escapeHtml(graveSrc)}" alt="Gravestone" loading="lazy"></div>` : ''}
+        ${rightSrc ? `<div class="result-image-slot portrait"><img src="${escapeHtml(rightSrc)}" alt="Portrait" loading="lazy"></div>` : ''}
       </div>
     `;
     imgContainer.style.display = 'block';
@@ -69,8 +69,8 @@ function renderResult(story) {
     const locTag = document.createElement('div');
     locTag.className = 'location-tag';
     locTag.innerHTML = isUncertain
-      ? `📍 ${story.location} <span title="Approximate location — no GPS data" style="display:inline-flex;align-items:center;justify-content:center;width:1rem;height:1rem;border-radius:50%;background:rgba(138,126,110,0.3);color:var(--stone);font-size:0.65rem;font-style:normal;cursor:help;margin-left:0.2rem;">?</span>`
-      : `📍 ${story.location}`;
+      ? `📍 ${escapeHtml(story.location)} <span title="Approximate location — no GPS data" style="display:inline-flex;align-items:center;justify-content:center;width:1rem;height:1rem;border-radius:50%;background:rgba(138,126,110,0.3);color:var(--stone);font-size:0.65rem;font-style:normal;cursor:help;margin-left:0.2rem;">?</span>`
+      : `📍 ${escapeHtml(story.location)}`;
     body.appendChild(locTag);
   }
 
@@ -814,13 +814,13 @@ async function _loadGravePhotoGallery(graveId, leftPortrait, rightPortrait) {
 
     const graveSlides = photos.map((src, i) =>
       `<div class="grave-gallery-slide">
-         <img src="${src}" alt="Gravestone photo ${i + 1}" loading="${i === 0 ? 'eager' : 'lazy'}">
+         <img src="${escapeHtml(src)}" alt="Gravestone photo ${i + 1}" loading="${i === 0 ? 'eager' : 'lazy'}">
          <span class="grave-gallery-label">Photo ${i + 1} of ${photos.length}</span>
        </div>`
     ).join('');
     const portraitSlides = portraits.map(src =>
       `<div class="grave-gallery-slide portrait">
-         <img src="${src}" alt="Portrait" loading="lazy">
+         <img src="${escapeHtml(src)}" alt="Portrait" loading="lazy">
          <span class="grave-gallery-label">Portrait</span>
        </div>`
     ).join('');

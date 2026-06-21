@@ -1,4 +1,4 @@
-const CACHE = 'gravestory-v50';
+const CACHE = 'gravestory-v51';
 const TILE_CACHE = 'gravestory-tiles-v1';
 self.addEventListener('install', e => {
   // No pre-cache list — network-first fetch handler caches everything on visit.

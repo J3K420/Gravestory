@@ -625,6 +625,22 @@ export default function ResultScreen({ navigation, route }) {
     // marker always lands in the cloud. (`graves.marker_style` below is a
     // SEPARATE table for the global pin — it never backed the per-story map.)
     if (user) {
+      // A marker pick can be the FIRST thing that reaches the cloud for an
+      // unsaved auto-public story (default_visibility=public): it carries
+      // is_public=true but no public_biography yet, so without this the global
+      // map would serve the raw bio (coalesce(public_biography, biography)) with
+      // living-relative names un-redacted. Same guard + fail-safe as handleSave
+      // and _doTogglePublic. The !public_biography guard makes it a no-op on the
+      // update path when redaction already ran.
+      if (updated.is_public && !updated.public_biography && updated.biography) {
+        try {
+          const subjects = Array.isArray(updated.subjects) ? updated.subjects
+            : (Array.isArray(updated.graveData?.subjects) ? updated.graveData.subjects : []);
+          updated.public_biography = await redactLivingNamesForPublic(updated.biography, subjects);
+        } catch (e) {
+          console.warn('public_biography redaction skipped on marker-pick save (non-fatal):', e?.message || e);
+        }
+      }
       const synced = updated.id
         ? await cloudUpdateStory(updated, user)
         : await cloudSaveStory(updated, user);

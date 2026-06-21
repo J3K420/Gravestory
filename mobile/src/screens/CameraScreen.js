@@ -513,6 +513,15 @@ export default function CameraScreen({ navigation, route }) {
       // AI-resolved meanings for symbols the static SYMBOL_CONTEXT table can't
       // explain; reused from a cached story when available, else resolved below.
       let symbolMeanings = cachedBio?.symbol_meanings || null;
+      // [latency #3] Kick off symbol-meaning resolution NOW (it depends only on
+      // graveData.symbols, already known from OCR) so this Gemini call overlaps the
+      // entire research fan-out + biography generation instead of running serially
+      // after them. Awaited at the existing merge point below — same inputs, same
+      // merge, same non-fatal behavior; only the wall-clock placement changes.
+      // resolveSymbolMeanings returns {} instantly with no network when every symbol
+      // is table-covered, so this costs nothing on clean stones.
+      const symbolMeaningsPromise = resolveSymbolMeanings(graveData.symbols)
+        .catch(e => { console.warn('Symbol-meaning resolution failed (non-fatal):', e?.message || e); return null; });
       if (cachedBio) {
         bioResult = {
           name: cachedBio.name,
@@ -744,28 +753,34 @@ export default function CameraScreen({ navigation, route }) {
         }
         if (resolvedPortraits.length === 0 && bioResult.name) {
           const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
-          const nameParts = bioResult.name.split(/\s+(?:and|&)\s+/i).map(n => n.trim()).filter(Boolean);
-          for (const namePart of nameParts) {
-            const tokens = namePart.toLowerCase().replace(/[.,'"()]/g, '').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w));
-            if (tokens.length >= 2) {
-              const fetched = await fetchWikipediaPortraits(namePart, bioResult.dates);
-              if (fetched.length > 0) { resolvedPortraits = fetched; break; }
-            }
+          const nameParts = bioResult.name.split(/\s+(?:and|&)\s+/i).map(n => n.trim()).filter(Boolean)
+            .filter(namePart => {
+              const tokens = namePart.toLowerCase().replace(/[.,'"()]/g, '').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w));
+              return tokens.length >= 2;
+            });
+          // [latency #4] Fetch every name part's portraits CONCURRENTLY instead of a
+          // sequential await-per-part loop (each part does a Wikipedia search +
+          // image download + resize + persist — serial was up to N× that). Still
+          // pick the FIRST name part (in order) that returned portraits, so the
+          // selection is identical to the old loop — only the wall-clock changes.
+          if (nameParts.length > 0) {
+            const fetchedPerPart = await Promise.all(
+              nameParts.map(namePart => fetchWikipediaPortraits(namePart, bioResult.dates))
+            );
+            const firstHit = fetchedPerPart.find(f => f.length > 0);
+            if (firstHit) resolvedPortraits = firstHit;
           }
         }
       }
 
-      // Resolve meanings for symbols the static SYMBOL_CONTEXT table can't explain,
-      // so every recognised symbol on the Result screen is a tappable chip. One small
-      // Gemini call, only when uncovered symbols exist (often a no-op). Merged onto any
-      // meanings a cached story already carried. Non-fatal — never blocks the scan.
-      try {
-        const aiMeanings = await resolveSymbolMeanings(graveData.symbols);
-        if (aiMeanings && Object.keys(aiMeanings).length > 0) {
-          symbolMeanings = { ...(symbolMeanings || {}), ...aiMeanings };
-        }
-      } catch (e) {
-        console.warn('Symbol-meaning resolution failed (non-fatal):', e?.message || e);
+      // Merge in the symbol meanings resolved concurrently (started right after OCR,
+      // [latency #3]) so every recognised symbol on the Result screen is a tappable
+      // chip. The Gemini call already ran in parallel with research + bio, so this
+      // await is usually instant here. Merged onto any meanings a cached story
+      // carried. Non-fatal — the promise already swallowed its own errors to null.
+      const aiMeanings = await symbolMeaningsPromise;
+      if (aiMeanings && Object.keys(aiMeanings).length > 0) {
+        symbolMeanings = { ...(symbolMeanings || {}), ...aiMeanings };
       }
 
       setStepIndex(4);
@@ -774,6 +789,11 @@ export default function CameraScreen({ navigation, route }) {
       // the precise node. But camera EXIF / device GPS is always more accurate for
       // pin placement — the user was physically standing at the grave. Prefer real
       // GPS over Nominatim coords; only fall back to Nominatim when GPS is absent.
+      // NOTE: even when on-site GPS exists, this geocode is kept — its lowConfidence
+      // signal (a US-state mismatch between the AI bio-location and its named state)
+      // still flags the pin. Skipping it on GPS scans would be a ~1–4 s win but would
+      // drop that flag for a class of scans (state-mismatch GPS pins), a behavior
+      // change; an adversarial review flagged it, so we keep the call. [latency #2 reverted]
       const primaryName = primaryOcrName || bioResult.name || '';
       const geoResult = await forwardGeocode(bioResult.location, primaryName, bioResult.dates);
       // Wikidata burial coords (P119 place of burial → P625) are a documented,

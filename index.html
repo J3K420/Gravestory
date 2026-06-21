@@ -1064,6 +1064,15 @@ async function startAnalysis() {
       confidence: graveData.name_confidence,
       subjects: Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name).length : 0,
     });
+    // [latency #3] Kick off symbol-meaning resolution NOW (it depends only on
+    // graveData.symbols, already known from OCR) so this Gemini call overlaps the
+    // entire research fan-out + biography generation instead of running serially
+    // after them. Awaited at the existing merge point below — same inputs, same
+    // merge, same non-fatal behavior; only the wall-clock placement changes.
+    // resolveSymbolMeanings returns {} instantly with no network when every symbol
+    // is table-covered, so this costs nothing on clean stones.
+    const symbolMeaningsPromise = resolveSymbolMeanings(graveData.symbols)
+      .catch(e => { console.log('Symbol-meaning resolution failed (non-fatal):', e?.message || e); return null; });
     // Count this scan now that OCR succeeded (verification already passed)
     await incrementWebScanCount();
 
@@ -1317,17 +1326,14 @@ async function startAnalysis() {
       });
     }
 
-    // 5.25 — Resolve meanings for symbols the static SYMBOL_CONTEXT table can't
-    // explain, so every recognised symbol on the result screen is a tappable chip.
-    // One small Gemini call, only when uncovered symbols exist (often a no-op).
-    // Merged onto any meanings the cached story already carried; non-fatal.
-    try {
-      const aiMeanings = await resolveSymbolMeanings(graveData.symbols);
-      if (aiMeanings && Object.keys(aiMeanings).length > 0) {
-        story.symbol_meanings = { ...(story.symbol_meanings || {}), ...aiMeanings };
-      }
-    } catch (e) {
-      console.log('Symbol-meaning resolution failed (non-fatal):', e?.message || e);
+    // 5.25 — Merge in the symbol meanings resolved concurrently (started right after
+    // OCR, [latency #3]) so every recognised symbol on the result screen is a tappable
+    // chip. The Gemini call already ran in parallel with research + bio, so this await
+    // is usually instant here. Merged onto any meanings the cached story carried;
+    // non-fatal — the promise already swallowed its own errors to null.
+    const aiMeanings = await symbolMeaningsPromise;
+    if (aiMeanings && Object.keys(aiMeanings).length > 0) {
+      story.symbol_meanings = { ...(story.symbol_meanings || {}), ...aiMeanings };
     }
 
     // 5.5 — Fetch Wikipedia portraits (best-effort, doesn't block on failure).
@@ -1348,12 +1354,18 @@ async function startAnalysis() {
     }
     if (!portraits?.left && !portraits?.right && story.name?.includes(' & ')) {
       const SKIP = new Set(['mr','mrs','ms','dr','rev','sr','jr','ii','iii','iv','v','the']);
-      for (const part of story.name.split(' & ').map(s => s.trim())) {
+      const parts = story.name.split(' & ').map(s => s.trim()).filter(part => {
         const tokens = part.toLowerCase().replace(/[.,'"()]/g, '').split(/\s+/).filter(w => w.length > 1 && !SKIP.has(w));
-        if (tokens.length >= 2) {
-          const attempt = await fetchWikipediaPortraits(part, story.dates);
-          if (attempt?.left || attempt?.right) { portraits = attempt; break; }
-        }
+        return tokens.length >= 2;
+      });
+      // [latency #4] Fetch every name part's portraits CONCURRENTLY instead of a
+      // sequential await-per-part loop. Still pick the FIRST name part (in order)
+      // that returned a portrait, so the selection is identical to the old loop —
+      // only the wall-clock changes.
+      if (parts.length > 0) {
+        const attempts = await Promise.all(parts.map(part => fetchWikipediaPortraits(part, story.dates)));
+        const firstHit = attempts.find(a => a?.left || a?.right);
+        if (firstHit) portraits = firstHit;
       }
     }
 

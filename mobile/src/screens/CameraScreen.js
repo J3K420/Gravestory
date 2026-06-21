@@ -874,8 +874,14 @@ export default function CameraScreen({ navigation, route }) {
         sources: Array.isArray(bioResult.sources) ? bioResult.sources.length : 0,
       });
 
-      setLoading(false);
+      // Navigate FIRST, then clear loading. If we cleared loading before
+      // navigating, CameraScreen would re-render as the "Take a photo" UI for one
+      // frame before Result is pushed on top — the camera screen briefly flashes.
+      // Navigating while still in the loading state keeps the loading screen up
+      // until Result covers it; clearing loading afterward leaves CameraScreen in
+      // its default state for when the user navigates back.
       navigation.navigate('Result', { story });
+      setLoading(false);
     } catch (err) {
       setLoading(false);
       logEvent(EVENTS.PIPELINE_ERROR, { stage: 'pipeline', message: err?.message });

@@ -616,29 +616,39 @@ export default function ResultScreen({ navigation, route }) {
     const idx = all.findIndex(s => s.timestamp === story.timestamp);
     if (idx >= 0) { all[idx] = updated; await saveStories(all, uid); }
     setStory(updated);
-    // Persist the marker to the cloud stories row so it survives a device
-    // switch / reinstall (the new phone rebuilds every pin from the cloud, so a
-    // pick that never reached `stories.marker_style` reverts to the book
-    // default). Previously this only ran when `updated.id` already existed, so a
-    // pick on a saved-but-not-yet-cloud-synced story silently stayed local-only.
-    // Now: cloudUpdate when we have an id, else cloudSave to MINT one, so the
-    // marker always lands in the cloud. (`graves.marker_style` below is a
-    // SEPARATE table for the global pin — it never backed the per-story map.)
+
+    // UNSAVED story: do NOT touch the cloud here. markerStyleRef (set above) is
+    // read by handleSave, which owns the single INSERT (and the grave staking +
+    // redaction). Previously this path called cloudSaveStory on an unsaved
+    // story, which (a) minted a cloud row before the user tapped Save/Discard —
+    // so a pick-then-Discard still left the story in the cloud — and (b) never
+    // cleared _unsaved, so the later handleSave INSERTed a SECOND row (duplicate
+    // in Remembered Stories). Recording the pick locally is enough; handleSave
+    // does the rest. (H6 + L16: keeping _unsaved/_base64 on `updated` is correct
+    // — handleSave needs _base64 for the R2 upload and _unsaved for its guard.)
+    if (story._unsaved) {
+      setSavingMarker(false);
+      return;
+    }
+
+    // SAVED story: persist the marker to the cloud stories row so it survives a
+    // device switch / reinstall (a new phone rebuilds every pin from the cloud,
+    // so a pick that never reached `stories.marker_style` reverts to the book
+    // default). cloudUpdate when we have an id, else cloudSave to MINT one for a
+    // saved-but-not-yet-cloud-synced story (_needsCloudSync). (`graves.marker_style`
+    // below is a SEPARATE table for the global pin — it never backed the per-story map.)
     if (user) {
-      // A marker pick can be the FIRST thing that reaches the cloud for an
-      // unsaved auto-public story (default_visibility=public): it carries
-      // is_public=true but no public_biography yet, so without this the global
-      // map would serve the raw bio (coalesce(public_biography, biography)) with
-      // living-relative names un-redacted. Same guard + fail-safe as handleSave
-      // and _doTogglePublic. The !public_biography guard makes it a no-op on the
-      // update path when redaction already ran.
+      // Defense-in-depth: if a saved-public story still has no public_biography
+      // (e.g. made public before S62 redaction shipped), redact before this
+      // re-write reaches the cloud. No-op when already redacted. Same guard +
+      // fail-safe as handleSave / _doTogglePublic.
       if (updated.is_public && !updated.public_biography && updated.biography) {
         try {
           const subjects = Array.isArray(updated.subjects) ? updated.subjects
             : (Array.isArray(updated.graveData?.subjects) ? updated.graveData.subjects : []);
           updated.public_biography = await redactLivingNamesForPublic(updated.biography, subjects);
         } catch (e) {
-          console.warn('public_biography redaction skipped on marker-pick save (non-fatal):', e?.message || e);
+          console.warn('public_biography redaction skipped on marker-pick update (non-fatal):', e?.message || e);
         }
       }
       const synced = updated.id

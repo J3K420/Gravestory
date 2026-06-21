@@ -213,7 +213,32 @@ async function pushLocalOnly() {
 
   let uploaded = 0;
   for (const story of candidates) {
-    if (existing.has(story.timestamp)) continue; // already in cloud
+    // An id-bearing candidate is here because a prior UPDATE failed
+    // (_needsCloudSync) — the row already exists, so it must be UPDATEd, never
+    // re-INSERTed (there is no unique constraint on client_timestamp, so an
+    // insert would create a duplicate). This is the H4 retry path that was
+    // previously skipped: `existing.has(timestamp)` sent it to `continue` and
+    // the flag never cleared, so a failed visibility/location/marker edit was
+    // silently lost from the cloud forever.
+    if (story.id) {
+      try {
+        const { data: updated, error: updErr } = await supabaseClient
+          .from('stories')
+          .update(storyToRow(story))
+          .eq('id', story.id)
+          .select()
+          .single();
+        if (updErr) throw updErr;
+        story._updatedAt = updated.updated_at;
+        delete story._needsCloudSync;
+        uploaded++;
+      } catch (e) {
+        story._needsCloudSync = true;
+        console.warn('☁️ pushLocalOnly: one update failed, will retry next sync:', e.message);
+      }
+      continue;
+    }
+    if (existing.has(story.timestamp)) continue; // already in cloud (id adopted above)
     try {
       const { data: inserted, error: insErr } = await supabaseClient
         .from('stories')

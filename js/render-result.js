@@ -472,13 +472,13 @@ function renderMarkerSection(story, alreadySaved) {
   `;
   body.appendChild(wrap);
 
-  document.getElementById('marker-pick-btn').onclick = () => openMarkerPicker(target);
+  document.getElementById('marker-pick-btn').onclick = () => openMarkerPicker(target, alreadySaved);
 }
 
 // Slide-up modal grid of all 20 marker styles. Picking one persists immediately
 // (local + cloud when saved) and stakes the grave's global-map pin, then
 // re-renders the result screen so the new pin shows.
-function openMarkerPicker(savedRow) {
+function openMarkerPicker(savedRow, alreadySaved) {
   const existing = document.getElementById('marker-picker-overlay');
   if (existing) existing.remove();
 
@@ -561,17 +561,23 @@ function openMarkerPicker(savedRow) {
           if (currentStory && currentStory.timestamp === savedRow.timestamp) currentStory.grave_id = gid;
         }
       }
-      // Persist the marker to the cloud stories row so it survives a device
-      // switch / reinstall (a fresh client rebuilds every pin from the cloud, so
-      // a pick that never reached `stories.marker_style` reverts to the book
-      // default). Previously this only ran when an `id` already existed, so a
-      // pick on a saved-but-not-yet-cloud-synced story silently stayed local-
-      // only. Now: persistUpdate when we have an id, else persistSave to MINT
-      // one, so the marker always lands in the cloud. (An unsaved story — no
-      // savedRow in savedStories — still defers to Save as before, since this
-      // picker only opens for staked graves.)
-      if (savedRow.id) await persistUpdate(savedRow);
-      else if (currentUser) await persistSave(savedRow);
+      // UNSAVED story: do NOT write a cloud row here. The in-memory
+      // currentStory.marker_style mutation above is carried into saveStory(),
+      // which owns the single INSERT. Calling persistSave here would (a) mint a
+      // cloud row before the user taps Save — a pick-then-leave still left the
+      // story in the cloud — and (b) NOT add savedRow to savedStories, so the
+      // later saveStory() (its double-save guard keys on savedStories
+      // membership) INSERTs a SECOND row → duplicate in Remembered Stories.
+      // (H6, web counterpart of the mobile handlePickMarker fix.) The grave is
+      // already staked via findOrCreateGrave above/at pipeline time, so the
+      // global pin still lands immediately.
+      if (alreadySaved) {
+        // Persist the marker to the cloud stories row so it survives a device
+        // switch / reinstall. persistUpdate when we have an id, else persistSave
+        // to MINT one for a saved-but-not-yet-cloud-synced story.
+        if (savedRow.id) await persistUpdate(savedRow);
+        else if (currentUser) await persistSave(savedRow);
+      }
       // Stake this grave's permanent global-map pin (first-wins, NULL-guarded
       // server-side). The grave already exists from the pipeline, so this
       // works even before the story row is saved. No-ops without a grave_id.

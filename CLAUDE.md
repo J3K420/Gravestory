@@ -54,7 +54,7 @@ js/
   user-prefs.js          — Display name + default visibility (user_metadata)
   persistence.js         — storyToRow/rowToStory (grave_id, source, marker_style), cloud upsert/delete
   sync.js                — Incremental delta sync (updated_at watermark) + pushLocalOnly
-  scan-limit.js          — checkWebScanLimit (guest 3 / free 10 lifetime, fail-closed); save limits are no-ops
+  scan-limit.js          — checkWebScanLimit (guest 3 / free signed-in 3 lifetime, fail-closed); save limits are no-ops
   api-tributes.js        — getTributes/setTribute (candle/flower per grave)
   save-actions.js        — saveStory, shareStory, exportCemeteryData
   render-result.js       — Result screen renderer + renderTributeSection + marker-style picker
@@ -214,7 +214,7 @@ mobile/
 
 ## Freemium / monetization
 
-- **Scans are the sole cost control** (Tavily/Gemini cost): guest 3, free signed-in 10 lifetime, + purchased credits. Save limits were removed entirely (no-ops kept for API compat). Limits fail closed on Supabase errors. (Tavily degrades gracefully when its ~4000-credit pool is exhausted — slots return empty and bios thin out, but Gemini still writes from the stone + free sources; no outage.)
+- **Scans are the sole cost control** (Tavily/Gemini cost): guest 3, free signed-in 3 lifetime (lowered from 10 in S66 — the pipeline has no warm-up, so a strong first bio sells the app and lands the paywall at peak WTP; signing in no longer adds free scans, it adds cloud save/sync + the ability to buy credits), + purchased credits. Save limits were removed entirely (no-ops kept for API compat). Limits fail closed on Supabase errors. (Tavily degrades gracefully when its ~4000-credit pool is exhausted — slots return empty and bios thin out, but Gemini still writes from the stone + free sources; no outage.)
 - Credits-only model (no subscriptions): `gravestory_5_scans` $1.99 · `gravestory_20_scans` $5.99 · `gravestory_60_scans` $12.99 · `gravestory_150_scans` $24.99 (Legacy/gift tier, added 2026-06-13 per pricing research — captures high-WTP gift buyers, anchors the $12.99 pack as the middle); never expire. Prices are set in Google Play Console and surfaced live via RevenueCat (`pkg.product.priceString`) — a price change is a STORE-side action, no code/OTA needed; the `PACK_INFO` strings in `PaywallScreen.js` are only an offline-preview fallback to keep in sync. **New product IDs must be added in THREE places: Play Console + RevenueCat (store-side), the worker `CREDIT_MAP` (else the webhook grants 0 credits — `unknown product`), and `PaywallScreen.js` PRODUCT_IDS+PACK_INFO.** Pack render order on the paywall follows the RevenueCat offering order, not the code. Premium pricing was chosen to pre-fund the planned AR ghost-narrator feature (`docs/ar-ghost-narrator-design.md`). RevenueCat SDK live (production `goog_` key via EAS Secret, Sensitive visibility); `Purchases.logIn(userId)` after auth; purchases land as credits via the Worker webhook.
 - Tester bypass: `is_unlimited: true` in `app_metadata` via SQL editor: `UPDATE auth.users SET raw_app_meta_data = raw_app_meta_data || '{"is_unlimited": true}'::jsonb WHERE id = '<user-id>';` (current: j3k420@gmail.com, james.edmonds26@gmail.com).
 

@@ -1005,15 +1005,15 @@ async function startAnalysis() {
 
   logEvent(ANALYTICS_EVENTS.SCAN_STARTED, { hasGps: !!currentExifLocation });
 
-  // Freemium scan limit check (guest: 3 lifetime; signed-in free: 10 lifetime)
+  // Freemium scan limit check (guest: 0 — must sign in to scan; signed-in free: 3 lifetime)
   const scanCheck = await checkWebScanLimit();
   if (scanCheck.atLimit) {
     logEvent(ANALYTICS_EVENTS.SCAN_LIMIT_HIT, { count: scanCheck.count, limit: scanCheck.limit, isGuest: scanCheck.isGuest });
     const msg = scanCheck._checkFailed
       ? 'Could not verify your scan limit right now. Please check your connection and try again.'
       : scanCheck.isGuest
-        ? `You've used your ${scanCheck.limit} free scans. Sign in to get ${WEB_SCAN_LIMIT_USER} scans.`
-        : `You've used all ${scanCheck.limit} scans. Purchase more credits in the app.`;
+        ? `Sign in to start scanning — you'll get ${WEB_SCAN_LIMIT_USER} free scans to begin. Browse the community map anytime without an account.`
+        : `You've used all ${scanCheck.limit} free scans. Purchase more credits in the app.`;
     alert(msg);
     return;
   }

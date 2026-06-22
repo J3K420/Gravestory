@@ -93,9 +93,19 @@ export default function PaywallScreen({ navigation, route }) {
     }
   }
 
-  const title = isGuest ? 'Scan Limit Reached' : 'Free Scans Used Up';
+  // Guests get 0 free scans — scanning requires an account. Present this as an
+  // invitation to sign in, not a "you hit a wall" message.
+  const guestNoScans = isGuest && limit <= 0;
 
-  const countLabel = `${count} of ${limit} free scans used`;
+  const title = guestNoScans
+    ? 'Sign In to Scan'
+    : isGuest
+      ? 'Scan Limit Reached'
+      : 'Free Scans Used Up';
+
+  const countLabel = guestNoScans
+    ? 'Free to start — no card required'
+    : `${count} of ${limit} free scans used`;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -110,14 +120,18 @@ export default function PaywallScreen({ navigation, route }) {
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.count}>{countLabel}</Text>
 
-        <View style={styles.barTrack}>
-          <View style={[styles.barFill, { width: `${Math.min((count / limit) * 100, 100)}%` }]} />
-        </View>
+        {!guestNoScans && (
+          <View style={styles.barTrack}>
+            <View style={[styles.barFill, { width: `${limit > 0 ? Math.min((count / limit) * 100, 100) : 0}%` }]} />
+          </View>
+        )}
 
         {isGuest ? (
           <>
             <Text style={styles.body}>
-              {`Guest accounts get ${SCAN_LIMIT_GUEST} free scans. Sign in for free to get ${SCAN_LIMIT_USER} scans.`}
+              {guestNoScans
+                ? `Create a free account to start scanning gravestones and discovering their stories. You'll get ${SCAN_LIMIT_USER} free scans to begin — no card required.`
+                : `Sign in to save your stories across devices and buy more scans when you're ready.`}
             </Text>
             <TouchableOpacity
               style={styles.primaryBtn}

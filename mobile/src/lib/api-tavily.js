@@ -202,13 +202,13 @@ export async function searchForPerson(graveData, location, cemeteryName) {
       queries.push({ q: `"${primaryVar}" obituary${loc ? ' ' + loc : ''}`.trim(), domains: ['legacy.com'] });
     }
 
-    // Slot 6: Secondary fallback — pre-1928 gets a Legacy.com pass too; modern
-    // deaths fall back to a family-name Newspapers.com search.
-    if (effectiveDeath && deathYrNum <= 1928) {
-      queries.push({ q: `"${primaryVar}" obituary${loc ? ' ' + loc : ''}`.trim(), domains: ['legacy.com'] });
-    } else if (graveData.family_name) {
-      queries.push({ q: `"${graveData.family_name}"${loc ? ' ' + loc : ''}${effectiveDeath ? ' ' + effectiveDeath : ''}`.trim(), domains: ['newspapers.com'] });
-    }
+    // (Removed) Slot 6 secondary fallback: a second legacy.com pass for pre-1928
+    // deaths (legacy.com barely indexes that era — the free Chronicling America
+    // OCR search already covers it at zero Tavily cost) and a surname-only
+    // newspapers.com query for modern deaths (paywalled stub that fails the
+    // first+last-name corroboration gate in biography.js, so it rarely affected
+    // the bio). Both branches were low-yield per the spend audit; dropping the
+    // slot saves 1–2 Tavily credits/scan with negligible quality impact.
   }
 
   // Alternate OCR readings for low-confidence names: append (fire only if budget allows)

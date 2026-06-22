@@ -2,8 +2,14 @@
 // Mirrors the mobile scan-limit.js / save-limit.js logic.
 // Depends on: supabaseClient (auth.js), currentUser (auth.js), savedStories (index.html).
 
-const WEB_SCAN_LIMIT_GUEST  = 3;
-const WEB_SCAN_LIMIT_USER   = 10;
+// Guests get 0 scans (S66) — they can browse the app + community global map
+// WITHOUT an account, but scanning (real Tavily/Gemini cost) requires sign-in.
+const WEB_SCAN_LIMIT_GUEST  = 0;
+// Signed-in free lifetime scans. Lowered 10 → 3 (S66) — keep in sync with
+// mobile SCAN_LIMIT_FREE_USER. The pipeline has no warm-up (scan #1 == scan #10
+// in quality), so a strong first bio sells the app; 3 lands the paywall at peak
+// willingness-to-pay and signals product confidence.
+const WEB_SCAN_LIMIT_USER   = 3;
 const WEB_GUEST_SCAN_KEY    = 'gs_web_scan_count';
 
 // Expose on window so other classic scripts (e.g. user-prefs.js) can read the

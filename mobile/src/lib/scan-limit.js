@@ -1,8 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 
-export const SCAN_LIMIT_FREE_GUEST = 3;
-export const SCAN_LIMIT_FREE_USER  = 10;
+// Guests get 0 scans (S66): they can explore the app and browse the community
+// global map (see real bios to get a feel) WITHOUT an account, but scanning —
+// the part that costs real Tavily/Gemini money — requires signing in. The first
+// tap to scan routes a guest to the sign-in invite, not a "limit reached" wall.
+export const SCAN_LIMIT_FREE_GUEST = 0;
+// Signed-in free lifetime scans. Lowered 10 → 3 (S66): the research pipeline has
+// no warm-up — scan #1 is the same quality as scan #10 — so a great first bio
+// sells the app, and a user who'd need 10 to be convinced was never going to be.
+// 3 lands the paywall at peak willingness-to-pay and signals product confidence.
+export const SCAN_LIMIT_FREE_USER  = 3;
 
 // Keep old export names so existing call sites don't break
 export const SCAN_LIMIT_GUEST = SCAN_LIMIT_FREE_GUEST;

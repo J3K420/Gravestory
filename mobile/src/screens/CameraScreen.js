@@ -505,7 +505,7 @@ export default function CameraScreen({ navigation, route }) {
             const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
             const { data: row } = await supabase
               .from('stories')
-              .select('name,dates,biography,location,inscription,symbols,symbol_meanings,sources,source_urls,portrait_left_url,portrait_right_url,portraits,grave_id')
+              .select('name,dates,biography,public_biography,location,inscription,symbols,symbol_meanings,sources,source_urls,portrait_left_url,portrait_right_url,portraits,grave_id')
               .eq('grave_id', cachedGraveId)
               .eq('is_public', true)
               .is('deleted_at', null)
@@ -543,7 +543,12 @@ export default function CameraScreen({ navigation, route }) {
         bioResult = {
           name: cachedBio.name,
           dates: cachedBio.dates,
-          biography: cachedBio.biography,
+          // Reuse the living-name-REDACTED public copy when present — the cached
+          // story belongs to a DIFFERENT user, so handing them the raw bio would
+          // re-expose living relatives' names that redaction hid on the public
+          // map. Falls back to the raw bio for public stories that predate
+          // redaction (public_biography NULL), matching the global-map RPC.
+          biography: cachedBio.public_biography || cachedBio.biography,
           location: cachedBio.location,
           inscription: cachedBio.inscription,
           symbols: cachedBio.symbols,

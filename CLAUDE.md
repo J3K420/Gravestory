@@ -2,6 +2,7 @@
 
 ## Working conventions
 
+- **Review every substantive change before committing.** Run the `bmad-code-review` skill (adversarial: Blind Hunter + Edge Case Hunter, triaged) on any non-trivial code/SQL/logic change, fix what it surfaces, THEN commit. Skip only truly trivial edits (typo, copy tweak, version bump). For correctness-critical or unrunnable-here artifacts (e.g. raw SQL pasted into Supabase), also spawn a targeted validation subagent. This is a hard gate, not optional — it exists because review has caught real bugs that slipped self-review (e.g. the dashboard `group by` ordinal shift).
 - **Always commit and push at the end of every session.** Do not leave work uncommitted.
 - **Mobile JS changes ship via OTA to the `production` channel** (where live testers are): `npx eas update --branch production --environment production`. Verify with `eas channel:list` before publishing. Native-module changes need a new build, not an OTA.
 - **Any web change must bump the `CACHE` version in `sw.js`** (increment the `gravestory-vN` number at the top of `sw.js`) or users keep the old cached shell.

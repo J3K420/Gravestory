@@ -19,7 +19,7 @@ const StoryCard = memo(function StoryCard({ story, i, onPress, onDelete }) {
       <View style={styles.savedAvatar}>
         <Headstone size={17} color={colors.ash} />
       </View>
-      <TouchableOpacity style={styles.savedCardMain} onPress={onPress}>
+      <TouchableOpacity style={styles.savedCardMain} onPress={onPress} activeOpacity={0.7}>
         <Text style={styles.savedName}>{story.name || 'Unknown'}</Text>
         <Text style={styles.savedDates}>{story.dates || ''}</Text>
       </TouchableOpacity>
@@ -28,7 +28,10 @@ const StoryCard = memo(function StoryCard({ story, i, onPress, onDelete }) {
       <TouchableOpacity
         style={styles.deleteBtn}
         onPress={onDelete}
+        activeOpacity={0.6}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityRole="button"
+        accessibilityLabel={`Delete story for ${story.name || 'Unknown'}`}
       >
         <Text style={styles.deleteBtnText}>✕</Text>
       </TouchableOpacity>
@@ -144,10 +147,16 @@ export default function RememberedStoriesScreen({ navigation }) {
       <StatusBar barStyle="light-content" backgroundColor={colors.ink} />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>✦ Remembered Stories</Text>
+        <Text style={styles.title}>Remembered Stories</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -160,6 +169,7 @@ export default function RememberedStoriesScreen({ navigation }) {
               key={mode.key}
               style={[styles.sortPill, sortBy === mode.key && styles.sortPillActive]}
               onPress={() => setSortBy(mode.key)}
+              activeOpacity={0.7}
             >
               <Text style={[styles.sortPillText, sortBy === mode.key && styles.sortPillTextActive]}>
                 {mode.label}
@@ -178,7 +188,7 @@ export default function RememberedStoriesScreen({ navigation }) {
             <GravestoneLogo size={80} animate={false} />
             <Text style={styles.emptyTitle}>No stories yet</Text>
             <Text style={styles.emptySaved}>
-              Tap Scan on the home screen to photograph your first gravestone
+              Tap "Scan a Gravestone" on the home screen to photograph your first one.
             </Text>
           </View>
 
@@ -236,14 +246,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: colors.line,
   },
-  backBtn: { paddingRight: 12 },
-  backText: { color: colors.flame, fontSize: 14, fontFamily: fonts.body },
+  backBtn: { width: 80, paddingRight: 12 },
+  backText: { color: colors.ashDim, fontSize: 15, fontFamily: fonts.body },
   title: {
     flex: 1, textAlign: 'center',
     color: colors.parchment, fontSize: 16,
     fontFamily: fonts.title, letterSpacing: 1,
   },
-  headerSpacer: { width: 52 },
+  headerSpacer: { width: 80 },
 
   sortBar: {
     flexDirection: 'row', alignItems: 'center',

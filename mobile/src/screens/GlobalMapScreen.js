@@ -169,7 +169,13 @@ export default function GlobalMapScreen({ navigation }) {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerSide}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.headerSide}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
@@ -181,7 +187,7 @@ export default function GlobalMapScreen({ navigation }) {
 
       {/* Guest banner */}
       {!user && (
-        <TouchableOpacity style={styles.guestBanner} onPress={() => navigation.navigate('Auth')}>
+        <TouchableOpacity style={styles.guestBanner} onPress={() => navigation.navigate('Auth')} activeOpacity={0.7}>
           <Text style={styles.guestBannerText}>
             Guest view · 50 most recent · Sign in for 500
           </Text>
@@ -220,6 +226,8 @@ export default function GlobalMapScreen({ navigation }) {
               onPress={() => { setSelectedStory(null); setBioExpanded(false); }}
               hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
               activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
             >
               <Text style={styles.calloutDismissText}>✕</Text>
             </TouchableOpacity>
@@ -253,6 +261,7 @@ export default function GlobalMapScreen({ navigation }) {
                 <TouchableOpacity
                   style={styles.calloutBtn}
                   onPress={() => setBioExpanded(e => !e)}
+                  activeOpacity={0.7}
                 >
                   <Text style={styles.calloutBtnText}>
                     {bioExpanded ? '▲ Hide bio' : '▼ Read bio'}
@@ -262,6 +271,7 @@ export default function GlobalMapScreen({ navigation }) {
               <TouchableOpacity
                 style={[styles.calloutBtn, styles.calloutBtnPrimary]}
                 onPress={() => { setSelectedStory(null); setBioExpanded(false); navigation.navigate('Result', { story: selectedStory }); }}
+                activeOpacity={0.7}
               >
                 <Text style={styles.calloutBtnText}>→ Go to bio</Text>
               </TouchableOpacity>
@@ -288,13 +298,14 @@ export default function GlobalMapScreen({ navigation }) {
           ) : (
             stories.map((story, i) => (
               <View key={story.id ?? i} style={styles.graveItem}>
-                <TouchableOpacity style={styles.graveItemMain} onPress={() => flyTo(story)}>
+                <TouchableOpacity style={styles.graveItemMain} onPress={() => flyTo(story)} activeOpacity={0.7}>
                   <Text style={styles.graveName} numberOfLines={1}>{story.name || 'Unknown'}</Text>
                   {!!story.dates && <Text style={styles.graveDates}>{story.dates}</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.storyBtn}
                   onPress={() => navigation.navigate('Result', { story })}
+                  activeOpacity={0.7}
                 >
                   <Text style={styles.storyBtnText}>Story →</Text>
                 </TouchableOpacity>
@@ -417,7 +428,7 @@ const styles = StyleSheet.create({
     textAlign: 'center', lineHeight: 22, marginTop: 8,
   },
   errorText: {
-    color: '#a03c3c', fontFamily: fonts.body,
+    color: colors.danger, fontFamily: fonts.body,
     textAlign: 'center', lineHeight: 22, marginTop: 8,
   },
 });

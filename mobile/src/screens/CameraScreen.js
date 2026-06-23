@@ -934,7 +934,14 @@ export default function CameraScreen({ navigation, route }) {
   if (pipelineError) {
     return (
       <SafeAreaView style={styles.container}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.back}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <View style={styles.rejectedBox}>
@@ -943,6 +950,7 @@ export default function CameraScreen({ navigation, route }) {
           {!!pipelineError.base64 && (
             <TouchableOpacity
               style={styles.tryAnyway}
+              activeOpacity={0.85}
               onPress={() => {
                 const { base64, gps, fromCamera } = pipelineError;
                 setPipelineError(null);
@@ -952,7 +960,7 @@ export default function CameraScreen({ navigation, route }) {
               <Text style={styles.tryAnywayText}>Save & Research Later</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.retryBtn} onPress={() => setPipelineError(null)}>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => setPipelineError(null)} activeOpacity={0.85}>
             <Text style={styles.retryText}>Try Again</Text>
           </TouchableOpacity>
         </View>
@@ -963,16 +971,23 @@ export default function CameraScreen({ navigation, route }) {
   if (rejected) {
     return (
       <SafeAreaView style={styles.container}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.back}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <View style={styles.rejectedBox}>
           <Text style={styles.rejectedTitle}>Not a Gravestone</Text>
           <Text style={styles.rejectedReason}>{rejected.reason}</Text>
-          <TouchableOpacity style={styles.tryAnyway} onPress={() => runPipeline(rejected.base64, true, rejected.gps, rejected.fromCamera, rejected.pending)}>
+          <TouchableOpacity style={styles.tryAnyway} activeOpacity={0.85} onPress={() => runPipeline(rejected.base64, true, rejected.gps, rejected.fromCamera, rejected.pending)}>
             <Text style={styles.tryAnywayText}>Use it anyway</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => setRejected(null)}>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => setRejected(null)} activeOpacity={0.85}>
             <Text style={styles.retryText}>Try a different photo</Text>
           </TouchableOpacity>
         </View>
@@ -982,7 +997,14 @@ export default function CameraScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.back}
+        activeOpacity={0.7}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 
@@ -1006,22 +1028,22 @@ export default function CameraScreen({ navigation, route }) {
           {/* Layer A — static corner brackets + edge ticks */}
           <Svg width={320} height={340} viewBox="0 0 320 340">
             {/* top-left */}
-            <Rect x={0}     y={0}     width={30}  height={2.2} fill="#f2b65c" opacity={0.9} />
-            <Rect x={0}     y={0}     width={2.2} height={30}  fill="#f2b65c" opacity={0.9} />
+            <Rect x={0}     y={0}     width={30}  height={2.2} fill={colors.flame} opacity={0.9} />
+            <Rect x={0}     y={0}     width={2.2} height={30}  fill={colors.flame} opacity={0.9} />
             {/* top-right */}
-            <Rect x={290}   y={0}     width={30}  height={2.2} fill="#f2b65c" opacity={0.9} />
-            <Rect x={317.8} y={0}     width={2.2} height={30}  fill="#f2b65c" opacity={0.9} />
+            <Rect x={290}   y={0}     width={30}  height={2.2} fill={colors.flame} opacity={0.9} />
+            <Rect x={317.8} y={0}     width={2.2} height={30}  fill={colors.flame} opacity={0.9} />
             {/* bottom-left */}
-            <Rect x={0}     y={337.8} width={30}  height={2.2} fill="#f2b65c" opacity={0.9} />
-            <Rect x={0}     y={310}   width={2.2} height={30}  fill="#f2b65c" opacity={0.9} />
+            <Rect x={0}     y={337.8} width={30}  height={2.2} fill={colors.flame} opacity={0.9} />
+            <Rect x={0}     y={310}   width={2.2} height={30}  fill={colors.flame} opacity={0.9} />
             {/* bottom-right */}
-            <Rect x={290}   y={337.8} width={30}  height={2.2} fill="#f2b65c" opacity={0.9} />
-            <Rect x={317.8} y={310}   width={2.2} height={30}  fill="#f2b65c" opacity={0.9} />
+            <Rect x={290}   y={337.8} width={30}  height={2.2} fill={colors.flame} opacity={0.9} />
+            <Rect x={317.8} y={310}   width={2.2} height={30}  fill={colors.flame} opacity={0.9} />
             {/* edge ticks (HUD detail) */}
-            <Rect x={155}   y={0}     width={10}  height={1.4} fill="#f2b65c" opacity={0.3} />
-            <Rect x={155}   y={338.6} width={10}  height={1.4} fill="#f2b65c" opacity={0.3} />
-            <Rect x={0}     y={165}   width={1.4} height={10}  fill="#f2b65c" opacity={0.3} />
-            <Rect x={318.6} y={165}   width={1.4} height={10}  fill="#f2b65c" opacity={0.3} />
+            <Rect x={155}   y={0}     width={10}  height={1.4} fill={colors.flame} opacity={0.3} />
+            <Rect x={155}   y={338.6} width={10}  height={1.4} fill={colors.flame} opacity={0.3} />
+            <Rect x={0}     y={165}   width={1.4} height={10}  fill={colors.flame} opacity={0.3} />
+            <Rect x={318.6} y={165}   width={1.4} height={10}  fill={colors.flame} opacity={0.3} />
           </Svg>
 
           {/* Aura — a soft haunting halo BEHIND the stone, pulsing on its own

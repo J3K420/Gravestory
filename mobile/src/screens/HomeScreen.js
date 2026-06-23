@@ -107,6 +107,7 @@ export default function HomeScreen({ navigation }) {
       <TouchableOpacity
         style={styles.userBtn}
         onPress={() => navigation.navigate(user ? 'Settings' : 'Auth')}
+        activeOpacity={0.7}
       >
         <Text style={styles.userBtnText}>{displayName ?? 'Sign in'}</Text>
       </TouchableOpacity>
@@ -171,11 +172,11 @@ export default function HomeScreen({ navigation }) {
 
         {/* Map buttons */}
         <View style={styles.mapRow}>
-          <TouchableOpacity style={styles.mapBtn} onPress={() => navigation.navigate('CemeteryMap')}>
+          <TouchableOpacity style={styles.mapBtn} onPress={() => navigation.navigate('CemeteryMap')} activeOpacity={0.85}>
             <MapStack size={15} color={colors.ash} />
             <Text style={styles.mapBtnText}>My Map</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.mapBtn, styles.mapBtnCommunity]} onPress={() => navigation.navigate('GlobalMap')}>
+          <TouchableOpacity style={[styles.mapBtn, styles.mapBtnCommunity]} onPress={() => navigation.navigate('GlobalMap')} activeOpacity={0.85}>
             <Globe size={15} color={colors.silver} />
             <Text style={[styles.mapBtnText, { color: colors.silver }]}>Community Map</Text>
           </TouchableOpacity>

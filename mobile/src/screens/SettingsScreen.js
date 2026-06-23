@@ -169,7 +169,14 @@ export default function SettingsScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.back}
+        activeOpacity={0.7}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 
@@ -220,7 +227,7 @@ export default function SettingsScreen({ navigation }) {
                 }
               >
                 <View style={styles.sectionHeaderRow}>
-                  <Text style={[styles.sectionLabel, styles.sectionLabelInline]}>Free Scans Used</Text>
+                  <Text style={[styles.sectionLabel, styles.sectionLabelInline]}>Scans Used</Text>
                   <Text style={styles.buyMoreLink}>Buy more ›</Text>
                 </View>
                 <View style={styles.progressRow}>
@@ -297,12 +304,13 @@ export default function SettingsScreen({ navigation }) {
             </TouchableOpacity>
 
             {/* Sign out */}
-            <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
+            <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut} activeOpacity={0.7}>
               <Text style={styles.signOutText}>Sign Out</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.privacyLink}
+              activeOpacity={0.7}
               onPress={() => Linking.openURL('https://j3k420.github.io/Gravestory/privacy-policy/')}
             >
               <Text style={styles.privacyLinkText}>Privacy Policy</Text>
@@ -310,6 +318,7 @@ export default function SettingsScreen({ navigation }) {
 
             <TouchableOpacity
               style={styles.privacyLink}
+              activeOpacity={0.7}
               onPress={() => Linking.openURL('https://j3k420.github.io/Gravestory/terms/')}
             >
               <Text style={styles.privacyLinkText}>Terms of Service</Text>
@@ -319,6 +328,7 @@ export default function SettingsScreen({ navigation }) {
                 Opens a type-to-confirm modal; never deletes on a single tap. */}
             <TouchableOpacity
               style={styles.deleteLink}
+              activeOpacity={0.7}
               onPress={() => { setDeleteConfirmText(''); setDeleteModal(true); }}
             >
               <Text style={styles.deleteLinkText}>Delete Account</Text>
@@ -362,6 +372,7 @@ export default function SettingsScreen({ navigation }) {
                 (deleteConfirmText.trim().toUpperCase() !== 'DELETE' || deleting) && styles.modalDeleteBtnDisabled,
               ]}
               disabled={deleteConfirmText.trim().toUpperCase() !== 'DELETE' || deleting}
+              activeOpacity={0.85}
               onPress={handleDeleteAccount}
             >
               {deleting
@@ -371,6 +382,7 @@ export default function SettingsScreen({ navigation }) {
             <TouchableOpacity
               style={styles.modalCancelBtn}
               disabled={deleting}
+              activeOpacity={0.7}
               onPress={() => setDeleteModal(false)}
             >
               <Text style={styles.modalCancelText}>Cancel</Text>
@@ -435,6 +447,8 @@ const styles = StyleSheet.create({
 
   // Rate button — gold-accented to invite the tap (a positive action), but not
   // as loud as the solid-flame Save CTA. Sits just above Sign Out.
+  // Soft gold wash, lighter than the colors.glow token (0.18) so the Rate button
+  // stays quieter than the gold CTAs — deliberately a bespoke 0.08, no token.
   rateBtn: {
     borderWidth: 1, borderColor: 'rgba(242,182,92,0.5)',
     backgroundColor: 'rgba(242,182,92,0.08)',

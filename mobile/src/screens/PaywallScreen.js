@@ -26,7 +26,6 @@ export default function PaywallScreen({ navigation, route }) {
   // The paywall is now only reached for the scan limit — saved-story limits were removed.
   const { count = 0, isGuest = false } = route.params ?? {};
 
-  const isScan = true;
   const limit  = isGuest ? SCAN_LIMIT_GUEST : SCAN_LIMIT_USER;
 
   const [packages, setPackages]     = useState([]);
@@ -109,7 +108,13 @@ export default function PaywallScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.back}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 
@@ -141,10 +146,10 @@ export default function PaywallScreen({ navigation, route }) {
               <Text style={styles.primaryBtnText}>Sign In — It's Free</Text>
             </TouchableOpacity>
           </>
-        ) : isScan ? (
+        ) : (
           <>
             <Text style={styles.body}>
-              Get more scans to keep discovering stories. Credits never expire.
+              Get more scans to keep discovering stories.
             </Text>
 
             {loading ? (
@@ -199,14 +204,10 @@ export default function PaywallScreen({ navigation, route }) {
               </>
             )}
 
-            <TouchableOpacity onPress={handleRestore} style={styles.restoreBtn}>
+            <TouchableOpacity onPress={handleRestore} style={styles.restoreBtn} activeOpacity={0.7}>
               <Text style={styles.restoreText}>Restore purchases</Text>
             </TouchableOpacity>
           </>
-        ) : (
-          <Text style={styles.body}>
-            Delete old stories to free up space.
-          </Text>
         )}
 
         <Text style={styles.hint}>
@@ -329,7 +330,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  restoreBtn: { marginTop: 4, marginBottom: 16 },
+  restoreBtn: { marginTop: 4, marginBottom: 16, paddingVertical: 10 },
   restoreText: {
     color: colors.ashDim,
     fontSize: 13,

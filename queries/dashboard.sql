@@ -118,9 +118,24 @@ with d as (
   left join (select user_id, count(*) as scans from public.scan_events group by user_id) se
     on se.user_id = sc.user_id
   where sc.purchased > 0
+  -- OWNER ACCOUNTS subtotal: your own 3 accounts' contribution to the credit
+  -- numbers above, so you can mentally subtract yourself. Matched dot-insensitively
+  -- (Gmail ignores dots, but auth.users stores the literal signup string, so
+  -- james.edmonds26 vs jamesedmonds26 both normalize and hit). Same unused formula
+  -- as ord 62. Update the email list if you add/remove an owner account.
+  union all
+  select 63, 'CREDITS', 'mine (my 3 accounts)',
+         coalesce(sum(sc.purchased),0)::text || ' sold',
+         coalesce(sum(greatest(sc.purchased - greatest(coalesce(se.scans, 0) - 3 /* free allowance */, 0), 0)), 0)::text || ' unused'
+  from public.scan_credits sc
+  left join (select user_id, count(*) as scans from public.scan_events group by user_id) se
+    on se.user_id = sc.user_id
+  where lower(replace((select email from auth.users u where u.id = sc.user_id), '.', '')) in (
+    'j3k420@gmailcom', 'jamesedmonds26@gmailcom', 'edmondsj46@gmailcom'
+  )
   -- purchases by pack (one row per pack) — revenuecat_events ledger (migration 017)
   union all
-  select 63, 'PURCHASES', 'pack: ' || coalesce(product_id,'(unknown)'),
+  select 64, 'PURCHASES', 'pack: ' || coalesce(product_id,'(unknown)'),
          count(*)::text || ' buys', coalesce(sum(amount),0)::text || ' credits'
   from public.revenuecat_events group by coalesce(product_id,'(unknown)')
 

@@ -287,8 +287,8 @@ select 'loading · duration' as section,
        case when (props->>'cached')::boolean then 'cache hit' else 'full pipeline' end as kind,
        count(*)                                                                        as n,
        round(avg((props->>'dur_ms')::numeric)/1000, 1)                                 as avg_s,
-       round((percentile_cont(0.5) within group (order by (props->>'dur_ms')::numeric))/1000, 1) as median_s,
-       round((percentile_cont(0.9) within group (order by (props->>'dur_ms')::numeric))/1000, 1) as p90_s,
+       round((percentile_cont(0.5) within group (order by (props->>'dur_ms')::numeric))::numeric/1000, 1) as median_s,
+       round((percentile_cont(0.9) within group (order by (props->>'dur_ms')::numeric))::numeric/1000, 1) as p90_s,
        round(max((props->>'dur_ms')::numeric)/1000, 1)                                 as max_s
 from public.analytics_events
 where event='bio_shown' and props ? 'dur_ms'

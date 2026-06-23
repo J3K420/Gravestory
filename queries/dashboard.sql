@@ -51,7 +51,7 @@ select 'users · signups/day' as section,
        count(*) as new_users
 from auth.users
 where created_at > now() - interval '30 days'
-group by 1, 2
+group by 2
 order by day desc;
 
 -- Sign-in provider split (google vs email) + how many are tester-unlimited
@@ -60,7 +60,7 @@ select 'users · provider' as section,
        count(*) as users,
        count(*) filter (where (raw_app_meta_data->>'is_unlimited')::boolean) as unlimited_testers
 from auth.users
-group by 1
+group by 2
 order by users desc;
 
 -- Engagement: users who have ever scanned / saved / bought
@@ -92,7 +92,7 @@ select 'stories · created/day' as section,
        count(*) as stories
 from public.stories
 where created_at > now() - interval '30 days'
-group by 1, 2
+group by 2
 order by day desc;
 
 -- 15 most recent stories (a quick eyeball of what people are scanning)
@@ -120,7 +120,7 @@ select 'graves · marker styles' as section,
        coalesce(marker_style, '(default/book)') as marker_style,
        count(*) as graves
 from public.graves
-group by 1
+group by 2
 order by graves desc;
 
 
@@ -151,7 +151,7 @@ select 'scans · per-user buckets' as section,
        count(*) as users,
        round(100.0 * count(*) / sum(count(*)) over (), 1) as pct
 from per_user
-group by 1
+group by 2
 order by min(scans);
 
 -- HEADLINE CONVERSION — % of users who ever scanned that bought a pack
@@ -183,7 +183,7 @@ select 'purchases · by pack' as section,
        count(*)            as purchases,
        sum(amount)         as credits_granted
 from public.revenuecat_events
-group by 1
+group by 2
 order by purchases desc;
 
 -- Recent purchases
@@ -214,7 +214,7 @@ select 'reports · by reason' as section,
        count(*)                          as n,
        count(*) filter (where is_public) as on_public_story
 from public.content_reports
-group by 1
+group by 2
 order by n desc;
 
 -- The actual reports to triage (newest first)
@@ -267,14 +267,14 @@ select 'funnel · ocr confidence' as section,
        props->>'confidence' as confidence, count(*) as n
 from public.analytics_events
 where event='ocr_done'
-group by 1 order by n desc;
+group by 2 order by n desc;
 
 -- Pipeline errors by stage/reason (research timeouts surface here)
 select 'funnel · errors' as section,
        props->>'stage' as stage, props->>'reason' as reason, count(*) as n
 from public.analytics_events
 where event='pipeline_error'
-group by 1, 2 order by n desc;
+group by 2, 3 order by n desc;
 
 
 -- ════════════════════════════════════════════════════════════════════════
@@ -293,7 +293,7 @@ select 'loading · duration' as section,
 from public.analytics_events
 where event='bio_shown' and props ? 'dur_ms'
   and created_at > now() - interval '30 days'
-group by 1;
+group by 2;
 
 -- Abandonment rate — of scans started, how many were left mid-load (last 30d)
 select 'loading · abandon rate' as section,
@@ -313,5 +313,5 @@ select 'loading · abandon by stage' as section,
        round(avg((props->>'dur_ms')::numeric)/1000, 1) as avg_wait_s
 from public.analytics_events
 where event='scan_abandoned' and created_at > now() - interval '30 days'
-group by 1
-order by 1;
+group by 2
+order by 2;

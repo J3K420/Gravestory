@@ -6,6 +6,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import { GraveMarkerSvg } from '../components/GraveMarkers';
+import { MapStack } from '../components/Icons';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudUpdateStory, updateGraveLocation } from '../lib/sync';
 import { supabase } from '../lib/supabase';
@@ -262,7 +263,10 @@ export default function CemeteryMapScreen({ navigation, route }) {
         >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Cemetery Map</Text>
+        <View style={styles.headerCenter}>
+          <MapStack size={16} color={colors.flame} />
+          <Text style={styles.headerTitle}>Cemetery Map</Text>
+        </View>
         <View style={styles.headerSide} />
       </View>
 
@@ -415,6 +419,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.stone,
   },
   headerSide: { width: 80 },
+  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   backText: { color: colors.ashDim, fontSize: 15, fontFamily: fonts.body },
   headerTitle: { color: colors.parchment, fontSize: 16, fontFamily: fonts.name, letterSpacing: 0.3 },
 

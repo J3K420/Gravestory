@@ -36,6 +36,11 @@ export const EVENTS = {
   TRIBUTE_LEFT:          'tribute_left',
   STORY_SHARED:          'story_shared',
   RESEARCH_YIELD:        'research_yield',
+  // Loading-time + drop-off (S67). bio_shown/pipeline_error now also carry a
+  // dur_ms (ms from scan_started). scan_abandoned fires if the user leaves the
+  // loading screen (back-out or backgrounds the app) before the pipeline ends —
+  // best-effort: a hard task-switcher kill may suspend JS before the insert sends.
+  SCAN_ABANDONED:        'scan_abandoned',
 };
 
 export function logEvent(event, props = {}) {

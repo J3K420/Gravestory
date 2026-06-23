@@ -289,3 +289,36 @@ d as (
 select grp, metric, total, excl_mine, detail
 from d
 order by ord, metric;
+
+
+-- ════════════════════════════════════════════════════════════════════════
+-- CONTENT REPORTS — full contents for triage  (SECOND statement)
+-- ════════════════════════════════════════════════════════════════════════
+-- The Supabase SQL editor shows only the LAST statement's result, so running
+-- the whole file displays THIS reports table. To see the main dashboard above
+-- instead, highlight just the `with me as ( … order by ord, metric;` block and
+-- Run Selection. Reports are readable ONLY here (service role) — the table has
+-- no SELECT policy for normal users by design.
+--
+-- Triage priority: a `privacy` or `offensive` reason on a PUBLIC story is the
+-- urgent case (a wrong/hurtful bio about a living person, visible on the global
+-- map). `on_public` = true + that reason → review and make private / correct /
+-- remove. factual_error / wrong_person on a private story = quality, lower urgency.
+-- `mine` flags reports filed by your own 3 owner accounts (test taps).
+select
+  cr.created_at,
+  cr.reason,
+  cr.person_name,
+  cr.is_public                                              as on_public,
+  cr.platform,
+  cr.note,
+  case when cr.reporter_id is null then 'guest' else 'signed-in' end as reporter,
+  case when cr.reporter_id in (
+         select id from auth.users
+         where lower(replace(email,'.','')) in (
+           'j3k420@gmailcom','jamesedmonds26@gmailcom','edmondsj46@gmailcom')
+       ) then 'yes' else 'no' end                           as mine,
+  cr.story_ts,
+  cr.grave_id
+from public.content_reports cr
+order by cr.created_at desc;

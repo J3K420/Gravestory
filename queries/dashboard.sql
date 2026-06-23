@@ -102,9 +102,25 @@ with d as (
   -- ░░ 5. PURCHASES / CREDITS ░░
   union all select 60, 'CREDITS', 'users with credits', (select count(*)::text from public.scan_credits where purchased > 0), ''
   union all select 61, 'CREDITS', 'credits sold (lifetime)', (select coalesce(sum(purchased),0)::text from public.scan_credits), 'sum of purchased; credits never expire + are not decremented on use'
+  -- TRUE outstanding balance: per buyer, purchased minus the paid scans they've
+  -- consumed. The free scans are spent first, so paid credits only burn after the
+  -- free allowance: paid_used = greatest(scans - FREE, 0); unused = greatest(
+  -- purchased - paid_used, 0). Summed across all buyers = unused credits people
+  -- can still cash in (the real liability, since credits never expire). LEFT JOIN
+  -- so a buyer who has never scanned counts their full purchased amount as unused.
+  -- ⚠ The `3` below is SCAN_LIMIT_FREE_USER (S66). If the free allowance changes,
+  --   update this literal or the outstanding number drifts.
+  union all
+  select 62, 'CREDITS', 'credits unused (outstanding)',
+         coalesce(sum(greatest(sc.purchased - greatest(coalesce(se.scans, 0) - 3 /* free allowance */, 0), 0)), 0)::text,
+         'real balance still redeemable'
+  from public.scan_credits sc
+  left join (select user_id, count(*) as scans from public.scan_events group by user_id) se
+    on se.user_id = sc.user_id
+  where sc.purchased > 0
   -- purchases by pack (one row per pack) — revenuecat_events ledger (migration 017)
   union all
-  select 62, 'PURCHASES', 'pack: ' || coalesce(product_id,'(unknown)'),
+  select 63, 'PURCHASES', 'pack: ' || coalesce(product_id,'(unknown)'),
          count(*)::text || ' buys', coalesce(sum(amount),0)::text || ' credits'
   from public.revenuecat_events group by coalesce(product_id,'(unknown)')
 

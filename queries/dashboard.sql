@@ -29,7 +29,7 @@ with d as (
   union all select 14, 'HEADLINE', 'graves',             (select count(*)::text from public.graves), ''
   union all select 15, 'HEADLINE', 'scans all-time',     (select count(*)::text from public.scan_events), ''
   union all select 16, 'HEADLINE', 'paying users',       (select count(distinct user_id)::text from public.scan_credits where purchased > 0), ''
-  union all select 17, 'HEADLINE', 'credits outstanding',(select coalesce(sum(purchased),0)::text from public.scan_credits), ''
+  union all select 17, 'HEADLINE', 'credits sold (lifetime)',(select coalesce(sum(purchased),0)::text from public.scan_credits), 'total ever purchased, not unused balance'
   union all select 18, 'HEADLINE', 'content reports',    (select count(*)::text from public.content_reports), ''
 
   -- ░░ 1. USERS ░░
@@ -101,7 +101,7 @@ with d as (
 
   -- ░░ 5. PURCHASES / CREDITS ░░
   union all select 60, 'CREDITS', 'users with credits', (select count(*)::text from public.scan_credits where purchased > 0), ''
-  union all select 61, 'CREDITS', 'total outstanding',  (select coalesce(sum(purchased),0)::text from public.scan_credits), ''
+  union all select 61, 'CREDITS', 'credits sold (lifetime)', (select coalesce(sum(purchased),0)::text from public.scan_credits), 'sum of purchased; credits never expire + are not decremented on use'
   -- purchases by pack (one row per pack) — revenuecat_events ledger (migration 017)
   union all
   select 62, 'PURCHASES', 'pack: ' || coalesce(product_id,'(unknown)'),

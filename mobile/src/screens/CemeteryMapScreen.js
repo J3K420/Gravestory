@@ -14,11 +14,6 @@ import { useRefresh } from '../lib/use-refresh';
 import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
 
-const GOLD      = colors.flame;
-const INK       = colors.ink;
-const PARCHMENT = colors.parchment;
-const STONE     = colors.ash;
-
 // Wrapper that owns tracksViewChanges: starts true so the SVG is captured,
 // flips to false after the first layout so map updates don't re-snapshot.
 // Re-snapshots when the chosen marker style changes (key includes marker_style).
@@ -249,20 +244,26 @@ export default function CemeteryMapScreen({ navigation, route }) {
   }
 
   const panelTitle = geocoding
-    ? '📍 Locating graves…'
+    ? 'Locating graves…'
     : mappedStories.length === 0
-      ? '📍 No location data yet'
-      : `✦ ${mappedStories.length} grave${mappedStories.length !== 1 ? 's' : ''} mapped`;
+      ? 'No location data yet'
+      : `${mappedStories.length} grave${mappedStories.length !== 1 ? 's' : ''} mapped`;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backSide}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.headerSide}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Cemetery Map</Text>
-        <View style={styles.backSide} />
+        <View style={styles.headerSide} />
       </View>
 
       {/* Map */}
@@ -285,7 +286,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
 
         {geocoding && (
           <View style={styles.geocodingBadge}>
-            <ActivityIndicator size="small" color={GOLD} style={{ marginRight: 8 }} />
+            <ActivityIndicator size="small" color={colors.flame} style={{ marginRight: 8 }} />
             <Text style={styles.geocodingText}>Locating…</Text>
           </View>
         )}
@@ -298,6 +299,8 @@ export default function CemeteryMapScreen({ navigation, route }) {
               onPress={() => { setSelectedStory(null); setBioExpanded(false); }}
               hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
               activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
             >
               <Text style={styles.calloutDismissText}>✕</Text>
             </TouchableOpacity>
@@ -335,6 +338,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
                 <TouchableOpacity
                   style={styles.calloutBtn}
                   onPress={() => setBioExpanded(e => !e)}
+                  activeOpacity={0.7}
                 >
                   <Text style={styles.calloutBtnText}>
                     {bioExpanded ? '▲ Hide bio' : '▼ Read bio'}
@@ -344,6 +348,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
               <TouchableOpacity
                 style={[styles.calloutBtn, styles.calloutBtnPrimary]}
                 onPress={() => { setSelectedStory(null); setBioExpanded(false); navigation.navigate('Result', { story: selectedStory }); }}
+                activeOpacity={0.7}
               >
                 <Text style={styles.calloutBtnText}>→ Go to bio</Text>
               </TouchableOpacity>
@@ -370,7 +375,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
             mappedStories.map((story, i) => (
               <View key={story.timestamp ?? i} style={styles.graveItem}>
                 {/* Tap row → fly to marker on map */}
-                <TouchableOpacity style={styles.graveItemMain} onPress={() => flyToGrave(story)}>
+                <TouchableOpacity style={styles.graveItemMain} onPress={() => flyToGrave(story)} activeOpacity={0.7}>
                   <Text style={styles.graveName} numberOfLines={1}>
                     {story.name || 'Unknown'}
                   </Text>
@@ -382,6 +387,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
                 <TouchableOpacity
                   style={styles.storyBtn}
                   onPress={() => navigation.navigate('Result', { story })}
+                  activeOpacity={0.7}
                 >
                   <Text style={styles.storyBtnText}>Story →</Text>
                 </TouchableOpacity>
@@ -395,20 +401,22 @@ export default function CemeteryMapScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: INK },
+  container: { flex: 1, backgroundColor: colors.ink },
 
+  // Header mirrors the Community map (GlobalMapScreen) for cross-screen parity.
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(201,168,76,0.15)',
+    borderBottomColor: colors.line,
+    backgroundColor: colors.stone,
   },
-  backSide: { width: 80 },
+  headerSide: { width: 80 },
   backText: { color: colors.ashDim, fontSize: 15, fontFamily: fonts.body },
-  headerTitle: { color: PARCHMENT, fontSize: 16, fontFamily: fonts.name, letterSpacing: 0.3 },
+  headerTitle: { color: colors.parchment, fontSize: 16, fontFamily: fonts.name, letterSpacing: 0.3 },
 
   mapContainer: { flex: 1, position: 'relative' },
   map: { flex: 1 },
@@ -420,7 +428,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.sm,
   },
-  geocodingText: { color: PARCHMENT, fontSize: 12, fontFamily: fonts.body, letterSpacing: 0.5 },
+  geocodingText: { color: colors.parchment, fontSize: 12, fontFamily: fonts.body, letterSpacing: 0.5 },
 
   floatingCallout: {
     position: 'absolute', top: 12, left: 12, right: 12,
@@ -435,7 +443,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   calloutDismissText: { color: colors.ash, fontSize: 18, lineHeight: 18 },
-  calloutName: { color: PARCHMENT, fontSize: 16, fontFamily: fonts.name, marginBottom: 3, paddingRight: 36 },
+  calloutName: { color: colors.parchment, fontSize: 16, fontFamily: fonts.name, marginBottom: 3, paddingRight: 36 },
   calloutDates: { color: colors.ash, fontSize: 13, fontFamily: fonts.serifItalic, marginBottom: 2 },
   calloutLocation: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, marginBottom: 6 },
   calloutWarn: { color: colors.ember, fontSize: 11, fontFamily: fonts.body, marginBottom: 6 },
@@ -455,11 +463,11 @@ const styles = StyleSheet.create({
   },
   calloutButtons: { flexDirection: 'row', gap: 8, marginTop: 4 },
   calloutBtn: {
-    borderWidth: 1, borderColor: GOLD,
+    borderWidth: 1, borderColor: colors.flame,
     paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.sm,
   },
   calloutBtnPrimary: { backgroundColor: 'rgba(242,182,92,0.1)' },
-  calloutBtnText: { color: GOLD, fontSize: 13, fontFamily: fonts.sansBold },
+  calloutBtnText: { color: colors.flame, fontSize: 13, fontFamily: fonts.sansBold },
 
   panel: {
     height: 220, backgroundColor: colors.stone,
@@ -478,17 +486,17 @@ const styles = StyleSheet.create({
     paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.line, gap: 8,
   },
   graveItemMain: { flex: 1 },
-  graveName: { color: PARCHMENT, fontSize: 14, fontFamily: fonts.name },
-  graveDates: { color: STONE, fontSize: 12, fontFamily: fonts.bodyItalic, marginTop: 1 },
+  graveName: { color: colors.parchment, fontSize: 14, fontFamily: fonts.name },
+  graveDates: { color: colors.ash, fontSize: 12, fontFamily: fonts.bodyItalic, marginTop: 1 },
 
   storyBtn: {
     borderWidth: 1, borderColor: colors.line,
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.sm,
   },
-  storyBtnText: { color: GOLD, fontSize: 12, fontFamily: fonts.body },
+  storyBtnText: { color: colors.flame, fontSize: 12, fontFamily: fonts.body },
 
   emptyText: {
-    color: STONE, fontFamily: fonts.bodyItalic,
+    color: colors.ash, fontFamily: fonts.bodyItalic,
     textAlign: 'center', lineHeight: 22, marginTop: 8,
   },
 });

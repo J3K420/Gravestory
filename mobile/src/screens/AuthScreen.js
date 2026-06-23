@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  View, Text, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
   ActivityIndicator,
 } from 'react-native';
@@ -8,33 +8,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../lib/supabase';
-import { getDeviceId } from '../lib/device-id';
-import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
 
 WebBrowser.maybeCompleteAuthSession();
 
+// Sign-in is Google-only on mobile (S34) — the email/password UI was removed.
 export default function AuthScreen({ navigation }) {
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
   const [status, setStatus]     = useState('');
   const [loading, setLoading]   = useState(false);
   const [signingIn, setSigningIn] = useState(false);
-  const { refreshControl } = useRefresh(() => {
-    setEmail('');
-    setPassword('');
-    setStatus('');
-  });
-
-  async function signIn() {
-    if (!email || !password) { setStatus('Email and password required'); return; }
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) setStatus(error.message);
-    else navigation.goBack();
-  }
 
   async function signInWithGoogle() {
     setLoading(true);
@@ -67,32 +50,21 @@ export default function AuthScreen({ navigation }) {
     setLoading(false);
   }
 
-  async function signUp() {
-    if (!email || !password) { setStatus('Email and password required'); return; }
-    if (password.length < 6) { setStatus('Password must be at least 6 characters'); return; }
-    setLoading(true);
-    const deviceId = await getDeviceId();
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { device_id: deviceId } },
-    });
-    setLoading(false);
-    if (error) setStatus(error.message);
-    else if (data.user && !data.session) setStatus('Check your email to verify your account');
-    else navigation.goBack();
-  }
-
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
-          refreshControl={refreshControl}
         >
 
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.back}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
 
@@ -110,8 +82,15 @@ export default function AuthScreen({ navigation }) {
               <Text style={styles.signingInText}>Signing you in…</Text>
             </View>
           ) : (
-            <TouchableOpacity style={styles.googleBtn} onPress={signInWithGoogle} disabled={loading} activeOpacity={0.85}>
-              <Text style={styles.googleBtnText}>G  Continue with Google</Text>
+            <TouchableOpacity
+              style={[styles.googleBtn, loading && styles.googleBtnDisabled]}
+              onPress={signInWithGoogle}
+              disabled={loading}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Continue with Google"
+            >
+              <Text style={styles.googleBtnText}>G Continue with Google</Text>
             </TouchableOpacity>
           )}
 
@@ -140,46 +119,20 @@ const styles = StyleSheet.create({
   title: { fontSize: 36, color: colors.parchment, fontFamily: fonts.title, marginTop: 12, letterSpacing: 0.5 },
   subtitle: { color: colors.ash, fontFamily: fonts.bodyItalic, fontSize: 14, marginTop: 8, textAlign: 'center', lineHeight: 20 },
 
+  // '#ffffff' is Google's required brand background for the sign-in button — no
+  // theme token maps to it, so it stays a literal by design.
   googleBtn: {
     backgroundColor: '#ffffff', paddingVertical: 15,
     borderRadius: radius.sm, alignItems: 'center', marginBottom: 20,
   },
-  googleBtnText: { color: '#2a2017', fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.3 },
+  googleBtnDisabled: { opacity: 0.6 },
+  googleBtnText: { color: colors.stone2, fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.3 },
 
   signingInRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingVertical: 15, marginBottom: 20, gap: 10,
   },
   signingInText: { color: colors.ash, fontSize: 15, fontFamily: fonts.bodyMedium, letterSpacing: 0.3 },
-
-  testerHint: {
-    color: colors.ash, fontFamily: fonts.bodyItalic, fontSize: 13,
-    textAlign: 'center', marginTop: -8, marginBottom: 20, lineHeight: 18,
-  },
-
-  orRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  orLine: { flex: 1, height: 1, backgroundColor: colors.line },
-  orText: { color: colors.ashDim, marginHorizontal: 12, fontSize: 12, fontFamily: fonts.body },
-
-  input: {
-    backgroundColor: colors.stone2, borderWidth: 1,
-    borderColor: colors.line, color: colors.parchment,
-    padding: 14, borderRadius: radius.sm,
-    marginBottom: 12, fontSize: 15, fontFamily: fonts.body,
-  },
-
-  primaryBtn: {
-    marginTop: 16, paddingVertical: 15, borderRadius: radius.md,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.flame,
-  },
-  primaryBtnText: { color: colors.onFlame, fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.5 },
-
-  ghostBtn: {
-    marginTop: 10, paddingVertical: 15, borderRadius: radius.sm,
-    borderWidth: 1, borderColor: colors.line,
-    backgroundColor: colors.stone2, alignItems: 'center',
-  },
-  ghostBtnText: { color: colors.parchment, fontSize: 15, fontFamily: fonts.body },
 
   statusText: { color: colors.danger, textAlign: 'center', marginTop: 16, fontSize: 13, fontFamily: fonts.body, lineHeight: 20 },
 });

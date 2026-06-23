@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Linking, Share, Image, Alert, FlatList, Dimensions, Modal, Pressable, TextInput,
@@ -260,7 +260,13 @@ export default function ResultScreen({ navigation, route }) {
   if (!story) {
     return (
       <SafeAreaView style={styles.container}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.back}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <View style={styles.center}>
@@ -298,7 +304,13 @@ export default function ResultScreen({ navigation, route }) {
 
     return (
       <SafeAreaView style={styles.container}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.back}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <ScrollView contentContainerStyle={styles.scroll}>
@@ -319,7 +331,12 @@ export default function ResultScreen({ navigation, route }) {
               Scanned offline · {new Date(story.timestamp).toLocaleDateString()}
             </Text>
           </View>
-          {story.gps && <Text style={styles.location}>✦ Location captured with photo</Text>}
+          {story.gps && (
+            <View style={styles.locationRow}>
+              <Pin size={13} color={colors.ashDim} />
+              <Text style={styles.location}>Location captured with photo</Text>
+            </View>
+          )}
 
           <View style={styles.divider} />
 
@@ -333,11 +350,12 @@ export default function ResultScreen({ navigation, route }) {
           <TouchableOpacity
             style={styles.saveBtn}
             onPress={() => navigation.navigate('Camera', { pending: story })}
+            activeOpacity={0.85}
           >
             <Text style={styles.saveBtnText}>Run Research</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.deleteBtn} onPress={discardPending}>
+          <TouchableOpacity style={styles.deleteBtn} onPress={discardPending} activeOpacity={0.7}>
             <Text style={styles.deleteBtnText}>Discard</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -792,7 +810,13 @@ export default function ResultScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity onPress={handleBack} style={styles.back}>
+      <TouchableOpacity
+        onPress={handleBack}
+        style={styles.back}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 
@@ -878,10 +902,10 @@ export default function ResultScreen({ navigation, route }) {
             accessibilityRole="button"
             accessibilityLabel={isSpeaking ? 'Stop reading the story aloud' : 'Read the story aloud'}
           >
-            <Text style={[styles.listenBtnIcon, isSpeaking && styles.listenBtnTextActive]}>
+            <Text style={styles.listenBtnIcon}>
               {isSpeaking ? '◼' : '▶'}
             </Text>
-            <Text style={[styles.listenBtnText, isSpeaking && styles.listenBtnTextActive]}>
+            <Text style={styles.listenBtnText}>
               {isSpeaking ? 'Stop' : 'Listen to this story'}
             </Text>
           </TouchableOpacity>
@@ -985,6 +1009,7 @@ export default function ResultScreen({ navigation, route }) {
                   style={[styles.tributeBtn, tributes.userTribute === 'candle' && styles.tributeBtnActive]}
                   onPress={() => handleTribute('candle')}
                   disabled={tributeLoading}
+                  activeOpacity={0.7}
                 >
                   <Text style={[styles.tributeBtnText, tributes.userTribute === 'candle' && styles.tributeBtnTextActive]}>
                     {tributes.userTribute === 'candle' ? '✓ Candle left' : 'Leave a candle'}
@@ -994,6 +1019,7 @@ export default function ResultScreen({ navigation, route }) {
                   style={[styles.tributeBtn, tributes.userTribute === 'flower' && styles.tributeBtnActive]}
                   onPress={() => handleTribute('flower')}
                   disabled={tributeLoading}
+                  activeOpacity={0.7}
                 >
                   <Text style={[styles.tributeBtnText, tributes.userTribute === 'flower' && styles.tributeBtnTextActive]}>
                     {tributes.userTribute === 'flower' ? '✓ Flower left' : 'Leave a flower'}
@@ -1014,6 +1040,7 @@ export default function ResultScreen({ navigation, route }) {
               style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
               onPress={handleSave}
               disabled={saving}
+              activeOpacity={0.85}
             >
               <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Story'}</Text>
             </TouchableOpacity>
@@ -1026,6 +1053,7 @@ export default function ResultScreen({ navigation, route }) {
             <TouchableOpacity
               style={styles.chip}
               onPress={() => navigation.navigate('CemeteryMap', { focusStory: story })}
+              activeOpacity={0.7}
             >
               <MapStack size={18} color={colors.flame} />
               <Text style={styles.chipText}>Map</Text>
@@ -1033,23 +1061,30 @@ export default function ResultScreen({ navigation, route }) {
           )}
           {showMarkerChip && (
             <TouchableOpacity
-              style={styles.chip}
+              style={[styles.chip, savingMarker && styles.chipDisabled]}
               onPress={() => { setMarkerPack(currentMarker.pack || MARKER_PACKS[0].id); setMarkerModal(true); }}
               disabled={savingMarker}
+              activeOpacity={0.7}
             >
               <GraveMarkerSvg styleId={story.marker_style} size={18} />
               <Text style={styles.chipText}>{savingMarker ? '…' : 'Marker'}</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.chip} onPress={handleShare} disabled={sharing}>
+          <TouchableOpacity
+            style={[styles.chip, sharing && styles.chipDisabled]}
+            onPress={handleShare}
+            disabled={sharing}
+            activeOpacity={0.7}
+          >
             <ShareIcon size={18} color={colors.flame} />
             <Text style={styles.chipText}>{sharing ? '…' : 'Share'}</Text>
           </TouchableOpacity>
           {showPublicToggle && (
             <TouchableOpacity
-              style={[styles.chip, isPublic && styles.chipActive]}
+              style={[styles.chip, isPublic && styles.chipActive, togglingPublic && styles.chipDisabled]}
               onPress={handleTogglePublic}
               disabled={togglingPublic}
+              activeOpacity={0.7}
             >
               <Globe size={18} color={isPublic ? colors.silver : colors.flame} />
               <Text style={[styles.chipText, isPublic && { color: colors.silver }]}>
@@ -1069,6 +1104,7 @@ export default function ResultScreen({ navigation, route }) {
         <TouchableOpacity
           style={isSample ? styles.saveBtn : styles.scanAgainBtn}
           onPress={() => navigation.navigate('Camera')}
+          activeOpacity={isSample ? 0.85 : 0.7}
         >
           <Text style={isSample ? styles.saveBtnText : styles.scanAgainText}>
             {isSample ? 'Scan Your First Gravestone' : 'Scan Another Gravestone'}
@@ -1080,6 +1116,7 @@ export default function ResultScreen({ navigation, route }) {
           <TouchableOpacity
             style={styles.deleteBtn}
             onPress={isUnsaved ? () => navigation.navigate('Home') : handleDelete}
+            activeOpacity={0.7}
           >
             <Text style={styles.deleteBtnText}>{isUnsaved ? 'Discard' : 'Delete Story'}</Text>
           </TouchableOpacity>
@@ -1147,7 +1184,7 @@ export default function ResultScreen({ navigation, route }) {
                 );
               })}
             </ScrollView>
-            <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setMarkerModal(false)}>
+            <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setMarkerModal(false)} activeOpacity={0.7}>
               <Text style={styles.symbolSheetCloseText}>Close</Text>
             </TouchableOpacity>
           </Pressable>
@@ -1166,7 +1203,7 @@ export default function ResultScreen({ navigation, route }) {
             <SwipeHandle onClose={() => setSymbolModal(null)} />
             <Text style={styles.symbolSheetName}>{symbolModal?.name}</Text>
             <Text style={styles.symbolSheetText}>{symbolModal?.text}</Text>
-            <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setSymbolModal(null)}>
+            <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setSymbolModal(null)} activeOpacity={0.7}>
               <Text style={styles.symbolSheetCloseText}>Close</Text>
             </TouchableOpacity>
           </Pressable>
@@ -1190,7 +1227,7 @@ export default function ResultScreen({ navigation, route }) {
               contain errors and is not an official or authoritative record. If you spot something
               wrong, you can report it.
             </Text>
-            <TouchableOpacity style={styles.symbolSheetClose} onPress={dismissAiModal}>
+            <TouchableOpacity style={styles.symbolSheetClose} onPress={dismissAiModal} activeOpacity={0.7}>
               <Text style={styles.symbolSheetCloseText}>I understand</Text>
             </TouchableOpacity>
           </Pressable>
@@ -1213,7 +1250,7 @@ export default function ResultScreen({ navigation, route }) {
                 <Text style={styles.symbolSheetText}>
                   Your report has been sent. We review flagged stories and will take a look.
                 </Text>
-                <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setReportModal(false)}>
+                <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setReportModal(false)} activeOpacity={0.7}>
                   <Text style={styles.symbolSheetCloseText}>Done</Text>
                 </TouchableOpacity>
               </>
@@ -1248,13 +1285,14 @@ export default function ResultScreen({ navigation, route }) {
                   maxLength={REPORT_NOTE_MAX}
                 />
                 <View style={styles.reportActions}>
-                  <TouchableOpacity style={styles.reportCancel} onPress={() => setReportModal(false)}>
+                  <TouchableOpacity style={styles.reportCancel} onPress={() => setReportModal(false)} activeOpacity={0.7}>
                     <Text style={styles.reportCancelText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.reportSubmit, (!reportReason || reportSending) && styles.reportSubmitDisabled]}
                     onPress={handleSubmitReport}
                     disabled={!reportReason || reportSending}
+                    activeOpacity={0.85}
                   >
                     <Text style={styles.reportSubmitText}>{reportSending ? 'Sending…' : 'Send report'}</Text>
                   </TouchableOpacity>
@@ -1284,10 +1322,10 @@ export default function ResultScreen({ navigation, route }) {
               private details about living people. You can make a story private again at any time.
             </Text>
             <View style={styles.reportActions}>
-              <TouchableOpacity style={styles.reportCancel} onPress={() => setShareNoticeModal(false)}>
+              <TouchableOpacity style={styles.reportCancel} onPress={() => setShareNoticeModal(false)} activeOpacity={0.7}>
                 <Text style={styles.reportCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.reportSubmit} onPress={acceptShareNotice}>
+              <TouchableOpacity style={styles.reportSubmit} onPress={acceptShareNotice} activeOpacity={0.85}>
                 <Text style={styles.reportSubmitText}>Share publicly</Text>
               </TouchableOpacity>
             </View>
@@ -1374,7 +1412,6 @@ const styles = StyleSheet.create({
   listenBtnActive: { borderColor: colors.flame, backgroundColor: 'rgba(242,182,92,0.16)' },
   listenBtnIcon: { color: colors.flame, fontSize: 12, lineHeight: 16 },
   listenBtnText: { color: colors.flame, fontSize: 13.5, fontFamily: fonts.bodyMedium, letterSpacing: 0.3 },
-  listenBtnTextActive: { color: colors.flame },
 
   // AI-honesty caption — muted gold, honest-research register (not a warning).
   aiCaption: {
@@ -1445,6 +1482,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   chipActive: { borderColor: 'rgba(170,190,220,0.4)', backgroundColor: 'rgba(170,190,220,0.08)' },
+  chipDisabled: { opacity: 0.5 },
   chipText: { color: colors.ash, fontSize: 11, fontFamily: fonts.body },
 
   unsavedHint: {

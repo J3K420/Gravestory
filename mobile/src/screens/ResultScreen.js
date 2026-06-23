@@ -1136,8 +1136,8 @@ export default function ResultScreen({ navigation, route }) {
             <Text style={styles.symbolSheetName}>Choose a marker</Text>
             <Text style={styles.markerSheetHint}>
               {isUnsaved
-                ? 'Your pin for this grave. If you’re the first to share it, this marker stays on the community map for good.'
-                : 'How this grave appears on your Cemetery map.'}
+                ? 'Your pin for this grave on your Cemetery map. The first person to share a grave publicly picks the marker that appears on the community map — so if you’re first to share it, this stone stays there for good.'
+                : 'How this grave appears on your Cemetery map. The first person to share a grave publicly picks the marker shown on the community map — if that was you, this is the stone everyone sees there.'}
             </Text>
             <ScrollView
               horizontal

@@ -452,8 +452,8 @@ function renderMarkerSection(story, alreadySaved) {
   // Before save the marker's headline meaning is the community global map
   // (first-wins); after save it's also the user's own Cemetery-map pin.
   const hint = alreadySaved
-    ? 'Map pin style'
-    : 'Your map pin — first to share wins it on the community map';
+    ? 'Map pin style — first to share a grave publicly picks its community-map stone'
+    : 'Your map pin — first to share a grave publicly picks its community-map stone';
   const wrap = document.createElement('div');
   wrap.id = 'marker-section';
   wrap.className = 'result-section';

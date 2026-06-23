@@ -78,6 +78,30 @@ export default function CameraScreen({ navigation, route }) {
   // back on return. Cleared once the picker promise resolves.
   const pickInProgressRef = useRef(false);
 
+  // Pipeline-duration + abandonment tracking (S67). `pipelineActiveRef` is true
+  // ONLY while research is genuinely in flight — distinct from the `loading` UI
+  // flag, which deliberately lingers through the Result-screen slide. It's set
+  // true at the top of runPipeline and flipped false at EVERY exit (success,
+  // error, rejection), so leaving the screen on the success path does NOT count
+  // as abandonment. `pipelineStartRef` stamps the start for dur_ms; `stepRef`
+  // mirrors stepIndex so the blur/background handlers read the live stage
+  // without re-subscribing on every step change.
+  const pipelineActiveRef = useRef(false);
+  const pipelineStartRef  = useRef(0);
+  const stepRef           = useRef(0);
+
+  // Fire scan_abandoned at most once per pipeline run, and only while a pipeline
+  // is genuinely active. Clears the active flag so a follow-on blur/background
+  // (e.g. background → kill) can't double-log the same abandonment.
+  const reportAbandonIfActive = useCallback(() => {
+    if (!pipelineActiveRef.current) return;
+    pipelineActiveRef.current = false;
+    logEvent(EVENTS.SCAN_ABANDONED, {
+      dur_ms: Date.now() - pipelineStartRef.current,
+      stepIndex: stepRef.current,
+    });
+  }, []);
+
   // On the success path runPipeline navigates to Result WITHOUT clearing `loading`,
   // so the loading screen — not the viewfinder — stays underneath while Result
   // slides in over it (clearing it on navigate flashed the viewfinder beside the
@@ -93,6 +117,20 @@ export default function CameraScreen({ navigation, route }) {
       }
     }, [])
   );
+
+  // Mirror stepIndex into a ref so the abandonment handlers report the live
+  // stage without re-subscribing the navigation/AppState listeners on each step.
+  useEffect(() => { stepRef.current = stepIndex; }, [stepIndex]);
+
+  // Count a navigation-away (back button, or system back) during an active
+  // pipeline as abandonment. The success path flips pipelineActiveRef false
+  // before navigating to Result, so this only fires when the user actually
+  // bails out mid-research. Unmount cleanup is the catch-all if the screen is
+  // torn down some other way while still active.
+  useEffect(() => {
+    const unsub = navigation.addListener('blur', reportAbandonIfActive);
+    return () => { unsub(); reportAbandonIfActive(); };
+  }, [navigation, reportAbandonIfActive]);
 
   // The headstone inside the viewfinder slowly "breathes" — a reverent ~5.6s
   // opacity swell, NOT the old harsh candle-flicker (which read as a rendering
@@ -178,9 +216,18 @@ export default function CameraScreen({ navigation, route }) {
       if (state === 'active' && pickInProgressRef.current) {
         setLoading(true);
       }
+      // User sent the app to the background mid-research → count it as
+      // abandonment (best-effort; a follow-on hard kill may not get the insert
+      // out). Only 'background' (not the transient iOS 'inactive', which fires
+      // for the notification shade / control center) to avoid false positives.
+      // Safe during the OS picker round-trip: the pipeline isn't active yet
+      // then, so reportAbandonIfActive no-ops.
+      if (state === 'background') {
+        reportAbandonIfActive();
+      }
     });
     return () => sub.remove();
-  }, []);
+  }, [reportAbandonIfActive]);
 
   const { refreshControl } = useRefresh(() => {
     setRejected(null);
@@ -420,6 +467,12 @@ export default function CameraScreen({ navigation, route }) {
   async function runPipeline(base64, skipVerify = false, gps = null, fromCamera = false, pending = null) {
     setLoading(true);
     setStepIndex(0);
+    // Mark a pipeline genuinely in flight + stamp the start for dur_ms. Cleared
+    // at every exit below so a screen-leave only logs scan_abandoned when the
+    // user actually bails mid-research.
+    pipelineActiveRef.current = true;
+    pipelineStartRef.current = Date.now();
+    stepRef.current = 0;
 
     try {
       // Fire reverseGeocode in parallel with verify so we have a location hint
@@ -439,6 +492,7 @@ export default function CameraScreen({ navigation, route }) {
             logEvent(EVENTS.VERIFICATION_REJECTED, { reason: err.reason });
             setRejected({ reason: err.reason, base64, gps, fromCamera, pending });
             setLoading(false);
+            pipelineActiveRef.current = false; // resolved into the rejection screen, not abandoned
             return;
           }
           throw err;
@@ -894,7 +948,13 @@ export default function CameraScreen({ navigation, route }) {
         cached: !!cachedBio,
         hasGps: !!refinedGps,
         sources: Array.isArray(bioResult.sources) ? bioResult.sources.length : 0,
+        dur_ms: Date.now() - pipelineStartRef.current,
       });
+
+      // Pipeline reached the bio — NOT abandoned. Must clear BEFORE navigating:
+      // navigation.navigate fires CameraScreen's 'blur' listener, so leaving the
+      // flag set would mislabel every successful scan as abandonment.
+      pipelineActiveRef.current = false;
 
       // Navigate and DELIBERATELY leave `loading` true. With the native-stack push
       // animation, Result slides in over ~300ms while CameraScreen stays mounted
@@ -907,7 +967,8 @@ export default function CameraScreen({ navigation, route }) {
       navigation.navigate('Result', { story });
     } catch (err) {
       setLoading(false);
-      logEvent(EVENTS.PIPELINE_ERROR, { stage: 'pipeline', message: err?.message });
+      pipelineActiveRef.current = false; // resolved into the error screen, not abandoned
+      logEvent(EVENTS.PIPELINE_ERROR, { stage: 'pipeline', message: err?.message, dur_ms: Date.now() - pipelineStartRef.current });
       console.warn('Pipeline error:', String(err), 'message:', err?.message, 'stack:', err?.stack);
       // For fresh scans, offer to queue the photo for later — the common cause
       // here is the signal dropping mid-pipeline. Resumed pending scans are

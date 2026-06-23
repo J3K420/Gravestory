@@ -216,3 +216,59 @@ from (
 ) t
 group by scans_before_purchase
 order by scans_before_purchase;
+
+-- ─────────────────────────────────────────────────────────────────────
+-- LOADING TIME + DROP-OFF DURING THE WAIT (S67, mobile)
+-- ─────────────────────────────────────────────────────────────────────
+-- The research pipeline takes up to ~30s. These read the dur_ms now carried on
+-- bio_shown / pipeline_error, and the new scan_abandoned event fired when a user
+-- leaves the loading screen (back-out or backgrounds the app) before it finishes.
+-- CAVEAT: scan_abandoned is best-effort — a hard task-switcher kill can suspend
+-- JS before the insert sends, so true abandonment is AT LEAST what's shown here.
+-- stepIndex on scan_abandoned: 0 verify, 1 OCR, 2 research, 3 biography, 4 finish.
+
+-- (1) PIPELINE DURATION DISTRIBUTION — how long does a successful scan take?
+--     Split cached (bio-cache hit, near-instant) vs full pipeline so the cache
+--     hits don't flatter the average. Times in seconds.
+select
+  case when (props->>'cached')::boolean then 'cache hit' else 'full pipeline' end as kind,
+  count(*)                                              as n,
+  round(avg((props->>'dur_ms')::numeric)/1000, 1)       as avg_s,
+  round((percentile_cont(0.5)  within group (order by (props->>'dur_ms')::numeric))/1000, 1) as median_s,
+  round((percentile_cont(0.9)  within group (order by (props->>'dur_ms')::numeric))/1000, 1) as p90_s,
+  round(max((props->>'dur_ms')::numeric)/1000, 1)       as max_s
+from analytics_events
+where event = 'bio_shown'
+  and props ? 'dur_ms'
+  and created_at > now() - interval '30 days'
+group by 1;
+
+-- (2) ABANDONMENT RATE — of scans that started, how many were left mid-load?
+--     started = scan_started; abandoned = scan_abandoned. (Not a per-user join;
+--     a fast ratio. A high rate vs the duration above = the wait is too long.)
+select
+  count(*) filter (where event = 'scan_started')   as started,
+  count(*) filter (where event = 'scan_abandoned') as abandoned,
+  round(100.0 * count(*) filter (where event = 'scan_abandoned')
+        / nullif(count(*) filter (where event = 'scan_started'), 0), 1) as abandon_pct
+from analytics_events
+where created_at > now() - interval '30 days';
+
+-- (3) WHERE in the pipeline do people give up? Buckets scan_abandoned by stage,
+--     with how long they'd waited before bailing. A cluster at stage 2 (research)
+--     with high wait_s = the 30s research dwell is the drop-off culprit.
+select
+  case (props->>'stepIndex')::int
+    when 0 then '0 verify'
+    when 1 then '1 OCR'
+    when 2 then '2 research'
+    when 3 then '3 biography'
+    when 4 then '4 finishing'
+    else '?' end                                        as stage,
+  count(*)                                              as abandoned,
+  round(avg((props->>'dur_ms')::numeric)/1000, 1)       as avg_wait_s
+from analytics_events
+where event = 'scan_abandoned'
+  and created_at > now() - interval '30 days'
+group by 1
+order by 1;

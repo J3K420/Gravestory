@@ -19,10 +19,34 @@
 -- Covers migrations 001–017 + the base `stories` table.
 -- ════════════════════════════════════════════════════════════════════════
 
-with d as (
+-- Owner accounts resolved ONCE here (dot-insensitive: Gmail ignores dots but
+-- auth.users stores the literal signup string, so james.edmonds26 / jamesedmonds26
+-- both normalize and match). Update this list if owner accounts change.
+with me as (
+  select id as user_id
+  from auth.users
+  where lower(replace(email, '.', '')) in (
+    'j3k420@gmailcom', 'jamesedmonds26@gmailcom', 'edmondsj46@gmailcom'
+  )
+),
+d as (
+
+  -- ░░ MY ACCOUNTS — your own footprint, to subtract from the totals below ░░
+  -- Your 3 accounts (incl. is_unlimited dev accounts) DO write scan_events,
+  -- stories, tributes, reports — so they inflate the headline counts. These rows
+  -- show your share of each so you can discount yourself.
+  select 1 as ord, 'MY ACCOUNTS' as grp, 'accounts found' as metric,
+         (select count(*)::text from me) as value,
+         'of 3 expected — fewer means an email didn''t match' as detail
+  union all select 2, 'MY ACCOUNTS', 'my scans',          (select count(*)::text from public.scan_events where user_id in (select user_id from me)), 'subtract from SCANS all-time'
+  union all select 3, 'MY ACCOUNTS', 'my stories live',   (select count(*)::text from public.stories where deleted_at is null and user_id in (select user_id from me)), 'subtract from STORIES live'
+  union all select 4, 'MY ACCOUNTS', 'my stories public', (select count(*)::text from public.stories where is_public and deleted_at is null and user_id in (select user_id from me)), 'subtract from STORIES public'
+  union all select 5, 'MY ACCOUNTS', 'my tributes',       (select count(*)::text from public.tributes where user_id in (select user_id from me)), 'subtract from TRIBUTES total'
+  union all select 6, 'MY ACCOUNTS', 'my content reports',(select count(*)::text from public.content_reports where reporter_id in (select user_id from me)), 'subtract from REPORTS total'
+  union all select 7, 'MY ACCOUNTS', 'my credits sold',   (select coalesce(sum(purchased),0)::text from public.scan_credits where user_id in (select user_id from me)), 'subtract from CREDITS sold'
 
   -- ░░ 0. HEADLINE ░░
-  select 10 as ord, 'HEADLINE' as grp, 'total users'           as metric, (select count(*)::text from auth.users) as value, '' as detail
+  union all select 10 as ord, 'HEADLINE' as grp, 'total users'           as metric, (select count(*)::text from auth.users) as value, '' as detail
   union all select 11, 'HEADLINE', 'new users (7d)',     (select count(*)::text from auth.users where created_at > now() - interval '7 days'), ''
   union all select 12, 'HEADLINE', 'stories live',       (select count(*)::text from public.stories where deleted_at is null), ''
   union all select 13, 'HEADLINE', 'stories public',     (select count(*)::text from public.stories where is_public and deleted_at is null), ''
@@ -118,21 +142,16 @@ with d as (
   left join (select user_id, count(*) as scans from public.scan_events group by user_id) se
     on se.user_id = sc.user_id
   where sc.purchased > 0
-  -- OWNER ACCOUNTS subtotal: your own 3 accounts' contribution to the credit
-  -- numbers above, so you can mentally subtract yourself. Matched dot-insensitively
-  -- (Gmail ignores dots, but auth.users stores the literal signup string, so
-  -- james.edmonds26 vs jamesedmonds26 both normalize and hit). Same unused formula
-  -- as ord 62. Update the email list if you add/remove an owner account.
+  -- OWNER ACCOUNTS subtotal for credits (uses the `me` CTE). Same unused formula
+  -- as ord 62, so this is directly subtractable from the total.
   union all
   select 63, 'CREDITS', 'mine (my 3 accounts)',
          coalesce(sum(sc.purchased),0)::text || ' sold',
          coalesce(sum(greatest(sc.purchased - greatest(coalesce(se.scans, 0) - 3 /* free allowance */, 0), 0)), 0)::text || ' unused'
   from public.scan_credits sc
+  join me on me.user_id = sc.user_id
   left join (select user_id, count(*) as scans from public.scan_events group by user_id) se
     on se.user_id = sc.user_id
-  where lower(replace((select email from auth.users u where u.id = sc.user_id), '.', '')) in (
-    'j3k420@gmailcom', 'jamesedmonds26@gmailcom', 'edmondsj46@gmailcom'
-  )
   -- purchases by pack (one row per pack) — revenuecat_events ledger (migration 017)
   union all
   select 64, 'PURCHASES', 'pack: ' || coalesce(product_id,'(unknown)'),

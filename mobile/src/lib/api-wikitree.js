@@ -24,6 +24,31 @@ function firstNamesMatch(queried, candidate) {
   return false;
 }
 
+// Word-boundary, nickname-aware relationship-name match. Replaces a former
+// substring check (`relText.includes(tok)`) that false-matched a single short
+// token anywhere in a joined blob — e.g. stone "Mary Ann" hitting WikiTree
+// "Joanna", or any common first-name token bleeding across name boundaries.
+// When BOTH names are multi-token, the SURNAME (last token) must align exactly
+// AND some first-name token must align (nickname-aware via firstNamesMatch) —
+// so a shared given name alone ("Jane Smith" vs "Jane Jones") cannot score a hit.
+// When the stone gives only ONE usable token (e.g. a spouse engraved by first
+// name "Mary", or by surname "Doe"), that token may align with EITHER the
+// candidate's first OR last token — single-name engravings are common and must
+// still match. Tokens of <=2 chars are ignored (initials/noise).
+function relationNameMatch(stoneName, candidateName) {
+  const tok = s => String(s || '').toLowerCase().split(/\s+/).filter(t => t.length > 2);
+  const a = tok(stoneName), b = tok(candidateName);
+  if (!a.length || !b.length) return false;
+  // Single-token stone name: match if it aligns with any candidate token
+  // (nickname-aware) — covers first-name-only and surname-only engravings.
+  if (a.length === 1) return b.some(tb => tb === a[0] || firstNamesMatch(a[0], tb));
+  // Multi-token: surname (last token) must match exactly, AND a first-name token
+  // (distinct from that surname alignment) must align.
+  const surnameHit = a[a.length - 1] === b[b.length - 1];
+  const firstHit = a.slice(0, -1).some(ta => b.slice(0, -1).some(tb => firstNamesMatch(ta, tb)));
+  return surnameHit && firstHit;
+}
+
 // Extract a normalised US state name from a free-form location string.
 // Returns lowercase state name (e.g. "pennsylvania") or null.
 const STATE_ABBREVS = {
@@ -184,15 +209,19 @@ export async function searchWikiTree(graveData, location = null) {
       // Relationship alignment (spouse / parents) — a stone that names the spouse
       // or a parent is a strong disambiguator on common names.
       if (hasKnownRelatives) {
-        const relText = [
+        // Candidate relative names kept SEPARATE (not joined into a blob) so a
+        // match is evaluated per-name with word boundaries — see
+        // relationNameMatch. Father/Mother are bare person keys (not names),
+        // so they rarely match by name and are effectively spouse-driven here.
+        const candidateNames = [
           m.Father, m.Mother,
           ...(m.Spouses ? Object.values(m.Spouses).map(s => s && (s.LongName || s.Name || s.FirstName)) : [])
-        ].filter(Boolean).join(' ').toLowerCase();
-        if (relText) {
+        ].filter(Boolean);
+        if (candidateNames.length) {
           const spouseHit = knownRelatives.spouse.some(rn =>
-            rn.split(/\s+/).filter(t => t.length > 2).some(tok => relText.includes(tok)));
+            candidateNames.some(cn => relationNameMatch(rn, cn)));
           const parentHit = knownRelatives.parent.some(rn =>
-            rn.split(/\s+/).filter(t => t.length > 2).some(tok => relText.includes(tok)));
+            candidateNames.some(cn => relationNameMatch(rn, cn)));
           if (spouseHit) score += 40;
           if (parentHit) score += 25;
         }

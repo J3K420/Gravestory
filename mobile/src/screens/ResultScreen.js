@@ -807,7 +807,25 @@ export default function ResultScreen({ navigation, route }) {
     // Record the pick synchronously so a pre-save Save tap sees it (see ref note).
     markerStyleRef.current = styleId;
     setSavingMarker(true);
-    const updated = { ...story, marker_style: styleId };
+
+    const uid = user?.id ?? null;
+    const all = await loadStories(uid);
+    const idx = all.findIndex(s => s.timestamp === story.timestamp);
+
+    // Seed from the freshest PERSISTED row, not the in-memory `story`. The
+    // cemetery map's drag-to-correct writes the corrected pin (gps + userCorrected
+    // + _lowConfidence) straight to local storage / the cloud, but THIS screen's
+    // `story` state never learned about it. Spreading the stale `story` here — then
+    // writing it back below — reverted the location to its original (pre-drag)
+    // coordinate. So overlay the marker pick onto the saved row's location fields.
+    // KEEP THIS FIELD LIST IN SYNC with CemeteryMapScreen.handleDragEnd's persisted
+    // set — those are the only fields it changes today (gps, userCorrected,
+    // _lowConfidence). If the drag ever persists another corrected field, copy it
+    // here too, or the stale-`story` spread will start clobbering it again.
+    // (Guard the spread: a fresh-scan _unsaved story has no local row yet — idx<0 —
+    // so fall back to `story`, which holds the only copy that exists.)
+    const base = idx >= 0 ? { ...story, gps: all[idx].gps, userCorrected: all[idx].userCorrected, _lowConfidence: all[idx]._lowConfidence } : story;
+    const updated = { ...base, marker_style: styleId };
     // Self-heal a missing grave link: if find_or_create_grave failed at save
     // time (non-fatal) the saved story has no grave_id, so an explicit pick
     // would silently never stake. Create-and-stake in one shot here and
@@ -821,9 +839,6 @@ export default function ResultScreen({ navigation, route }) {
         if (gid) updated.grave_id = gid;
       }
     }
-    const uid = user?.id ?? null;
-    const all = await loadStories(uid);
-    const idx = all.findIndex(s => s.timestamp === story.timestamp);
     if (idx >= 0) { all[idx] = updated; await saveStories(all, uid); }
     setStory(updated);
 

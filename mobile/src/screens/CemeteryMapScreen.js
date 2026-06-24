@@ -58,7 +58,19 @@ function GravestoneMarker({ styleId, needsPlacing }) {
 
 // Defined outside the component so it's stable across renders
 const markerStyles = StyleSheet.create({
+  // SYMMETRIC PADDING is load-bearing: react-native-maps rasterizes this whole View
+  // into a fixed-size bitmap (tracksViewChanges flips false after first layout), and
+  // anything outside the View's bounds is clipped by that snapshot. The badge used to
+  // sit at top:-4/right:-4 — i.e. OUTSIDE this container — so the snapshot cut off its
+  // top, and enlarging the circle just enlarged the clipped slice (same ratio, the bug
+  // the user saw). Padding the container so the badge lives fully INSIDE the bounds is
+  // the real fix. The padding is SYMMETRIC (all sides) on purpose: the Marker has no
+  // explicit anchor, so react-native-maps centers the view on the coordinate — uneven
+  // padding would shift the SVG off-center and drift the pin off its true point. With
+  // equal padding the SVG stays centered = on the coordinate; the badge sits at the
+  // top-right of the padded box, fully inside the snapshot.
   shadow: {
+    padding: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.6,
@@ -67,8 +79,8 @@ const markerStyles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: 0,
+    right: 0,
     width: 16,
     height: 16,
     borderRadius: 8,
@@ -78,10 +90,8 @@ const markerStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // The ✛ glyph sits taller than the old "?" and its top arm was clipping against
-  // the circle. Bigger circle (16) + NO tight lineHeight (lineHeight≈fontSize clips
-  // ascenders on Android — the established GraveStory text lesson) + a hair of
-  // includeFontPadding room: let flex centering place the glyph, don't fight metrics.
+  // Metrics kept loose so the glyph isn't clipped by its own line box on Android
+  // (lineHeight≈fontSize clips ascenders — the established GraveStory text lesson).
   badgeText: {
     color: '#e8d4a0',
     fontSize: 10,

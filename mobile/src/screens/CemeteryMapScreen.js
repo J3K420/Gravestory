@@ -283,6 +283,10 @@ export default function CemeteryMapScreen({ navigation, route }) {
           onPress: async () => {
             // A user-placed pin is exact — clear the approximate flag so the "?"
             // badge and "approximate location" warning disappear (local + global).
+            // NOTE: these three fields (gps, userCorrected, _lowConfidence) are the
+            // complete set this drag persists. ResultScreen.handlePickMarker re-seeds
+            // EXACTLY these from the local row so a later marker pick doesn't revert
+            // the correction — keep the two lists in sync if you add a field here.
             const updated = { ...story, gps: newGps, userCorrected: true, _lowConfidence: false };
             setMappedStories(prev =>
               prev.map(s => s.timestamp === story.timestamp ? updated : s)

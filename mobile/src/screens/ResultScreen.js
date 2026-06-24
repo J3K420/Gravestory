@@ -654,18 +654,35 @@ export default function ResultScreen({ navigation, route }) {
 
   // Export the story as a GEDCOM file for a family-tree app. Owner-only (the
   // button is hidden on global/sample stories); fail-soft with a friendly Alert.
+  // Android saves into a user-picked folder (and confirms where); iOS opens the
+  // share sheet (which already offers "Save to Files").
   async function handleExport() {
     if (exporting) return;
     setExporting(true);
     try {
       const res = await exportStoryGedcom(story);
-      if (!res.ok && res.reason === 'sharing-unavailable') {
-        Alert.alert('Export unavailable', 'Sharing is not available on this device.');
-      } else if (!res.ok && res.reason === 'error') {
+      if (res.ok) {
+        // savedTo present (even '') = the Android save-to-device path; absent = share.
+        logEvent(EVENTS.STORY_SHARED, {
+          method: res.savedTo !== undefined ? 'gedcom-save' : 'gedcom-share',
+          isGlobal: false,
+        });
+        if (res.savedTo !== undefined) {
+          const where = res.savedTo
+            ? `Saved to your “${res.savedTo}” folder.`
+            : 'Saved to the folder you chose.';
+          Alert.alert('Family-tree file saved', where);
+        }
+      } else if (res.reason === 'permission-denied') {
+        // User cancelled the folder picker — intentional, stay silent.
+      } else if (res.reason === 'sharing-unavailable' || res.reason === 'saf-unavailable') {
+        Alert.alert('Export unavailable', 'Saving is not available on this device.');
+      } else if (res.reason === 'write-failed') {
+        Alert.alert('Could not save', 'The family-tree file could not be written. Try a different folder.');
+      } else if (res.reason === 'error') {
         Alert.alert('Export failed', 'Could not generate the GEDCOM file.');
-      } else if (res.ok) {
-        logEvent(EVENTS.STORY_SHARED, { method: 'gedcom', isGlobal: false });
       }
+      // 'no-story' / 'not-owner' are unreachable (button is gated) → no Alert.
     } catch {}
     setExporting(false);
   }
@@ -1245,7 +1262,7 @@ export default function ResultScreen({ navigation, route }) {
           >
             <TreeIcon size={18} color={colors.ash} />
             <Text style={styles.exportBtnText}>
-              {exporting ? 'Exporting…' : 'Export to family tree (GEDCOM)'}
+              {exporting ? 'Saving…' : 'Save family-tree file (GEDCOM)'}
             </Text>
           </TouchableOpacity>
         )}

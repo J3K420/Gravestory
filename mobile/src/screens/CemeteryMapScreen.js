@@ -29,21 +29,27 @@ function GraveMarker({ story, onPress, onDragEnd }) {
       onPress={onPress}
     >
       <View onLayout={() => setTracksViewChanges(false)}>
-        {/* A corrected pin is exact — no "?" badge regardless of the original flag. */}
-        <GravestoneMarker styleId={story.marker_style} lowConfidence={story._lowConfidence && !story.userCorrected} />
+        {/* Until the user has dragged the pin to the exact grave, it's UNCONFIRMED —
+            even a real-GPS camera pin, because consumer GPS is routinely ~10–30 m off
+            (worse under tree cover). So the "needs placing" state keys off
+            !userCorrected, NOT _lowConfidence (which only meant "geocoded fallback").
+            Once corrected, the pin is exact and shows clean. */}
+        <GravestoneMarker styleId={story.marker_style} needsPlacing={!story.userCorrected} />
       </View>
     </Marker>
   );
 }
 
-// Renders the grave's chosen marker style (falls back to the default 'book').
-function GravestoneMarker({ styleId, lowConfidence }) {
+// Renders the grave's chosen marker style (falls back to the default 'book'). An
+// UNCONFIRMED pin (never user-placed) gets a small gold "place me" badge so it reads
+// as "tap to position", not as a finished, trusted location.
+function GravestoneMarker({ styleId, needsPlacing }) {
   return (
     <View style={markerStyles.shadow}>
       <GraveMarkerSvg styleId={styleId} size={32} />
-      {lowConfidence && (
+      {needsPlacing && (
         <View style={markerStyles.badge}>
-          <Text style={markerStyles.badgeText}>?</Text>
+          <Text style={markerStyles.badgeText}>✛</Text>
         </View>
       )}
     </View>
@@ -74,9 +80,10 @@ const markerStyles = StyleSheet.create({
   },
   badgeText: {
     color: '#e8d4a0',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 'bold',
     lineHeight: 12,
+    textAlign: 'center',
   },
 });
 
@@ -118,6 +125,10 @@ export default function CemeteryMapScreen({ navigation, route }) {
   const [geocoding, setGeocoding] = useState(true);
   const [selectedStory, setSelectedStory] = useState(null);
   const [bioExpanded, setBioExpanded] = useState(false);
+  // Per-visit dismiss for the "drag your pins" prompt (see the banner below). Resets
+  // each time the screen mounts so a returning user is reminded, but isn't nagged
+  // within a single session once they dismiss it.
+  const [placeHintDismissed, setPlaceHintDismissed] = useState(false);
   const { refreshControl } = useRefresh(resolveStories);
 
   useEffect(() => {
@@ -209,6 +220,22 @@ export default function CemeteryMapScreen({ navigation, route }) {
 
   async function handleDragEnd(story, coordinate) {
     const newGps = { lat: coordinate.latitude, lng: coordinate.longitude };
+    // An UNSAVED focus story (opened from a fresh scan's Map chip before tapping Save)
+    // has no local-storage row and no cloud row yet, so a drag here would update the
+    // on-screen copy but persist NOTHING — handleSave later writes the ORIGINAL gps and
+    // the placement is silently lost. Don't fake it: tell the user to save first. The
+    // marker visually snaps back to its anchor on the next render (we don't setMappedStories).
+    if (story._unsaved) {
+      // Snap the marker back to its bound coordinate (a fresh array → re-render; the
+      // Marker's coordinate prop is story.gps, so it returns to the anchor).
+      setMappedStories(prev => [...prev]);
+      Alert.alert(
+        'Save the story first',
+        'Save this story, then come back to the map to place its pin exactly. (Pin positions are only kept for saved stories.)',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     Alert.alert(
       'Save corrected position?',
       `Move ${story.name || 'this grave'} to the dragged location?`,
@@ -250,6 +277,15 @@ export default function CemeteryMapScreen({ navigation, route }) {
       ? 'No location data yet'
       : `${mappedStories.length} grave${mappedStories.length !== 1 ? 's' : ''} mapped`;
 
+  // Any pin the user hasn't yet placed exactly. GPS drops pins near the grave but
+  // rarely on it (often 10–30 m off, worse under tree cover), so dragging each pin
+  // onto its real grave is the EXPECTED step — surfaced as an obvious prompt the
+  // moment the map opens, not buried in a per-pin callout.
+  const unplacedCount = mappedStories.filter(s => !s.userCorrected).length;
+  // Hidden while a callout is open (selectedStory) — they share the top of the map,
+  // and the open callout already carries its own per-pin "place this pin" block.
+  const showPlaceHint = !geocoding && unplacedCount > 0 && !placeHintDismissed && !selectedStory;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -280,7 +316,13 @@ export default function CemeteryMapScreen({ navigation, route }) {
         >
           {mappedStories.map((story, i) => (
             <GraveMarker
-              key={`${story.timestamp ?? i}-${story.marker_style || 'book'}`}
+              // `userCorrected` is in the key so placing a pin REMOUNTS the marker:
+              // react-native-maps only re-rasterizes a custom marker while
+              // tracksViewChanges is true, and GraveMarker flips that false after first
+              // layout and never back. Without the key change the ✛ "needs placing"
+              // badge would stay frozen on the old snapshot even after the drag clears
+              // userCorrected — the marker reconciles in place and never re-snapshots.
+              key={`${story.timestamp ?? i}-${story.marker_style || 'book'}-${story.userCorrected ? 'p' : 'u'}`}
               story={story}
               onPress={() => { setSelectedStory(story); setBioExpanded(false); }}
               onDragEnd={e => handleDragEnd(story, e.nativeEvent.coordinate)}
@@ -292,6 +334,32 @@ export default function CemeteryMapScreen({ navigation, route }) {
           <View style={styles.geocodingBadge}>
             <ActivityIndicator size="small" color={colors.flame} style={{ marginRight: 8 }} />
             <Text style={styles.geocodingText}>Locating…</Text>
+          </View>
+        )}
+
+        {/* Drag-your-pins prompt — appears on map open whenever there are pins the
+            user hasn't placed yet. This is the primary teaching moment for the drag
+            gesture: obvious, at the top of the map, dismissible. */}
+        {showPlaceHint && (
+          <View style={styles.placeHint}>
+            <View style={styles.placeHintTextCol}>
+              <Text style={styles.placeHintTitle}>
+                ✛ {unplacedCount === 1 ? 'Place your pin' : `Place your ${unplacedCount} pins`}
+              </Text>
+              <Text style={styles.placeHintBody}>
+                GPS is approximate. Press and hold a marker, then drag it onto the exact grave.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.placeHintClose}
+              onPress={() => setPlaceHintDismissed(true)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss pin-placement tip"
+            >
+              <Text style={styles.placeHintCloseText}>✕</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -317,12 +385,18 @@ export default function CemeteryMapScreen({ navigation, route }) {
               <Text style={styles.calloutLocation}>{selectedStory.location}</Text>
             )}
             {selectedStory.userCorrected ? (
-              <Text style={styles.calloutCorrected}>✓ location corrected</Text>
-            ) : selectedStory._lowConfidence ? (
-              <Text style={styles.calloutWarn}>⚠ approximate location</Text>
-            ) : null}
-
-            <Text style={styles.calloutHint}>✦ Pin in the wrong spot? Press and hold the marker, then drag it to the correct grave.</Text>
+              <Text style={styles.calloutCorrected}>✓ location placed by you</Text>
+            ) : (
+              // Unconfirmed pin (any pin not yet user-placed). GPS drops it close but
+              // rarely exact — under tree cover it can be 20–30 m off — so placing it
+              // is the EXPECTED step, not error recovery. Make that prominent.
+              <View style={styles.placeCallout}>
+                <Text style={styles.placeCalloutTitle}>📍 Place this pin exactly</Text>
+                <Text style={styles.placeCalloutBody}>
+                  GPS is approximate. Press and hold the marker, then drag it onto the real grave.
+                </Text>
+              </View>
+            )}
 
             {/* Inline bio preview — first two paragraphs */}
             {bioExpanded && !!selectedStory.biography && (
@@ -435,6 +509,34 @@ const styles = StyleSheet.create({
   },
   geocodingText: { color: colors.parchment, fontSize: 12, fontFamily: fonts.body, letterSpacing: 0.5 },
 
+  // Drag-your-pins prompt banner. Anchored to the BOTTOM of the map (not the top):
+  // the top strip is where auto-framed pins land (a single focus pin is centered and
+  // fitToCoordinates pads only 60px), and a full-width opaque banner there would
+  // physically occlude the press-and-hold on the very marker it tells you to drag.
+  // Tinted gold to read as a teaching prompt, not a warning.
+  placeHint: {
+    position: 'absolute', bottom: 12, left: 12, right: 12,
+    flexDirection: 'row', alignItems: 'flex-start',
+    backgroundColor: 'rgba(34,26,16,0.97)',
+    borderWidth: 1, borderColor: 'rgba(242,182,92,0.5)',
+    borderRadius: radius.md,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  placeHintTextCol: { flex: 1, paddingRight: 10 },
+  placeHintTitle: {
+    color: colors.flame, fontSize: 14, fontFamily: fonts.sansBold,
+    marginBottom: 3, letterSpacing: 0.2,
+  },
+  placeHintBody: {
+    color: colors.parchment, fontSize: 12.5, fontFamily: fonts.body, lineHeight: 18,
+  },
+  placeHintClose: {
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+    marginTop: -2, marginRight: -4,
+  },
+  placeHintCloseText: { color: colors.ash, fontSize: 16, lineHeight: 16 },
+
   floatingCallout: {
     position: 'absolute', top: 12, left: 12, right: 12,
     backgroundColor: 'rgba(20,16,11,0.96)',
@@ -451,11 +553,23 @@ const styles = StyleSheet.create({
   calloutName: { color: colors.parchment, fontSize: 16, fontFamily: fonts.name, marginBottom: 3, paddingRight: 36 },
   calloutDates: { color: colors.ash, fontSize: 13, fontFamily: fonts.serifItalic, marginBottom: 2 },
   calloutLocation: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, marginBottom: 6 },
-  calloutWarn: { color: colors.ember, fontSize: 11, fontFamily: fonts.body, marginBottom: 6 },
   calloutCorrected: { color: colors.moss, fontSize: 11, fontFamily: fonts.body, marginBottom: 6 },
-  calloutHint: {
-    color: colors.flame, fontSize: 11, fontFamily: fonts.body, lineHeight: 16,
-    marginBottom: 8, fontStyle: 'italic',
+  // Prominent "place this pin" block for an unconfirmed pin — a bordered, tinted
+  // panel rather than a one-line italic footnote, because placing the pin is the
+  // expected step (GPS is rarely exact at the grave).
+  placeCallout: {
+    borderWidth: 1, borderColor: 'rgba(242,182,92,0.45)',
+    backgroundColor: 'rgba(242,182,92,0.08)',
+    borderRadius: radius.sm,
+    paddingHorizontal: 10, paddingVertical: 8,
+    marginBottom: 8,
+  },
+  placeCalloutTitle: {
+    color: colors.flame, fontSize: 12.5, fontFamily: fonts.sansBold,
+    marginBottom: 2, letterSpacing: 0.2,
+  },
+  placeCalloutBody: {
+    color: colors.ash, fontSize: 11.5, fontFamily: fonts.body, lineHeight: 16,
   },
   calloutBioScroll: { maxHeight: 140, marginBottom: 8 },
   // Vertical padding on the scroll CONTENT (not the Text) so the serif font's

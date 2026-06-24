@@ -653,32 +653,31 @@ export default function ResultScreen({ navigation, route }) {
   }
 
   // Export the story as a GEDCOM file for a family-tree app. Owner-only (the
-  // button is hidden on global/sample stories); fail-soft with a friendly Alert.
-  // Android saves into a user-picked folder (and confirms where); iOS opens the
-  // share sheet (which already offers "Save to Files").
-  async function handleExport() {
+  // button is hidden on global/sample stories). GEDCOM is unfamiliar to most
+  // users, so a one-line explainer first sets the expectation that the share
+  // sheet (Save to Files / Drive / email) is HOW you keep the file — then we open
+  // it. Fail-soft with a friendly Alert.
+  function handleExport() {
+    if (exporting) return;
+    Alert.alert(
+      'Save your family-tree file',
+      'This creates a GEDCOM (.ged) file for genealogy apps like Ancestry or FamilySearch. On the next screen, choose “Save to Files”, Google Drive, or email to keep it.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', onPress: doExport },
+      ],
+    );
+  }
+
+  async function doExport() {
     if (exporting) return;
     setExporting(true);
     try {
       const res = await exportStoryGedcom(story);
       if (res.ok) {
-        // savedTo present (even '') = the Android save-to-device path; absent = share.
-        logEvent(EVENTS.STORY_SHARED, {
-          method: res.savedTo !== undefined ? 'gedcom-save' : 'gedcom-share',
-          isGlobal: false,
-        });
-        if (res.savedTo !== undefined) {
-          const where = res.savedTo
-            ? `Saved to your “${res.savedTo}” folder.`
-            : 'Saved to the folder you chose.';
-          Alert.alert('Family-tree file saved', where);
-        }
-      } else if (res.reason === 'permission-denied') {
-        // User cancelled the folder picker — intentional, stay silent.
-      } else if (res.reason === 'sharing-unavailable' || res.reason === 'saf-unavailable') {
-        Alert.alert('Export unavailable', 'Saving is not available on this device.');
-      } else if (res.reason === 'write-failed') {
-        Alert.alert('Could not save', 'The family-tree file could not be written. Try a different folder.');
+        logEvent(EVENTS.STORY_SHARED, { method: 'gedcom', isGlobal: false });
+      } else if (res.reason === 'sharing-unavailable') {
+        Alert.alert('Export unavailable', 'Sharing is not available on this device.');
       } else if (res.reason === 'error') {
         Alert.alert('Export failed', 'Could not generate the GEDCOM file.');
       }

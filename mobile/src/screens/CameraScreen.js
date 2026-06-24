@@ -72,6 +72,23 @@ export default function CameraScreen({ navigation, route }) {
   const [rejected, setRejected] = useState(null);
   const [pipelineError, setPipelineError] = useState(null);
 
+  // True for a brief moment right after the app returns to the foreground while a
+  // scan was genuinely in flight. A backgrounded scan PAUSES (its JS thread is
+  // suspended by the OS) and resumes on return — but the loading screen comes
+  // back showing the same frozen step it paused on, which reads as "hung/broken".
+  // Flashing an explicit "Resuming your scan…" acknowledgment turns that silent
+  // freeze into a deliberate-looking pause-and-resume. Gated so it NEVER fires
+  // for the camera/library picker round-trip (which also backgrounds the app) or
+  // when no pipeline is active — see the AppState handler below. Auto-clears.
+  const [justResumed, setJustResumed] = useState(false);
+  const justResumedTimerRef = useRef(null);
+  // True once the app has genuinely gone to 'background' during a scan. The pill
+  // must only fire on a REAL background→foreground round-trip — NOT on an iOS
+  // 'inactive' blip (Control Center / notification shade / incoming-call banner)
+  // or a mid-scan OS permission dialog, none of which suspend our JS. Mirrors the
+  // pickHasBackgroundedRef pattern used for the picker. Reset after each resume.
+  const scanBackgroundedRef = useRef(false);
+
   // True while the OS picker (camera/library) is open. The picker backgrounds
   // the app; when it closes the app returns to 'active'. We use that resume
   // signal — not a setLoading before/after the picker — to show the loading
@@ -123,6 +140,20 @@ export default function CameraScreen({ navigation, route }) {
     });
   }, []);
 
+  // Tear down the "Resuming…" pill state when a scan ends (success, error, or
+  // rejection). Without this, a pill armed in the final seconds before completion
+  // could linger its full 2500ms and flash "Resuming your scan…" on the loading
+  // view as the Result/error screen takes over. Also clears scanBackgroundedRef
+  // so it can't carry into the next scan. Idempotent; safe to call at every exit.
+  const clearResumePill = useCallback(() => {
+    if (justResumedTimerRef.current) {
+      clearTimeout(justResumedTimerRef.current);
+      justResumedTimerRef.current = null;
+    }
+    scanBackgroundedRef.current = false;
+    setJustResumed(false);
+  }, []);
+
   // On the success path runPipeline navigates to Result WITHOUT clearing `loading`,
   // so the loading screen — not the viewfinder — stays underneath while Result
   // slides in over it (clearing it on navigate flashed the viewfinder beside the
@@ -135,8 +166,11 @@ export default function CameraScreen({ navigation, route }) {
       if (!pickInProgressRef.current) {
         setLoading(false);
         setStepIndex(0);
+        // Drop any lingering "Resuming…" flash so it can't bleed into a fresh
+        // viewfinder when the user returns from Result.
+        clearResumePill();
       }
-    }, [])
+    }, [clearResumePill])
   );
 
   // Mirror stepIndex into a ref so the abandonment handlers report the live
@@ -248,6 +282,37 @@ export default function CameraScreen({ navigation, route }) {
       if (state === 'active' && pickInProgressRef.current && pickHasBackgroundedRef.current) {
         setLoading(true);
       }
+
+      // Record a GENUINE background (state === 'background', specifically — NOT
+      // iOS 'inactive', which is Control Center / a call banner / a permission
+      // dialog and does NOT suspend our JS) while a scan is active. Only such a
+      // background actually pauses the scan, so it's the only thing that should
+      // arm the "Resuming…" pill. Mirrors pickHasBackgroundedRef for the picker.
+      if (state === 'background' && pipelineActiveRef.current) {
+        scanBackgroundedRef.current = true;
+      }
+
+      // A genuine return-from-background DURING an active scan (NOT the picker
+      // round-trip — that has pickInProgressRef set and is handled above; and
+      // pipelineActiveRef is still false during the picker, since runPipeline
+      // hasn't been called yet). scanBackgroundedRef confirms we ACTUALLY paused,
+      // so a bare 'inactive'→'active' blip can't fire a false "Resuming…". The
+      // scan paused while backgrounded; flash a brief acknowledgment so the
+      // frozen-looking step reads as a deliberate pause rather than a hang.
+      if (
+        state === 'active' &&
+        !pickInProgressRef.current &&
+        pipelineActiveRef.current &&
+        scanBackgroundedRef.current
+      ) {
+        scanBackgroundedRef.current = false;
+        if (justResumedTimerRef.current) clearTimeout(justResumedTimerRef.current);
+        setJustResumed(true);
+        justResumedTimerRef.current = setTimeout(() => {
+          setJustResumed(false);
+          justResumedTimerRef.current = null;
+        }, 2500);
+      }
       // Backgrounding the app mid-scan is NO LONGER treated as abandonment. The
       // common case is a quick swipe-away (answer a text, glance at another app)
       // and return — the OS keeps our JS running through a short grace window, so
@@ -265,7 +330,13 @@ export default function CameraScreen({ navigation, route }) {
       // counting every background as abandoned was the worse distortion now that
       // backgrounding is a supported, recoverable state.
     });
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      if (justResumedTimerRef.current) {
+        clearTimeout(justResumedTimerRef.current);
+        justResumedTimerRef.current = null;
+      }
+    };
   }, []);
 
   const { refreshControl } = useRefresh(() => {
@@ -613,6 +684,7 @@ export default function CameraScreen({ navigation, route }) {
             setRejected({ reason: err.reason, base64, gps, fromCamera, pending });
             setLoading(false);
             pipelineActiveRef.current = false; // resolved into the rejection screen, not abandoned
+            clearResumePill();
             return;
           }
           throw err;
@@ -1152,6 +1224,7 @@ export default function CameraScreen({ navigation, route }) {
       // navigation.navigate fires CameraScreen's 'blur' listener, so leaving the
       // flag set would mislabel every successful scan as abandonment.
       pipelineActiveRef.current = false;
+      clearResumePill();
 
       // The scan finished. If the user stepped away while it ran, fire a local
       // "story ready" notification so they can tap back in — otherwise they'd have
@@ -1181,6 +1254,7 @@ export default function CameraScreen({ navigation, route }) {
     } catch (err) {
       setLoading(false);
       pipelineActiveRef.current = false; // resolved into the error screen, not abandoned
+      clearResumePill();
       logEvent(EVENTS.PIPELINE_ERROR, { stage: 'pipeline', message: err?.message, dur_ms: Date.now() - pipelineStartRef.current });
       console.warn('Pipeline error:', String(err), 'message:', err?.message, 'stack:', err?.stack);
       // For fresh scans, offer to queue the photo for later — the common cause
@@ -1199,7 +1273,7 @@ export default function CameraScreen({ navigation, route }) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingBox}>
-          <IlluminatedLedger stepIndex={stepIndex} />
+          <IlluminatedLedger stepIndex={stepIndex} justResumed={justResumed} />
         </View>
       </SafeAreaView>
     );
@@ -1568,7 +1642,7 @@ function Seal({ state }) {
   );
 }
 
-function IlluminatedLedger({ stepIndex }) {
+function IlluminatedLedger({ stepIndex, justResumed }) {
   // SIX Animated.Values. Each looped value's INITIAL EQUALS its cycle's first
   // toValue, and every loop is a CLOSED A→B→A cycle — so the Animated.loop
   // restart is seamless (the project's documented snap-back gotcha).
@@ -1959,6 +2033,18 @@ function IlluminatedLedger({ stepIndex }) {
         )}
       </View>
 
+      {/* (C2) RESUMING PILL — appears briefly when the app returns from the
+          background mid-scan. A backgrounded scan pauses on the same step it was
+          on; without this the screen looks frozen on return. The pill makes the
+          pause read as deliberate ("we paused, now we're going again"). This
+          component only ever mounts inside `if (loading)`, so being mounted is
+          itself the loader guard — no separate `loading` check needed. */}
+      {justResumed && (
+        <View style={styles.resumingPill}>
+          <Text style={styles.resumingPillText}>Resuming your scan…</Text>
+        </View>
+      )}
+
       {/* (D) REASSURANCE LINE — one honest per-step line; minHeight so swaps
           never reflow. No animated ellipsis, no rotating patter. */}
       <Text style={styles.ledgerReassure}>{LEDGER_REASSURE[stepIndex] || LEDGER_REASSURE[0]}</Text>
@@ -1968,8 +2054,8 @@ function IlluminatedLedger({ stepIndex }) {
           only its opacity animates) so the fade-in never reflows the screen. */}
       <Animated.View style={[styles.resumeNote, { opacity: resumeFade }]}>
         <Text style={styles.resumeNoteText}>
-          Keep this page open while we work. If you switch apps, your scan pauses
-          and picks up right where it left off when you return.
+          This can take up to a minute. Keep this page open — if you switch apps
+          the scan pauses safely and picks right back up when you return.
         </Text>
       </Animated.View>
     </>
@@ -2140,6 +2226,16 @@ const styles = StyleSheet.create({
   ledgerReassure: {
     color: colors.ash, fontFamily: fonts.bodyItalic, fontSize: 14,
     letterSpacing: 0.5, textAlign: 'center', marginTop: space.lg, minHeight: 22,
+  },
+  resumingPill: {
+    alignSelf: 'center', marginTop: space.md,
+    paddingVertical: 7, paddingHorizontal: 16,
+    borderRadius: 999, backgroundColor: 'rgba(242,182,92,0.14)',
+    borderWidth: 1, borderColor: 'rgba(242,182,92,0.34)',
+  },
+  resumingPillText: {
+    color: colors.flame, fontFamily: fonts.sansBold, fontSize: 13,
+    letterSpacing: 0.4, textAlign: 'center',
   },
   resumeNote: {
     marginTop: space.md, paddingHorizontal: space.lg,

@@ -12,6 +12,10 @@ export function rowToStory(row) {
     public_biography: row.public_biography || null,
     has_originated_relatives: !!row.has_originated_relatives,
     originatedRelatives: Array.isArray(row.originated_relatives) ? row.originated_relatives : [],
+    // Kinship kernel (migration 021) — structured family data for GEDCOM export.
+    subjects: Array.isArray(row.subjects) ? row.subjects : [],
+    relationships: Array.isArray(row.relationships) ? row.relationships : [],
+    maiden_name: row.maiden_name || null,
     location: row.location,
     inscription: row.inscription,
     symbols: row.symbols,
@@ -47,6 +51,10 @@ function storyToRow(story, userId) {
     has_originated_relatives: !!story.has_originated_relatives,
     originated_relatives: Array.isArray(story.originatedRelatives) && story.originatedRelatives.length
       ? story.originatedRelatives : null,
+    // Kinship kernel (migration 021) — null when empty so jsonb stays clean.
+    subjects: Array.isArray(story.subjects) && story.subjects.length ? story.subjects : null,
+    relationships: Array.isArray(story.relationships) && story.relationships.length ? story.relationships : null,
+    maiden_name: story.maiden_name || null,
     location: story.location || null,
     inscription: story.inscription || null,
     symbols: story.symbols || null,

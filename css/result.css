@@ -416,6 +416,14 @@
 
   .action-share:hover { background: rgba(26,20,16,0.08); }
 
+  .action-export {
+    background: transparent;
+    border: 1px solid var(--ink) !important;
+    color: var(--ink);
+  }
+
+  .action-export:hover { background: rgba(26,20,16,0.08); }
+
   .action-new {
     background: var(--gold);
     color: var(--ink);

@@ -161,3 +161,30 @@ function copyToClipboard(text) {
   });
 }
 
+// ── EXPORT GEDCOM ────────────────────────────────────────────────
+// Download the current story as a GEDCOM (.ged) file a genealogist can import
+// into their family tree. OWNER-ONLY: never export someone else's public story
+// (global/sample) — those wouldn't carry the kinship columns anyway, and we
+// don't re-publish others' data. Same Blob-download pattern as exportCemeteryData.
+function exportStoryGedcom() {
+  if (!currentStory) return;
+  if (currentStory._isGlobal || currentStory._isSample) {
+    alert('Export is only available for your own scanned stories.');
+    return;
+  }
+  try {
+    const text = buildGedcom(currentStory);
+    const blob = new Blob([text], { type: 'application/x-gedcom' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = gedcomFilename(currentStory);
+    a.click();
+    URL.revokeObjectURL(url);
+    if (typeof logEvent === 'function') logEvent(ANALYTICS_EVENTS.STORY_SHARED, { method: 'gedcom', isGlobal: false });
+  } catch (e) {
+    console.warn('GEDCOM export failed:', e?.message);
+    alert('Could not generate the GEDCOM file.');
+  }
+}
+

@@ -206,6 +206,11 @@ function renderResult(story) {
     }
   }
 
+  // GEDCOM export is owner-only: hide it for the read-only sample and for global
+  // (other people's) stories. Shown for the user's own scanned/saved stories.
+  const exportBtn = document.getElementById('export-btn');
+  if (exportBtn) exportBtn.style.display = (isSample || story._isGlobal) ? 'none' : '';
+
   // Public/private toggle, tributes, marker picker — all suppressed for the sample.
   if (!isSample) {
     renderVisibilityControls(story, alreadySaved);

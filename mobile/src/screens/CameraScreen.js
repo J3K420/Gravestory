@@ -973,12 +973,23 @@ export default function CameraScreen({ navigation, route }) {
         // global bios — graveData itself is not a persisted column. Mirrors web.
         symbols: Array.isArray(graveData.symbols) && graveData.symbols.length ? graveData.symbols : null,
         symbol_meanings: symbolMeanings || null,
-        // Deceased subjects (name + own dates) — used at public-share time to
-        // tell the living-name redactor which names it may keep. Transient (no
-        // DB column; storyToRow's allowlist excludes it). Mirrors web index.html.
+        // KINSHIP KERNEL (migration 021) — structured family data lifted out of
+        // graveData (which is NOT persisted) so it survives save + cloud sync and
+        // can drive GEDCOM export from a story reloaded in a later session. Also
+        // feeds the public-share living-name redactor. `...bioResult` is spread
+        // first and never carries these, so the literals win (cf. originatedRelatives).
+        // Deceased subjects: name + own birth/death dates, one per person on the stone.
         subjects: Array.isArray(graveData.subjects)
           ? graveData.subjects.filter(s => s && s.name)
           : undefined,
+        // Relationship links (spouse/parent/child/sibling → GEDCOM FAM records).
+        relationships: Array.isArray(graveData.relationships) && graveData.relationships.length
+          ? graveData.relationships : undefined,
+        // Née/birth surname.
+        maiden_name: graveData.maiden_name || undefined,
+        // family_name HAS a column but was never populated (the build step never
+        // lifted it out of graveData) — fix it here so it round-trips.
+        family_name: bioResult.family_name || graveData.family_name || undefined,
         portraits: resolvedPortraits,
         gps: refinedGps,
         _lowConfidence: lowConfidence,

@@ -52,6 +52,19 @@ export function ShareIcon({ size = 22, color = colors.flame }) {
   );
 }
 
+export function TreeIcon({ size = 22, color = colors.flame }) {
+  // A small family-tree glyph for the GEDCOM export action: two parent nodes
+  // joined to a child node below.
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="7" cy="5" r="2.5" stroke={color} strokeWidth={1.6} />
+      <Circle cx="17" cy="5" r="2.5" stroke={color} strokeWidth={1.6} />
+      <Circle cx="12" cy="19" r="2.5" stroke={color} strokeWidth={1.6} />
+      <Path d="M7 7.5v3h10v-3M12 10.5v6" stroke={color} strokeWidth={1.6} />
+    </Svg>
+  );
+}
+
 export function Pin({ size = 18, color = colors.flame }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

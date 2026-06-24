@@ -18,8 +18,9 @@ import { redactLivingNamesForPublic, stripOriginatedNamesForPublic, stripOrigina
 import { useRefresh } from '../lib/use-refresh';
 import { deletePendingPhoto } from '../lib/pending';
 import { logEvent, EVENTS } from '../lib/analytics';
+import { exportStoryGedcom } from '../lib/export-gedcom';
 import { colors, fonts, radius } from '../lib/theme';
-import { MapStack, ShareIcon, Globe, Pin } from '../components/Icons';
+import { MapStack, ShareIcon, Globe, Pin, TreeIcon } from '../components/Icons';
 import { MARKER_STYLES, MARKER_PACKS, getMarker, GraveMarkerSvg } from '../components/GraveMarkers';
 import { SYMBOL_CONTEXT } from '../lib/biography';
 
@@ -107,6 +108,7 @@ export default function ResultScreen({ navigation, route }) {
   const [story, setStory]               = useState(route.params?.story);
   const [user, setUser]                 = useState(null);
   const [sharing, setSharing]           = useState(false);
+  const [exporting, setExporting]       = useState(false);
   const [saving, setSaving]             = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
@@ -612,6 +614,24 @@ export default function ResultScreen({ navigation, route }) {
       logEvent(EVENTS.STORY_SHARED, { isGlobal: !!story._isGlobal });
     } catch {}
     setSharing(false);
+  }
+
+  // Export the story as a GEDCOM file for a family-tree app. Owner-only (the
+  // button is hidden on global/sample stories); fail-soft with a friendly Alert.
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const res = await exportStoryGedcom(story);
+      if (!res.ok && res.reason === 'sharing-unavailable') {
+        Alert.alert('Export unavailable', 'Sharing is not available on this device.');
+      } else if (!res.ok && res.reason === 'error') {
+        Alert.alert('Export failed', 'Could not generate the GEDCOM file.');
+      } else if (res.ok) {
+        logEvent(EVENTS.STORY_SHARED, { method: 'gedcom', isGlobal: false });
+      }
+    } catch {}
+    setExporting(false);
   }
 
   async function handleTogglePublic() {
@@ -1143,6 +1163,23 @@ export default function ResultScreen({ navigation, route }) {
           </Text>
         )}
 
+        {/* GEDCOM export — owner-only (hidden on global/sample). A full-width
+            secondary button rather than a 5th chip (the chips row is already
+            cramped on narrow phones). */}
+        {!story._isGlobal && !isSample && (
+          <TouchableOpacity
+            style={[styles.exportBtn, exporting && styles.chipDisabled]}
+            onPress={handleExport}
+            disabled={exporting}
+            activeOpacity={0.7}
+          >
+            <TreeIcon size={18} color={colors.ash} />
+            <Text style={styles.exportBtnText}>
+              {exporting ? 'Exporting…' : 'Export to family tree (GEDCOM)'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* Scan another (sample shows it as the primary next step) */}
         <TouchableOpacity
           style={isSample ? styles.saveBtn : styles.scanAgainBtn}
@@ -1544,6 +1581,13 @@ const styles = StyleSheet.create({
     paddingVertical: 15, borderRadius: radius.sm, marginBottom: 10, alignItems: 'center',
   },
   scanAgainText: { color: colors.ash, fontFamily: fonts.body, letterSpacing: 0.5 },
+
+  exportBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1, borderColor: colors.line, backgroundColor: colors.stone2,
+    paddingVertical: 14, borderRadius: radius.sm, marginBottom: 16,
+  },
+  exportBtnText: { color: colors.ash, fontFamily: fonts.body, letterSpacing: 0.5, fontSize: 14 },
 
   deleteBtn: {
     borderWidth: 1, borderColor: colors.dangerDim,

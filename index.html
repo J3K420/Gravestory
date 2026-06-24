@@ -67,6 +67,7 @@
 <script src="js/exif.js"></script>
 <script src="js/util-dom.js"></script>
 <script src="js/biography.js"></script>
+<script src="js/gedcom.js"></script>
 <script src="js/user-prefs.js"></script>
 <script src="js/persistence.js"></script>
 <script src="js/sync.js"></script>
@@ -390,6 +391,7 @@
   <div class="result-actions">
     <button class="action-btn action-save" id="save-btn" onclick="saveStory()">💾 Save</button>
     <button class="action-btn action-share" onclick="shareStory()">↗ Share</button>
+    <button class="action-btn action-export" id="export-btn" onclick="exportStoryGedcom()">⬇ GEDCOM</button>
     <button class="action-btn action-new" onclick="showScreen('camera')">+ New</button>
   </div>
 </div>
@@ -1493,12 +1495,23 @@ async function startAnalysis() {
         ? graveData.symbols
         : (story.symbols || null),
       symbol_meanings: story.symbol_meanings || null,
-      // Deceased subjects (name + own dates) — used at public-share time to tell
-      // the living-name redactor which names it is ALLOWED to keep. Transient
-      // (no DB column); cached stories fall back to inferring the subject.
+      // KINSHIP KERNEL (migration 021) — structured family data lifted out of
+      // graveData (NOT a persisted column) so it survives save + cloud sync and
+      // can drive GEDCOM export from a story reloaded in a later session. Also
+      // feeds the public-share living-name redactor. `...story` (the bio result)
+      // is spread first and never carries these, so the literals win.
+      // Deceased subjects: name + own birth/death dates, one per person on the stone.
       subjects: Array.isArray(graveData.subjects)
         ? graveData.subjects.filter(s => s && s.name)
         : undefined,
+      // Relationship links (spouse/parent/child/sibling → GEDCOM FAM records).
+      relationships: Array.isArray(graveData.relationships) && graveData.relationships.length
+        ? graveData.relationships : undefined,
+      // Née/birth surname.
+      maiden_name: graveData.maiden_name || undefined,
+      // family_name HAS a column but was never populated (the build step never
+      // lifted it out of graveData) — fix it here so it round-trips.
+      family_name: story.family_name || graveData.family_name || undefined,
       image: currentImage,       // Kept for in-session preview only; stripped before save
       _pendingImageBase64: currentImageBase64,  // Used by saveStory to upload to R2
       image_url: null,           // Will be populated after upload

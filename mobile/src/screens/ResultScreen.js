@@ -27,6 +27,9 @@ import { SYMBOL_CONTEXT } from '../lib/biography';
 const SCREEN_W = Dimensions.get('window').width;
 const AI_DISCLAIMER_SEEN_KEY = 'gs_ai_disclaimer_seen';
 const SHARE_NOTICE_SEEN_KEY = 'gs_share_notice_seen';
+// "Don't show again" flag for the post-save "place your pin on the map" reminder.
+// Unset = show the reminder after every save; 'true' = the user opted out forever.
+const PIN_REMINDER_DISMISSED_KEY = 'gs_pin_reminder_dismissed';
 
 // Wikimedia's upload.wikimedia.org 403s requests from the default RN/okhttp image
 // loader (it blocks bare/okhttp User-Agents as anti-hotlinking) — so portrait URLs
@@ -143,6 +146,8 @@ export default function ResultScreen({ navigation, route }) {
   const [reportSending, setReportSending] = useState(false);
   const [reportDone, setReportDone]     = useState(false);
   const [shareNoticeModal, setShareNoticeModal] = useState(false); // first-share public notice
+  const [pinReminderModal, setPinReminderModal] = useState(false); // post-save "place your pin" reminder
+  const [pinReminderDontShow, setPinReminderDontShow] = useState(false); // its "don't show again" checkbox
   const [savingMarker, setSavingMarker] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false); // bio read-aloud (TTS) active
   // expo-speech is a single global engine but isSpeaking is per-instance state.
@@ -613,11 +618,44 @@ export default function ResultScreen({ navigation, route }) {
 
       setStory(saved);
       logEvent(EVENTS.STORY_SAVED, { signedIn: !!sessionUser, hasGrave: !!graveId });
+
+      // Post-save reminder to place the pin precisely on the map. GPS is often
+      // 10–30 m off (worse under tree cover), so as a user accumulates saved
+      // stories their map fills with pins that are near-but-not-on the grave and
+      // become hard to tell apart. Nudge them — after EVERY save — to open the map
+      // and drag the pin, until they opt out via the modal's "don't show again".
+      // Gated on:
+      //   • the story actually HAVING a pin to drag (gps or a geocodable location);
+      //     a no-location save has nothing to place — same gate as the Map chip.
+      //   • the AI-disclaimer sheet NOT being up. It auto-opens on a first-ever real
+      //     bio; if the user saved before dismissing it, two bottom sheets would
+      //     stack. Suppressing here (rather than stacking) is fine — with "every
+      //     save" cadence the reminder lands on their next save anyway.
+      // The `.catch(() => null)` is LOAD-BEARING: it keeps a storage read failure
+      // from propagating into the surrounding try's catch and firing a bogus
+      // "Save Failed" alert AFTER the save already committed. Don't remove it.
+      // Net fail-soft: any read miss/error → reminder shows (the safe default).
+      if ((saved.gps || saved.location) && !aiModal) {
+        const dismissed = await AsyncStorage.getItem(PIN_REMINDER_DISMISSED_KEY).catch(() => null);
+        if (dismissed !== 'true') {
+          setPinReminderDontShow(false); // reset the checkbox each time it opens
+          setPinReminderModal(true);
+        }
+      }
     } catch (err) {
       console.warn('Save failed:', err?.message);
       Alert.alert('Save Failed', 'Could not save this story. Please check your connection and try again.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Dismiss the post-save pin reminder. If the user ticked "don't show again",
+  // persist the flag so the reminder never fires again on any future save.
+  function dismissPinReminder() {
+    setPinReminderModal(false);
+    if (pinReminderDontShow) {
+      AsyncStorage.setItem(PIN_REMINDER_DISMISSED_KEY, 'true').catch(() => {});
     }
   }
 
@@ -1471,6 +1509,44 @@ export default function ResultScreen({ navigation, route }) {
         </Pressable>
       </Modal>
 
+      {/* Post-save reminder: place your pin precisely on the map. Shown after
+          every save until the user ticks "Don't show this again". */}
+      <Modal
+        visible={pinReminderModal}
+        transparent
+        animationType="slide"
+        onRequestClose={dismissPinReminder}
+      >
+        <Pressable style={styles.symbolOverlay} onPress={dismissPinReminder}>
+          <Pressable style={[styles.symbolSheet, { paddingBottom: insets.bottom + 36 }]} onPress={() => {}}>
+            <SwipeHandle onClose={dismissPinReminder} />
+            <Text style={styles.symbolSheetName}>Place your pin on the map</Text>
+            <Text style={styles.symbolSheetText}>
+              Saved. GPS can be off by 10–30 metres — more under tree cover — so this
+              grave's pin may not sit exactly on the spot. Open your map, then press
+              and hold the marker and drag it onto the exact grave so your pins stay
+              easy to tell apart.
+            </Text>
+            <TouchableOpacity
+              style={styles.pinReminderCheckRow}
+              onPress={() => setPinReminderDontShow(v => !v)}
+              activeOpacity={0.7}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: pinReminderDontShow }}
+              accessibilityLabel="Don't show this again"
+            >
+              <View style={[styles.pinReminderCheckbox, pinReminderDontShow && styles.pinReminderCheckboxOn]}>
+                {pinReminderDontShow && <Text style={styles.pinReminderCheckMark}>✓</Text>}
+              </View>
+              <Text style={styles.pinReminderCheckLabel}>Don't show this again</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.symbolSheetClose} onPress={dismissPinReminder} activeOpacity={0.7}>
+              <Text style={styles.symbolSheetCloseText}>OK</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Report a problem sheet */}
       <Modal
         visible={reportModal}
@@ -1830,6 +1906,22 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.line,
   },
   symbolSheetCloseText: { color: colors.ash, fontFamily: fonts.body, fontSize: 14 },
+
+  // Post-save "place your pin" reminder — "don't show again" checkbox row
+  pinReminderCheckRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginTop: 18, alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  pinReminderCheckbox: {
+    width: 22, height: 22, borderRadius: 6,
+    borderWidth: 1.5, borderColor: colors.line,
+    backgroundColor: colors.stone2,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pinReminderCheckboxOn: { backgroundColor: colors.flame, borderColor: colors.flame },
+  pinReminderCheckMark: { color: colors.onFlame, fontSize: 14, fontWeight: '700', lineHeight: 16 },
+  pinReminderCheckLabel: { color: colors.ash, fontFamily: fonts.body, fontSize: 14 },
 
   // Report-a-problem sheet
   reportSub: {

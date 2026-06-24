@@ -6,6 +6,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as StoreReview from 'expo-store-review';
+import * as Updates from 'expo-updates';
+import Constants from 'expo-constants';
 import Purchases from 'react-native-purchases';
 import { supabase } from '../lib/supabase';
 import { useRefresh } from '../lib/use-refresh';
@@ -337,6 +339,16 @@ export default function SettingsScreen({ navigation }) {
         ) : (
           <Text style={styles.notSignedIn}>Not signed in.</Text>
         )}
+
+        {/* Build/bundle stamp — shows which JS bundle is actually running so OTA
+            delivery is verifiable. `Updates.updateId` is null when running the
+            build's EMBEDDED bundle (no OTA applied yet) and a UUID once an OTA is
+            live. The short suffix is enough to tell two bundles apart. */}
+        <Text style={styles.buildStamp}>
+          {`v${Constants.expoConfig?.version || '?'} · ${
+            Updates.updateId ? `OTA ${String(Updates.updateId).slice(0, 8)}` : 'embedded bundle'
+          }`}
+        </Text>
       </ScrollView>
 
       {/* Type-to-confirm account deletion */}
@@ -468,6 +480,7 @@ const styles = StyleSheet.create({
 
   privacyLink: { alignItems: 'center', paddingVertical: 20 },
   privacyLinkText: { color: colors.ashDim, fontSize: 12, fontFamily: fonts.body, textDecorationLine: 'underline' },
+  buildStamp: { color: colors.ashDim, fontSize: 11, fontFamily: fonts.body, textAlign: 'center', paddingTop: 8, paddingBottom: 24, opacity: 0.7 },
 
   deleteLink: { alignItems: 'center', paddingTop: 4, paddingBottom: 24 },
   deleteLinkText: {

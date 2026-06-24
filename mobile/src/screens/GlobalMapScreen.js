@@ -157,6 +157,18 @@ export default function GlobalMapScreen({ navigation }) {
     );
   }
 
+  // Zoom to a cemetery-overview level (~0.008° ≈ the grounds + nearby streets),
+  // centred on the pin. From the world-scale community map this is how you see
+  // "which cemetery is this grave in". Leaves the callout open so the user keeps
+  // their place. gps is guaranteed for any rendered marker, but guard anyway.
+  function flyToCemetery(story) {
+    if (!story?.gps) return;
+    mapRef.current?.animateToRegion(
+      { latitude: story.gps.lat, longitude: story.gps.lng, latitudeDelta: 0.008, longitudeDelta: 0.008 },
+      700
+    );
+  }
+
   const panelTitle = loading
     ? 'Loading shared stories…'
     : fetchError
@@ -274,18 +286,33 @@ export default function GlobalMapScreen({ navigation }) {
                   style={styles.calloutBtn}
                   onPress={() => setBioExpanded(e => !e)}
                   activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={bioExpanded ? 'Hide biography' : 'Read biography'}
                 >
                   <Text style={styles.calloutBtnText}>
-                    {bioExpanded ? '▲ Hide bio' : '▼ Read bio'}
+                    {bioExpanded ? '▲ Bio' : '▼ Bio'}
                   </Text>
+                </TouchableOpacity>
+              )}
+              {!!selectedStory.gps && (
+                <TouchableOpacity
+                  style={styles.calloutBtn}
+                  onPress={() => flyToCemetery(selectedStory)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Frame the cemetery"
+                >
+                  <Text style={styles.calloutBtnText}>⤢ Cemetery</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
                 style={[styles.calloutBtn, styles.calloutBtnPrimary]}
                 onPress={() => { setSelectedStory(null); setBioExpanded(false); navigation.navigate('Result', { story: selectedStory }); }}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Open full biography"
               >
-                <Text style={styles.calloutBtnText}>→ Go to bio</Text>
+                <Text style={styles.calloutBtnText}>→ Open</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -410,7 +437,7 @@ const styles = StyleSheet.create({
   // ScrollView's clip rect on Android (mirrors CemeteryMapScreen).
   calloutBioContent: { paddingTop: 3, paddingBottom: 6 },
   calloutBioText: { color: colors.ash, fontSize: 13, fontFamily: fonts.serif, lineHeight: 21 },
-  calloutButtons: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  calloutButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   calloutBtn: {
     borderWidth: 1, borderColor: colors.flame,
     paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.sm,

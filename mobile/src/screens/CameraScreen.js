@@ -80,6 +80,25 @@ export default function CameraScreen({ navigation, route }) {
   // back on return. Cleared once the picker promise resolves.
   const pickInProgressRef = useRef(false);
 
+  // True only AFTER the app has actually left 'active' for the picker activity
+  // (gone 'background'/'inactive'). Android emits a transient 'active' event as
+  // the camera activity is being launched — BEFORE the app has truly
+  // backgrounded — and without this guard that spurious 'active' flipped the
+  // loader on for a frame before the camera covered it (the pre-camera flash).
+  // We only treat a return-to-'active' as "picker closed" once we've first seen
+  // the app leave 'active'. Reset alongside pickInProgressRef.
+  const pickHasBackgroundedRef = useRef(false);
+
+  // Re-entrancy lock for pickAndAnalyze, armed SYNCHRONOUSLY at the top of the
+  // function (before any await) and released in its finally. Distinct from
+  // pickInProgressRef, which is scoped to the picker launch only and is read by
+  // the AppState handler / useFocusEffect — arming THAT early would mislabel the
+  // permission-prompt background as a picker return and flash the loader. This
+  // ref is read ONLY by the re-entrancy guard, so arming it across the whole
+  // function (including the pre-picker scan-limit + permission awaits) is safe
+  // and actually closes the double-tap window those awaits open.
+  const pickArmedRef = useRef(false);
+
   // Pipeline-duration + abandonment tracking (S67). `pipelineActiveRef` is true
   // ONLY while research is genuinely in flight — distinct from the `loading` UI
   // flag, which deliberately lingers through the Result-screen slide. It's set
@@ -215,7 +234,18 @@ export default function CameraScreen({ navigation, route }) {
   // Gated on pickInProgressRef so unrelated app resumes don't trigger it.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && pickInProgressRef.current) {
+      // Record the picker activity actually taking over (app left 'active').
+      // Android fires a spurious 'active' DURING the camera launch handshake,
+      // before this background event — gating the loader on having seen this
+      // first is what stops that transient 'active' painting the loading screen
+      // for a frame before the camera opens (the pre-camera flash).
+      if (state !== 'active' && pickInProgressRef.current) {
+        pickHasBackgroundedRef.current = true;
+      }
+      // Treat a return-to-'active' as "picker closed" ONLY after we've seen the
+      // app leave 'active' for the picker — i.e. this is a genuine resume, not
+      // the transient 'active' Android emits while the camera is still opening.
+      if (state === 'active' && pickInProgressRef.current && pickHasBackgroundedRef.current) {
         setLoading(true);
       }
       // Backgrounding the app mid-scan is NO LONGER treated as abandonment. The
@@ -268,6 +298,24 @@ export default function CameraScreen({ navigation, route }) {
   }
 
   async function pickAndAnalyze(fromCamera, offline = false) {
+    // Re-entrancy guard. The Take Photo / Choose from Library buttons have no
+    // built-in debounce, so a rapid double-tap (or tapping both) could launch two
+    // overlapping picks that share ONE pair of refs (pickInProgressRef /
+    // pickHasBackgroundedRef) — when the first resolves it clears the refs out
+    // from under the second, blinding the AppState handler and either flashing the
+    // viewfinder back or stranding the spinner. A single ref pair can't represent
+    // two concurrent picks, so we refuse to start a second while one is in flight.
+    // We gate on pickArmedRef (NOT pickInProgressRef): pickInProgressRef isn't set
+    // until the picker launch, AFTER several awaits (scan-limit + permission), so a
+    // second tap landing during those awaits would slip past a pickInProgressRef
+    // check. pickArmedRef is armed SYNCHRONOUSLY just below — before any await — so
+    // the guard is atomic. (The offline re-entry from offerOfflineScan is safe: that
+    // path RETURNS first, releasing the lock in finally, before the user can tap
+    // "Scan Offline".)
+    if (pickArmedRef.current) return;
+    pickArmedRef.current = true;
+    try {
+
     setRejected(null);
     setPipelineError(null);
 
@@ -344,12 +392,16 @@ export default function CameraScreen({ navigation, route }) {
     // via the pipelineError panel instead of stranding the spinner.
     try {
       pickInProgressRef.current = true;
+      // Fresh launch: we have NOT backgrounded yet. Reset so a leftover true from
+      // a prior pick can't make the next launch's transient 'active' flash the loader.
+      pickHasBackgroundedRef.current = false;
       const result = fromCamera
         ? await ImagePicker.launchCameraAsync(opts)
         : await ImagePicker.launchImageLibraryAsync(opts);
       // Picker closed; the resume handler has already shown the spinner (on
       // confirm) or it'll be cleared just below (on cancel).
       pickInProgressRef.current = false;
+      pickHasBackgroundedRef.current = false;
 
       if (result.canceled) {
         // User backed out — clear the spinner the resume handler may have set.
@@ -414,6 +466,7 @@ export default function CameraScreen({ navigation, route }) {
       await runPipeline(manipResult.base64, false, gps, fromCamera);
     } catch (err) {
       pickInProgressRef.current = false;
+      pickHasBackgroundedRef.current = false;
       setLoading(false);
       console.warn('Photo prep failed:', err?.message || err);
       setPipelineError({
@@ -422,6 +475,15 @@ export default function CameraScreen({ navigation, route }) {
         gps: null,
         fromCamera,
       });
+    }
+
+    } finally {
+      // Release the re-entrancy lock on EVERY exit (early returns, picker cancel,
+      // success → runPipeline, and the photo-prep catch). runPipeline has already
+      // run by the time the success path reaches here, but that's fine: the lock
+      // only needs to span THIS function's picker launch, and a fresh tap on the
+      // Camera screen after navigation is a new, legitimate pick.
+      pickArmedRef.current = false;
     }
   }
 

@@ -944,17 +944,53 @@ export default function ResultScreen({ navigation, route }) {
     navigation.goBack();
   }
 
+  // Home shortcut. Mirrors handleBack's unsaved-discard guard so the one-tap
+  // jump to Home can't silently drop an unsaved story — only the destination
+  // differs (navigate to Home vs goBack one step). navigate('Home') pops back
+  // to the existing Home screen in the stack rather than pushing a duplicate.
+  function handleHome() {
+    if (isUnsaved && !saving) {
+      Alert.alert(
+        'Discard this story?',
+        'You haven\'t saved this story yet. Leaving now will discard it.',
+        [
+          { text: 'Keep editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: () => navigation.navigate('Home') },
+        ]
+      );
+      return;
+    }
+    navigation.navigate('Home');
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity
-        onPress={handleBack}
-        style={styles.back}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-      >
-        <Text style={styles.backText}>← Back</Text>
-      </TouchableOpacity>
+      <View style={styles.headerRow}>
+        <TouchableOpacity
+          onPress={handleBack}
+          style={styles.back}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+
+        {/* Home shortcut — the result page can be reached several screens deep
+            (scan → result, map → result), so offer a one-tap return to Home
+            alongside the single-step Back. handleHome routes to Home but goes
+            through the same unsaved-discard confirmation as Back so an unsaved
+            story is never silently dropped. */}
+        <TouchableOpacity
+          onPress={handleHome}
+          style={styles.home}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go to home screen"
+        >
+          <Text style={styles.backText}>Home</Text>
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -1539,7 +1575,12 @@ export default function ResultScreen({ navigation, route }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.ink },
+  // Back (left) + Home (right) share one row. Each button keeps its own 24px
+  // padding so the tap targets stay generous and the labels sit at the screen
+  // edges; the row only adds the flex distribution.
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   back: { padding: 24, paddingBottom: 0 },
+  home: { padding: 24, paddingBottom: 0 },
   backText: { color: colors.ashDim, fontSize: 15, fontFamily: fonts.body },
   scroll: { padding: 24, paddingTop: 12, paddingBottom: 48 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },

@@ -67,23 +67,28 @@ const markerStyles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: -3,
-    right: -3,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    top: -4,
+    right: -4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: 'rgba(60,40,20,0.95)',
     borderWidth: 1,
     borderColor: '#c9a84c',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // The ✛ glyph sits taller than the old "?" and its top arm was clipping against
+  // the circle. Bigger circle (16) + NO tight lineHeight (lineHeight≈fontSize clips
+  // ascenders on Android — the established GraveStory text lesson) + a hair of
+  // includeFontPadding room: let flex centering place the glyph, don't fight metrics.
   badgeText: {
     color: '#e8d4a0',
     fontSize: 10,
     fontWeight: 'bold',
-    lineHeight: 12,
     textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 });
 

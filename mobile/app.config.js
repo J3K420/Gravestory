@@ -27,7 +27,7 @@ export default {
     },
     android: {
       package: 'com.gravestory.app',
-      versionCode: 12,
+      versionCode: 13,
       adaptiveIcon: {
         backgroundColor: '#14100b',
         foregroundImage: './assets/android-icon-foreground.png',
@@ -79,6 +79,18 @@ export default {
             'Allow GraveStory to read photo location data so gravestone photos can be pinned on the map.',
           isAccessMediaLocationEnabled: true,
           granularPermissions: ['photo'],
+        },
+      ],
+      [
+        // Local-only notifications: fire a "your story is ready" notification when
+        // a scan finishes while the app is backgrounded. No remote push / tokens.
+        // The plugin adds POST_NOTIFICATIONS to the Android manifest (Android 13+),
+        // which is why adding it requires a fresh native build, not an OTA.
+        // No `icon` asset yet — Android falls back to the app icon, tinted `color`
+        // (theme `flame`); a dedicated monochrome notification icon is a follow-up.
+        'expo-notifications',
+        {
+          color: '#f2b65c',
         },
       ],
     ],

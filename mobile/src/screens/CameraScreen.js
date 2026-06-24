@@ -27,6 +27,7 @@ import { loadStories, saveStories } from '../lib/storage';
 import { savePendingPhoto, readPendingPhoto, deletePendingPhoto } from '../lib/pending';
 import { logEvent, EVENTS } from '../lib/analytics';
 import { ORIGINATE_RELATIVES } from '../lib/config';
+import { requestNotificationPermission, notifyStoryReady, setLastReadyStory } from '../lib/notify';
 
 // Overall ceiling for the parallel research fan-out. The individual research
 // legs (Tavily, WikiTree, Wikidata, Chronicling America, Internet Archive,
@@ -217,18 +218,25 @@ export default function CameraScreen({ navigation, route }) {
       if (state === 'active' && pickInProgressRef.current) {
         setLoading(true);
       }
-      // User sent the app to the background mid-research → count it as
-      // abandonment (best-effort; a follow-on hard kill may not get the insert
-      // out). Only 'background' (not the transient iOS 'inactive', which fires
-      // for the notification shade / control center) to avoid false positives.
-      // Safe during the OS picker round-trip: the pipeline isn't active yet
-      // then, so reportAbandonIfActive no-ops.
-      if (state === 'background') {
-        reportAbandonIfActive();
-      }
+      // Backgrounding the app mid-scan is NO LONGER treated as abandonment. The
+      // common case is a quick swipe-away (answer a text, glance at another app)
+      // and return — the OS keeps our JS running through a short grace window, so
+      // the scan often finishes and Result is ready on the way back. Eagerly
+      // logging scan_abandoned here mislabeled those recoverable backgrounds, so
+      // we no longer fire it on 'background'. Instead, when the scan completes
+      // while the app is still backgrounded, runPipeline's success tail fires a
+      // local "story ready" notification (it reads AppState.currentState directly).
+      //
+      // Telemetry trade-off (intentional): a deliberate back-out still fires the
+      // navigation 'blur' handler and a still-mounted teardown still fires the
+      // unmount handler — both call reportAbandonIfActive. The one cohort we no
+      // longer capture is "backgrounded, then the OS suspends/kills the process
+      // mid-scan" (no blur, no React cleanup runs). That's an accepted blind spot:
+      // counting every background as abandoned was the worse distortion now that
+      // backgrounding is a supported, recoverable state.
     });
     return () => sub.remove();
-  }, [reportAbandonIfActive]);
+  }, []);
 
   const { refreshControl } = useRefresh(() => {
     setRejected(null);
@@ -291,6 +299,15 @@ export default function CameraScreen({ navigation, route }) {
         return;
       }
     }
+
+    // Request notification permission in-context, now that a scan is actually
+    // proceeding ("you're about to wait on a scan"), not at cold boot. This is the
+    // ONLY place we may prompt — it runs in the foreground; the background
+    // completion path only CHECKS permission, never requests. Fire-and-forget — it
+    // must not delay the picker, and it's fail-soft: a denied/failed permission
+    // just means a backgrounded scan won't notify on completion. Only prompts the
+    // first time; later scans see the resolved status and no-op.
+    requestNotificationPermission();
 
     // exif: true so we can read GPS coords before compression strips them.
     //
@@ -999,6 +1016,22 @@ export default function CameraScreen({ navigation, route }) {
       // navigation.navigate fires CameraScreen's 'blur' listener, so leaving the
       // flag set would mislabel every successful scan as abandonment.
       pipelineActiveRef.current = false;
+
+      // The scan finished. If the user stepped away while it ran, fire a local
+      // "story ready" notification so they can tap back in — otherwise they'd have
+      // to remember to reopen. Gate on `=== 'background'` specifically, NOT
+      // `!== 'active'`: on iOS the transient 'inactive' state (Control Center,
+      // notification shade, incoming call) means the user is effectively still in
+      // the app, and we don't want to pop a banner over it. Stash the finished
+      // story first (keyed by timestamp) so a matching tap can route to its Result
+      // (it's in-memory only; unsaved scans have no DB row yet). We still navigate
+      // to Result below regardless, so the screen is already mounted underneath
+      // when they return. notifyStoryReady is fail-soft and only fires if
+      // permission was already granted (it never prompts from the background).
+      setLastReadyStory(story);
+      if (AppState.currentState === 'background') {
+        notifyStoryReady({ name: primaryName || story.name, storyTimestamp: story.timestamp });
+      }
 
       // Navigate and DELIBERATELY leave `loading` true. With the native-stack push
       // animation, Result slides in over ~300ms while CameraScreen stays mounted

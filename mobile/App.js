@@ -20,6 +20,10 @@ import {
 import { supabase } from './src/lib/supabase';
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import { REVENUECAT_API_KEY } from './src/lib/config';
+import {
+  configureNotifications,
+  addStoryReadyTapListener,
+} from './src/lib/notify';
 
 import HomeScreen from './src/screens/HomeScreen';
 import AuthScreen from './src/screens/AuthScreen';
@@ -138,6 +142,37 @@ export default function App() {
     return () => {
       authListener?.subscription?.unsubscribe();
     };
+  }, []);
+
+  // Local "story ready" notifications. configureNotifications sets the foreground
+  // handler + Android channel. addStoryReadyTapListener is the single handler for
+  // notification taps — it also receives the tap that COLD-LAUNCHED the app (per
+  // the expo-notifications response-listener contract), so no separate sticky
+  // getLastNotificationResponseAsync probe is needed (that value persists across
+  // launches and would mis-route a later plain icon launch to Home). On tap we
+  // route to the finished story's Result if it survived in memory and matches the
+  // tapped notification, else Home (the unsaved in-memory story is gone after a
+  // cold kill — Home is the honest landing).
+  useEffect(() => {
+    configureNotifications();
+
+    function routeToStoryReady(story, { retries = 20 } = {}) {
+      // navigationRef may not be ready on a cold start; retry briefly.
+      if (!navigationRef.isReady()) {
+        if (retries > 0) setTimeout(() => routeToStoryReady(story, { retries: retries - 1 }), 100);
+        return;
+      }
+      try {
+        if (story) navigationRef.navigate('Result', { story });
+        else navigationRef.navigate('Home');
+      } catch (e) {
+        console.warn('notification routing failed:', e?.message);
+      }
+    }
+
+    const unsubscribe = addStoryReadyTapListener((story) => routeToStoryReady(story));
+
+    return () => unsubscribe();
   }, []);
 
   // Background/foreground lifecycle. Two things break on an app that sits

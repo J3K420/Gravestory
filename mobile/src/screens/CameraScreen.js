@@ -12,7 +12,7 @@ import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import { useRefresh } from '../lib/use-refresh';
 import { colors, fonts, radius, space } from '../lib/theme';
-import { verifyIsGravestone, readGravestone, resolveSymbolMeanings } from '../lib/api-gemini';
+import { verifyIsGravestone, readGravestone, resolveSymbolMeanings, buildMentionHits, resolveMentions } from '../lib/api-gemini';
 import { searchForPerson, extractFindAGraveDetail } from '../lib/api-tavily';
 import { searchWikiTree } from '../lib/api-wikitree';
 import { queryWikidata, queryWikidataByBurialPlace } from '../lib/api-wikidata';
@@ -614,6 +614,9 @@ export default function CameraScreen({ navigation, route }) {
       // Inc2: app-originated spouse names for THIS scan; [] on a cache hit.
       // Hoisted so the story-build literal can read it (wikiData is block-scoped).
       let _origUnique = [];
+      // Mentions: name-safe one-line source pointers from this scan's raw research.
+      // Resolves to [] on a cache hit (no fresh research). Hoisted like _origUnique.
+      let mentionsPromise = Promise.resolve([]);
       if (cachedBio) {
         bioResult = {
           name: cachedBio.name,
@@ -869,6 +872,18 @@ export default function CameraScreen({ navigation, route }) {
           sources:     Array.isArray(bioResult?.sources) ? bioResult.sources.length : 0,
         });
 
+        // Mentions: turn the raw research hits (otherwise discarded after the bio)
+        // into name-safe one-line source pointers. Built HERE while the per-source
+        // arrays + the bridged wikipediaSummary are in scope. Non-fatal ([] on fail).
+        const mentionHits = buildMentionHits({
+          searchResults: [...(searchResults || []), ...(fgDetail ? [fgDetail] : [])],
+          chronResults,
+          archiveResults,
+          wikiSummary: wikipediaSummary,
+        });
+        mentionsPromise = resolveMentions(mentionHits, graveData.subjects)
+          .catch(e => { console.warn('resolveMentions failed (non-fatal):', e?.message || e); return []; });
+
         // Portrait fallback: if the stone showed only a surname (e.g. "HOUDINI"),
         // the single-token guard skipped the initial Wikipedia fetch. Now that the
         // biography has resolved the full name, retry — but split on " and " first
@@ -914,6 +929,10 @@ export default function CameraScreen({ navigation, route }) {
       if (aiMeanings && Object.keys(aiMeanings).length > 0) {
         symbolMeanings = { ...(symbolMeanings || {}), ...aiMeanings };
       }
+
+      // Await the mentions resolved concurrently (started in the research branch).
+      // [] on a cache hit or any failure — the Result-screen sheet is simply omitted.
+      const mentions = await mentionsPromise;
 
       setStepIndex(4);
 
@@ -1005,6 +1024,10 @@ export default function CameraScreen({ navigation, route }) {
         // ...bioResult first, which never carries these fields, so the literal wins.
         originatedRelatives: _origUnique,
         has_originated_relatives: _origUnique.length > 0,
+        // Mentions (migration 022) — name-safe one-line source pointers; undefined
+        // when empty so the spread `...bioResult` leaves it out. Survives handleSave
+        // (plain key, not `_`-prefixed) and round-trips via storyToRow/rowToStory.
+        mentions: Array.isArray(mentions) && mentions.length ? mentions : undefined,
       };
 
       // Research succeeded for a previously offline-scanned story — remove the

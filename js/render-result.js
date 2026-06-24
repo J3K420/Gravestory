@@ -176,6 +176,11 @@ function renderResult(story) {
   // meaning (static table OR per-story AI-resolved); plain chips otherwise.
   renderSymbolSection(story);
 
+  // Mentions — a tappable "Also found in…" chip opening a sheet of name-safe
+  // one-line hyperlinks to the research sources for this person. Shows on the
+  // owner's story, the sample, and public/global stories alike (outbound links).
+  renderMentionsSection(story);
+
   // Show map button if GPS or text location available
   const mapBtn = document.getElementById('result-map-btn');
   if (mapBtn) {
@@ -432,6 +437,78 @@ function closeSymbolSheet() {
   if (existing) existing.remove();
 }
 
+// ── MENTIONS SECTION ─────────────────────────────────────────────
+// A single "Also found in…" chip that opens a bottom-sheet list of name-safe
+// one-line hyperlinks to this person's research sources (Tavily web / FindAGrave
+// / Chronicling America / Internet Archive / Wikipedia). The sentence text is
+// the link label, authored by resolveMentions under the living-name rule, so it
+// is safe to show on public/global stories too. Mirrors the symbol-chip pattern:
+// the list is stored in a module-level lookup, never embedded in onclick.
+let _mentionSheetLookup = [];
+
+function renderMentionsSection(story) {
+  const existing = document.getElementById('mentions-section');
+  if (existing) existing.remove();
+  _mentionSheetLookup = [];
+
+  const mentions = Array.isArray(story.mentions)
+    ? story.mentions.filter(m => m && typeof m.sentence === 'string' && m.sentence.trim())
+    : [];
+  if (mentions.length === 0) return;
+
+  const body = document.getElementById('result-body');
+  if (!body) return;
+
+  _mentionSheetLookup = mentions;
+
+  const section = document.createElement('div');
+  section.id = 'mentions-section';
+  section.className = 'result-section';
+  section.innerHTML = `
+    <div class="section-label">Mentions</div>
+    <div class="symbol-chips">
+      <button type="button" class="symbol-chip symbol-chip-tappable" onclick="openMentionSheet()">Also found in… <span class="symbol-chip-caret">›</span></button>
+    </div>
+  `;
+  body.appendChild(section);
+}
+
+// Open the mentions sheet. Reads the list from the module-level lookup (never
+// from onclick data). Each sentence is a single hyperlink; a hit whose URL isn't
+// a usable http(s) link (link-rot) renders as non-clickable text but still reads.
+function openMentionSheet() {
+  const list = _mentionSheetLookup;
+  if (!Array.isArray(list) || list.length === 0) return;
+  closeMentionSheet();
+
+  const rows = list.map(m => {
+    const clickable = typeof m.url === 'string' && /^https?:\/\//i.test(m.url);
+    const label = escapeHtml(m.sentence);
+    return clickable
+      ? `<a class="mention-line" href="${escapeHtml(m.url)}" target="_blank" rel="noopener noreferrer">${label}</a>`
+      : `<div class="mention-line mention-line-dead">${label}</div>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'mention-sheet-overlay';
+  overlay.className = 'symbol-sheet-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) closeMentionSheet(); };
+  overlay.innerHTML = `
+    <div class="symbol-sheet" role="dialog" aria-modal="true">
+      <div class="symbol-sheet-handle"></div>
+      <div class="symbol-sheet-name">Also found in…</div>
+      <div class="mention-lines">${rows}</div>
+      <button type="button" class="symbol-sheet-close" onclick="closeMentionSheet()">Close</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function closeMentionSheet() {
+  const existing = document.getElementById('mention-sheet-overlay');
+  if (existing) existing.remove();
+}
+
 // Marker-style picker — lets the user choose this grave's pin: their personal
 // cemetery-map pin AND, for the first public scanner, the grave's permanent
 // global-map marker (first-wins). Mirrors the mobile ResultScreen "Marker" chip.
@@ -677,6 +754,11 @@ async function _applyVisibilityToggle(savedRow) {
         const _orig = Array.isArray(savedRow.originatedRelatives) ? savedRow.originatedRelatives : [];
         if (savedRow.has_originated_relatives && !_orig.length) {
           savedRow.public_biography = 'This public biography is being prepared.';
+          // Desync fail-safe: flag set but names gone — blank EVERY raw-served
+          // public column, not just the bio (mentions/sources also go to the RPC).
+          savedRow.mentions = [];
+          savedRow.sources = [];
+          savedRow.source_urls = [];
         } else {
           const _stripped = (typeof stripOriginatedNamesForPublic === 'function')
             ? stripOriginatedNamesForPublic(savedRow.biography, _orig, subjects)
@@ -690,9 +772,19 @@ async function _applyVisibilityToggle(savedRow) {
             savedRow.sources = stripOriginatedNamesFromSources(savedRow.sources, _orig, subjects);
             savedRow.source_urls = stripOriginatedNamesFromSources(savedRow.source_urls, _orig, subjects);
           }
+          // Mentions public floor (see save-actions.js): (1) drop a mention naming
+          // a living non-originated relative the model failed to generalize, then
+          // (2) strip any app-originated relative name.
+          if (typeof filterMentionsForPublic === 'function') {
+            savedRow.mentions = filterMentionsForPublic(savedRow.mentions, subjects);
+          }
+          if (_orig.length && typeof stripOriginatedNamesFromMentions === 'function') {
+            savedRow.mentions = stripOriginatedNamesFromMentions(savedRow.mentions, _orig, subjects);
+          }
         }
         if (currentStory && currentStory.timestamp === savedRow.timestamp) {
           currentStory.public_biography = savedRow.public_biography;
+          if (Array.isArray(savedRow.mentions)) currentStory.mentions = savedRow.mentions;
         }
       } catch (e) {
         console.warn('public_biography redaction skipped (non-fatal):', e?.message || e);

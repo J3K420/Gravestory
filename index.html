@@ -1144,6 +1144,10 @@ async function startAnalysis() {
     // fresh WikiTree run). Hoisted here so the build literal can read it —
     // wikiData is block-scoped to the search branch and not visible there.
     let _origUnique = [];
+    // Mentions: name-safe one-line source pointers built from this scan's raw
+    // research hits. Resolves to [] on a cache hit (no fresh research) — correct,
+    // the cache-hit viewer reuses an existing story and runs no new search.
+    let mentionsPromise = Promise.resolve([]);
     if (cachedBio) {
       story = {
         name: cachedBio.name,
@@ -1375,6 +1379,20 @@ async function startAnalysis() {
         wikipedia:   Array.isArray(wikiSummaryResults) ? wikiSummaryResults.filter(Boolean).length : 0,
         sources:     Array.isArray(story?.sources) ? story.sources.length : 0,
       });
+
+      // Mentions: turn the raw research hits (otherwise discarded after the bio)
+      // into name-safe one-line source pointers. Built HERE — the last point all
+      // the per-source arrays are in scope (they're block-scoped to this branch).
+      // Fired now so the Gemini call overlaps the portrait/geocode tail; awaited
+      // just before the currentStory build. Non-fatal (resolveMentions returns []).
+      const mentionHits = buildMentionHits({
+        searchResults: [...(searchResults || []), ...(fgDetail ? [fgDetail] : [])],
+        chronResults,
+        archiveResults,
+        wikiSummary: wikipediaSummary,
+      });
+      mentionsPromise = resolveMentions(mentionHits, graveData.subjects)
+        .catch(e => { console.log('resolveMentions failed (non-fatal):', e?.message || e); return []; });
     }
 
     // 5.25 — Merge in the symbol meanings resolved concurrently (started right after
@@ -1386,6 +1404,10 @@ async function startAnalysis() {
     if (aiMeanings && Object.keys(aiMeanings).length > 0) {
       story.symbol_meanings = { ...(story.symbol_meanings || {}), ...aiMeanings };
     }
+
+    // Await the mentions resolved concurrently (started in the research branch).
+    // [] on a cache hit or any failure — the result-screen sheet is simply omitted.
+    const mentions = await mentionsPromise;
 
     // 5.5 — Fetch Wikipedia portraits (best-effort, doesn't block on failure).
     // Skip the fetch when the cached story already has portrait URLs stored.
@@ -1531,6 +1553,9 @@ async function startAnalysis() {
       // cache-hit viewer was already served the redacted/placeholder public copy.
       originatedRelatives: _origUnique,
       has_originated_relatives: _origUnique.length > 0,
+      // Mentions (migration 022) — name-safe one-line source pointers; undefined
+      // when empty so the spread `...story` (which never carries it) leaves it out.
+      mentions: Array.isArray(mentions) && mentions.length ? mentions : undefined,
     };
     renderResult(currentStory);
     showScreen('result');

@@ -495,7 +495,11 @@ export default function ResultScreen({ navigation, route }) {
         uri,
         label: gravePhotos.length > 1 ? `Photo ${i + 1} of ${gravePhotos.length}` : 'Gravestone',
       }))
-    : (localGraveUri ? [{ uri: localGraveUri, label: 'Gravestone' }] : []);
+    // The sample story bundles its gravestone photo as a local asset (a require()'d
+    // module, not a URI) so the example leads with a real stone like a true scan.
+    : (story._graveImageAsset
+        ? [{ asset: story._graveImageAsset, label: 'Gravestone' }]
+        : (localGraveUri ? [{ uri: localGraveUri, label: 'Gravestone' }] : []));
 
   const portraitUris = normalizePortraits(portraits).length > 0
     ? normalizePortraits(portraits)
@@ -951,7 +955,7 @@ export default function ResultScreen({ navigation, route }) {
               keyExtractor={(_, i) => String(i)}
               renderItem={({ item }) => (
                 <View style={styles.carouselSlide}>
-                  <Image source={imgSource(item.uri)} style={styles.carouselImage} resizeMode="contain" />
+                  <Image source={item.asset ? item.asset : imgSource(item.uri)} style={styles.carouselImage} resizeMode="contain" />
                   <View style={styles.carouselLabelBadge}>
                     <Text style={styles.carouselLabelText}>{item.label}</Text>
                   </View>

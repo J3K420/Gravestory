@@ -22,6 +22,11 @@ export const SAMPLE_STORY = {
   name: 'Marie Skłodowska Curie',
   dates: '1867 – 1934',
   location: 'The Panthéon, Paris, France',
+  // The actual crypt plaque at the Panthéon — bundled as a local asset so the
+  // example always shows a real gravestone photo first (then portraits), exactly
+  // like a real scan, with no network dependency. ResultScreen renders this as the
+  // leading "Gravestone" carousel slot when no image_url/_base64 is present.
+  _graveImageAsset: require('../../assets/sample-grave-curie.jpg'),
   // Two portraits — Marie and her husband/collaborator Pierre (both long deceased).
   // Web shape is portrait_left_url/right_url; mobile reads the portraits[] array via
   // normalizePortraits(). Verified-live Wikimedia Commons thumbnails (HTTP 200 JPEG).

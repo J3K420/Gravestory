@@ -182,7 +182,19 @@ export default function GlobalMapScreen({ navigation }) {
           <Globe size={16} color={colors.flame} />
           <Text style={styles.headerTitle}>Community Map</Text>
         </View>
-        <View style={styles.headerSide} />
+        {/* Home shortcut. This is a top-level browse screen with no in-memory
+            unsaved story to protect (it only shows public community stories),
+            so Home navigates directly — no discard guard. navigate('Home') pops
+            to the existing root Home rather than pushing a duplicate. */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Home')}
+          style={[styles.headerSide, styles.headerSideRight]}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go to home screen"
+        >
+          <Text style={styles.backText}>Home</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Guest banner */}
@@ -328,6 +340,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.stone,
   },
   headerSide: { width: 80 },
+  // Right-align the Home label in its fixed 80px slot so the header reads
+  // Back (left) · title (center) · Home (right) symmetrically.
+  headerSideRight: { alignItems: 'flex-end' },
   headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   backText: { color: colors.ashDim, fontSize: 15, fontFamily: fonts.body },
   headerTitle: { color: colors.parchment, fontSize: 16, fontFamily: fonts.name, letterSpacing: 0.3 },

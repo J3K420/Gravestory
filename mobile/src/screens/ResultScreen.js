@@ -28,6 +28,22 @@ const SCREEN_W = Dimensions.get('window').width;
 const AI_DISCLAIMER_SEEN_KEY = 'gs_ai_disclaimer_seen';
 const SHARE_NOTICE_SEEN_KEY = 'gs_share_notice_seen';
 
+// Wikimedia's upload.wikimedia.org 403s requests from the default RN/okhttp image
+// loader (it blocks bare/okhttp User-Agents as anti-hotlinking) — so portrait URLs
+// from Wikipedia silently fail to render unless we send a real UA on the <Image>
+// request. WIKI_HEADERS is used for the JS fetch calls in api-wikipedia.js; <Image>
+// needs the same UA passed via source.headers. Local/R2 images (file://, data:, our
+// own R2 host) don't need it, but the header is harmless there.
+const IMAGE_UA = 'GraveStory/1.0 (https://github.com/J3K420/Gravestory; gravestory mobile app)';
+// Build an <Image> source, attaching the UA header only for remote http(s) URIs
+// (Wikimedia portraits). file:// and data: URIs are returned bare.
+function imgSource(uri) {
+  if (typeof uri === 'string' && /^https?:\/\//i.test(uri)) {
+    return { uri, headers: { 'User-Agent': IMAGE_UA } };
+  }
+  return { uri };
+}
+
 // Android caps a single Speech.speak() utterance at maxSpeechInputLength
 // (4000 chars on every device; iOS reports Number.MAX_VALUE). Over the cap the
 // native call throws and NO callback fires, so the button would stick on "Stop"
@@ -320,7 +336,7 @@ export default function ResultScreen({ navigation, route }) {
           {!!story.photoUri && (
             <View style={styles.carouselOuter}>
               <View style={styles.carouselSlide}>
-                <Image source={{ uri: story.photoUri }} style={styles.carouselImage} resizeMode="contain" />
+                <Image source={imgSource(story.photoUri)} style={styles.carouselImage} resizeMode="contain" />
                 <View style={styles.carouselLabelBadge}>
                   <Text style={styles.carouselLabelText}>Gravestone</Text>
                 </View>
@@ -935,7 +951,7 @@ export default function ResultScreen({ navigation, route }) {
               keyExtractor={(_, i) => String(i)}
               renderItem={({ item }) => (
                 <View style={styles.carouselSlide}>
-                  <Image source={{ uri: item.uri }} style={styles.carouselImage} resizeMode="contain" />
+                  <Image source={imgSource(item.uri)} style={styles.carouselImage} resizeMode="contain" />
                   <View style={styles.carouselLabelBadge}>
                     <Text style={styles.carouselLabelText}>{item.label}</Text>
                   </View>

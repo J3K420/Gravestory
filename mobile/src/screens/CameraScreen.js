@@ -323,6 +323,16 @@ export default function CameraScreen({ navigation, route }) {
     if (fromCamera) {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) { Alert.alert('Permission needed', 'Camera access is required.'); return; }
+      // Pre-warm the GPS chip NOW, the instant before the camera opens, so it's
+      // acquiring satellites while the user frames and takes the photo — turning the
+      // later getDeviceGps() read from a cold lock into a warm, fast, precise one.
+      // NOTE: this is a no-op on the FIRST-EVER scan (warmGps only CHECKS permission,
+      // never prompts, and the permission is still undetermined then) — that scan
+      // reads from a cold chip and leans on getDeviceGps's instant cache fallback for
+      // a coordinate. Every subsequent scan (permission resolved) gets the warm-up.
+      // Camera-only (a library photo isn't taken where the user stands now).
+      // Fire-and-forget + permission-checked — see warmGps.
+      warmGps();
     }
 
     // Wrap from the picker launch through the GPS/compression prep. We do NOT
@@ -1911,55 +1921,86 @@ function extractExifGps(exif) {
   return { lat, lng };
 }
 
+// Acceptable horizontal accuracy (metres) for a fix we'll attach to the map pin.
+// A coords.accuracy WORSE than this (a coarse cell/wifi fix) is rejected — it would
+// both misplace the draggable pin and, worse, feed a wrong cemetery name into the
+// reverseGeocodeCemetery → Tavily research disambiguator (which the user can't see
+// or correct). Applied to BOTH the fresh read and the cached fix, so the preferred
+// path is no laxer than the fallback. A null/absent accuracy field (some devices
+// omit it) is treated as acceptable rather than discarding an otherwise-good fix.
+const GPS_ACCEPTABLE_ACCURACY_M = 100;
+function isAcceptableFix(coords) {
+  return !!coords
+    && Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude)
+    && (coords.accuracy == null || coords.accuracy <= GPS_ACCEPTABLE_ACCURACY_M);
+}
+
 // Resolve the device's current location for a camera shot whose photo carried no
-// GPS EXIF. Two changes over the original (S72), to fix the "no Map button on the
-// first scan, appears on retry" bug — a COLD GPS chip couldn't return a fix inside
-// the old 6s cap, so refinedGps stayed null and the Result-screen Map chip (gated
-// on story.gps || story.location) never rendered for an unmarked/no-name stone
-// (which has no bio location to fall back on either):
-//   1. LAST-KNOWN fast path: getLastKnownPositionAsync returns the OS-cached fix
-//      INSTANTLY (no chip warm-up), so the very first scan gets a coordinate even
-//      while the chip is cold. Bounded TWO ways so a bad cached fix can't slip in:
-//        • maxAge 60s — a cemetery visit never needs a minute-plus-old fix, and this
-//          keeps a fix from a place the user just left from being reused.
-//        • requiredAccuracy 100m — REJECT a coarse cell-tower/wifi fix (1–3 km). The
-//          coordinate doesn't only place a draggable pin; it also feeds
-//          reverseGeocodeCemetery → the cemetery-name Tavily disambiguator, which the
-//          user can't see or correct, so a multi-km fix could pick the WRONG cemetery
-//          and degrade the biography research. A miss here just falls through to the
-//          live read. (100m ≈ Accuracy.Balanced, the live read's own target.)
-//   2. LONGER live timeout (6s → 15s): a genuine cold outdoor fix routinely exceeds
-//      6s. We still race a cap so a wedged GPS never hangs the pipeline, but 15s
-//      gives the chip time to actually lock. Accuracy stays Balanced (fast enough,
-//      good enough for a draggable pin).
-// Order: try the instant cached fix first; if there's none recent enough, wait for
-// a live fix. Either hit returns; only a no-cache + timed-out live read returns null.
+// GPS EXIF. The user is physically AT the grave, so we want the most PRECISE on-site
+// fix we can get WITHOUT stranding the pipeline (S72c — restructured after review).
+// Strategy: read the INSTANT cache and the FRESH high-accuracy fix CONCURRENTLY, then
+// prefer fresh-if-precise, else the cached fix, else null. This keeps precision (a
+// good fresh fix wins) without the regression an earlier draft had — making the slow,
+// cover-sensitive High read a BLOCKING first step with a long sole timeout meant that
+// under tree canopy / beside mausoleums (the literal environment of an old cemetery)
+// the loading screen could freeze for the whole cap before any coordinate appeared,
+// even when a perfectly good recent cached fix existed.
+//   • Cache (getLastKnownPositionAsync): instant, doesn't power the radio. Bounded
+//     maxAge 60s (never reuse a fix from a place just left) + the accuracy floor.
+//   • Fresh (getCurrentPositionAsync High ≈10m target): the precise on-site fix.
+//     warmGps() pre-warms the chip at camera-open so this usually lands fast; capped
+//     at 8s (a pre-warmed High read that hasn't locked by 8s won't by 15s either, and
+//     8s of frozen loading is already a lot). Accepted only if it meets the accuracy
+//     floor — a coarse High fix (High is a target, not a guarantee) is NOT preferred
+//     over a precise cached one.
+// Returns null only when neither source yields an acceptable fix → the pipeline
+// degrades to no-pin + drag-to-correct, exactly as before (the no-Map-button safety
+// net survives: a cached fix alone is enough to light the Result Map chip).
 async function getDeviceGps() {
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return null;
 
-    // 1. Instant cached fix — accept it only if fresh (<60s) AND reasonably precise
-    //    (<100m), so neither a fix from a place the user just left nor a coarse
-    //    cell/wifi fix can be silently reused. A null / stale / too-coarse cache
-    //    (cold boot, location just enabled) falls through to the live read.
-    try {
-      const last = await Location.getLastKnownPositionAsync({ maxAge: 60000, requiredAccuracy: 100 });
-      if (last?.coords) {
-        return { lat: last.coords.latitude, lng: last.coords.longitude };
-      }
-    } catch { /* fall through to the live read */ }
+    // Both reads run concurrently; each swallows its own failure to null so one
+    // failing never rejects the pair. The fresh read is capped so a cold/wedged
+    // chip can't hang the pipeline.
+    const cachedPromise = Location.getLastKnownPositionAsync({ maxAge: 60000, requiredAccuracy: GPS_ACCEPTABLE_ACCURACY_M })
+      .catch(() => null);
+    const freshPromise = Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+    ]).catch(() => null);
 
-    // 2. Live fix, with a generous cap so a cold chip has time to lock. The race
-    //    guarantees the pipeline can't hang on a wedged GPS subsystem.
-    const loc = await Promise.race([
-      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000)),
-    ]);
-    return { lat: loc.coords.latitude, lng: loc.coords.longitude };
+    const [fresh, cached] = await Promise.all([freshPromise, cachedPromise]);
+
+    // Prefer the fresh on-site fix when it's precise; else the cached fix; else null.
+    if (isAcceptableFix(fresh?.coords)) {
+      return { lat: fresh.coords.latitude, lng: fresh.coords.longitude };
+    }
+    if (isAcceptableFix(cached?.coords)) {
+      return { lat: cached.coords.latitude, lng: cached.coords.longitude };
+    }
+    return null;
   } catch {
     return null;
   }
+}
+
+// Fire-and-forget GPS pre-warm. Called when the camera/picker opens (pickAndAnalyze)
+// so the chip starts acquiring satellites WHILE the user frames and takes the photo —
+// turning the later getDeviceGps() read from a cold 10–30s lock into a warm 1–2s one.
+// We deliberately DON'T await it or use its result: its only job is to power the chip
+// on early. Fully fail-soft — a denied permission or any error is ignored here (the
+// real read in getDeviceGps re-checks permission and handles failure). No timeout
+// needed; nothing waits on this promise.
+function warmGps() {
+  (async () => {
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') return; // don't trigger a permission prompt from here
+      await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+    } catch { /* pre-warm is best-effort */ }
+  })();
 }
 
 const styles = StyleSheet.create({

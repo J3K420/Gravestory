@@ -493,6 +493,36 @@ export default function CameraScreen({ navigation, route }) {
     stepRef.current = 0;
 
     try {
+      // Device-GPS RETRY for the "Use it anyway" verification bypass (S72). On that
+      // path pickAndAnalyze captured one device-GPS reading; on a COLD chip it can
+      // time out, and the rejection screen reuses that single null reading
+      // (rejected.gps). By the time the user reads the rejection and taps through,
+      // the chip has had seconds to warm up, so a second attempt here usually
+      // succeeds — and without it an unmarked / no-name stone (no bio location to
+      // fall back on) gets no coordinate at all and the Result-screen Map chip never
+      // appears.
+      //
+      // Tightly gated, because a broader retry caused two regressions (both caught in
+      // adversarial review):
+      //   • `skipVerify` ONLY — i.e. the bypass. The NORMAL camera path is already
+      //     fixed by getDeviceGps itself (last-known fast path + longer timeout) in
+      //     pickAndAnalyze; retrying again here would just chain a SECOND cold-GPS
+      //     wait before OCR (up to ~30s of black screen). The bypass is the one path
+      //     whose pre-call genuinely predates the chip warming up.
+      //   • `!pending` — a RESUMED offline camera scan is researched later from a
+      //     DIFFERENT place (home, wifi). Its only trustworthy coordinate is the one
+      //     captured at the grave (pending.gps); if that's null the right degrade is
+      //     "no pin, drag to correct", NEVER the user's current location. Retrying
+      //     here would silently pin the grave at the user's house and push that wrong
+      //     coordinate to find_grave / findOrCreateGrave / grave_photos / the public map.
+      // Camera-only (device location is meaningless for a library photo). Non-fatal:
+      // still null → degrade as before. Done BEFORE the reverse-geo / cemetery-name
+      // promises below so a recovered coordinate also feeds Tavily disambiguation.
+      if (!gps && fromCamera && skipVerify && !pending) {
+        const retried = await getDeviceGps();
+        if (retried) gps = retried;
+      }
+
       // Fire reverseGeocode in parallel with verify so we have a location hint
       // ready before OCR and search queries execute. Also resolve the enclosing
       // cemetery name (if the GPS sits inside one) to disambiguate Tavily queries.
@@ -1881,13 +1911,50 @@ function extractExifGps(exif) {
   return { lat, lng };
 }
 
+// Resolve the device's current location for a camera shot whose photo carried no
+// GPS EXIF. Two changes over the original (S72), to fix the "no Map button on the
+// first scan, appears on retry" bug — a COLD GPS chip couldn't return a fix inside
+// the old 6s cap, so refinedGps stayed null and the Result-screen Map chip (gated
+// on story.gps || story.location) never rendered for an unmarked/no-name stone
+// (which has no bio location to fall back on either):
+//   1. LAST-KNOWN fast path: getLastKnownPositionAsync returns the OS-cached fix
+//      INSTANTLY (no chip warm-up), so the very first scan gets a coordinate even
+//      while the chip is cold. Bounded TWO ways so a bad cached fix can't slip in:
+//        • maxAge 60s — a cemetery visit never needs a minute-plus-old fix, and this
+//          keeps a fix from a place the user just left from being reused.
+//        • requiredAccuracy 100m — REJECT a coarse cell-tower/wifi fix (1–3 km). The
+//          coordinate doesn't only place a draggable pin; it also feeds
+//          reverseGeocodeCemetery → the cemetery-name Tavily disambiguator, which the
+//          user can't see or correct, so a multi-km fix could pick the WRONG cemetery
+//          and degrade the biography research. A miss here just falls through to the
+//          live read. (100m ≈ Accuracy.Balanced, the live read's own target.)
+//   2. LONGER live timeout (6s → 15s): a genuine cold outdoor fix routinely exceeds
+//      6s. We still race a cap so a wedged GPS never hangs the pipeline, but 15s
+//      gives the chip time to actually lock. Accuracy stays Balanced (fast enough,
+//      good enough for a draggable pin).
+// Order: try the instant cached fix first; if there's none recent enough, wait for
+// a live fix. Either hit returns; only a no-cache + timed-out live read returns null.
 async function getDeviceGps() {
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return null;
+
+    // 1. Instant cached fix — accept it only if fresh (<60s) AND reasonably precise
+    //    (<100m), so neither a fix from a place the user just left nor a coarse
+    //    cell/wifi fix can be silently reused. A null / stale / too-coarse cache
+    //    (cold boot, location just enabled) falls through to the live read.
+    try {
+      const last = await Location.getLastKnownPositionAsync({ maxAge: 60000, requiredAccuracy: 100 });
+      if (last?.coords) {
+        return { lat: last.coords.latitude, lng: last.coords.longitude };
+      }
+    } catch { /* fall through to the live read */ }
+
+    // 2. Live fix, with a generous cap so a cold chip has time to lock. The race
+    //    guarantees the pipeline can't hang on a wedged GPS subsystem.
     const loc = await Promise.race([
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000)),
     ]);
     return { lat: loc.coords.latitude, lng: loc.coords.longitude };
   } catch {

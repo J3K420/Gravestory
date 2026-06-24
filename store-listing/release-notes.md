@@ -7,6 +7,37 @@ their own line. Max 500 characters per language.
 
 ---
 
+## versionCode 14 — GEDCOM export + backgrounded scans + notification
+
+vc14 supersedes the never-uploaded vc13, so it carries BOTH the S69
+backgrounded-scan + notification work AND the new S70 GEDCOM export.
+
+Recommended (names both features):
+
+```
+<en-US>
+New: Export any story to your family tree — tap "Export to family tree (GEDCOM)" to save a genealogy file. Plus scans now keep running if you switch apps, with a notification when your story is ready.
+</en-US>
+```
+
+Shorter alternative:
+
+```
+<en-US>
+New: Export a story to your family tree as a GEDCOM file, and get notified the moment a backgrounded scan is ready.
+</en-US>
+```
+
+Minimal / generic:
+
+```
+<en-US>
+Bug fixes and performance improvements.
+</en-US>
+```
+
+---
+
 ## versionCode 13 — Backgrounded scans + "story ready" notification
 
 Recommended (user-facing, names the feature):

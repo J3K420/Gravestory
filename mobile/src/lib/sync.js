@@ -11,6 +11,7 @@ export function rowToStory(row) {
     biography: row.biography,
     public_biography: row.public_biography || null,
     has_originated_relatives: !!row.has_originated_relatives,
+    originatedRelatives: Array.isArray(row.originated_relatives) ? row.originated_relatives : [],
     location: row.location,
     inscription: row.inscription,
     symbols: row.symbols,
@@ -44,6 +45,8 @@ function storyToRow(story, userId) {
     biography: story.biography || null,
     public_biography: story.public_biography || null,
     has_originated_relatives: !!story.has_originated_relatives,
+    originated_relatives: Array.isArray(story.originatedRelatives) && story.originatedRelatives.length
+      ? story.originatedRelatives : null,
     location: story.location || null,
     inscription: story.inscription || null,
     symbols: story.symbols || null,

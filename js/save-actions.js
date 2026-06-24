@@ -57,7 +57,25 @@ async function saveStory() {
     try {
       const subjects = Array.isArray(currentStory.subjects) ? currentStory.subjects
         : (Array.isArray(currentStory.graveData?.subjects) ? currentStory.graveData.subjects : []);
-      currentStory.public_biography = await redactLivingNamesForPublic(currentStory.biography, subjects);
+      // INCREMENT 2: deterministically strip app-originated relative names BEFORE
+      // the fail-open redactor. Desync guard: flag set but names absent -> safe
+      // placeholder, never the raw bio.
+      const _orig = Array.isArray(currentStory.originatedRelatives) ? currentStory.originatedRelatives : [];
+      if (currentStory.has_originated_relatives && !_orig.length) {
+        currentStory.public_biography = 'This public biography is being prepared.';
+      } else {
+        const _stripped = (typeof stripOriginatedNamesForPublic === 'function')
+          ? stripOriginatedNamesForPublic(currentStory.biography, _orig, subjects)
+          : currentStory.biography;
+        currentStory.public_biography = await redactLivingNamesForPublic(_stripped, subjects);
+        // `sources` is served RAW by the public RPC — strip originated names from
+        // citation descriptions too (model/bioSnippet can feed a name in). Shared
+        // column: owner sees the name in the bio prose, so dropping it here is fine.
+        if (_orig.length && typeof stripOriginatedNamesFromSources === 'function') {
+          currentStory.sources = stripOriginatedNamesFromSources(currentStory.sources, _orig, subjects);
+          currentStory.source_urls = stripOriginatedNamesFromSources(currentStory.source_urls, _orig, subjects);
+        }
+      }
     } catch (e) {
       console.warn('public_biography redaction skipped on auto-public save (non-fatal):', e?.message || e);
     }

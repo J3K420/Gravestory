@@ -287,6 +287,88 @@ Return only JSON.`;
 // string so sharing never silently breaks; the report button remains the
 // backstop. (A stricter caller may choose to block instead.)
 //
+// INCREMENT 2 — DETERMINISTIC public strip for APP-ORIGINATED relative names.
+// Runs BEFORE redactLivingNamesForPublic at every public write site. Unlike the
+// fail-OPEN Gemini redactor, this is pure code and UNCONDITIONAL: an originated
+// name (a relative from WikiTree NOT on the stone) is reduced to its relationship
+// word REGARDLESS of any death-year. NOT gated on ORIGINATE_RELATIVES — it must
+// strip names persisted while the flag was ON even after the flag is flipped OFF.
+// `originatedRelatives` = [{name, relation}]; `subjects` = OCR deceased we must
+// NOT over-strip. Empty list = pass-through. Never keeps a name on error.
+function stripOriginatedNamesForPublic(biography, originatedRelatives, subjects) {
+  if (typeof biography !== 'string' || !biography) return biography;
+  if (!Array.isArray(originatedRelatives) || !originatedRelatives.length) return biography;
+
+  const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Tokens of every deceased subject's name — the first-name-only variant must
+  // never strip these: "John Sr." subject + a WikiTree spouse "John".
+  const subjectTokens = new Set();
+  if (Array.isArray(subjects)) {
+    for (const s of subjects) {
+      if (s && typeof s.name === 'string') {
+        for (const t of s.name.toLowerCase().split(/\s+/)) if (t.length > 1) subjectTokens.add(t);
+      }
+    }
+  }
+  // Lifespan / b./d. paren only: require TWO dashed years, or a b./d. prefix.
+  // A bare single-year paren is more likely an event year — do NOT consume it.
+  const dateParen = '(?:\\s*\\((?:(?:b\\.|d\\.)\\s*\\d{3,4}|\\d{3,4}\\s*[\\u2013\\u2014-]\\s*\\d{3,4})\\))?';
+  const cite = '(?:\\s*\\[\\d+\\])?';   // single trailing [N] only (don't eat a 2nd legit citation)
+
+  let out = biography;
+  for (const rel of originatedRelatives) {
+    if (!rel || typeof rel.name !== 'string' || !rel.name.trim()) continue;
+    const relWord = (typeof rel.relation === 'string' && rel.relation.trim())
+      ? rel.relation.trim() : 'relative';
+    // Strip parenthetical/bracketed tokens (WikiTree LongName "Mary (Brown) Smith")
+    // BEFORE tokenizing — keep the inner maiden token as its own surname.
+    const cleaned = rel.name.replace(/[()\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+    const parts = cleaned.split(/\s+/).filter(Boolean);
+    if (!parts.length) continue;
+    const first = parts[0], last = parts[parts.length - 1];
+
+    const variants = [];
+    if (parts.length >= 2) {
+      variants.push(parts.join(' '));            // full incl. middles + maiden
+      variants.push(`${first} ${last}`);         // first + last
+      for (let k = 1; k < parts.length; k++) variants.push(`${first} ${parts[k]}`); // first + each interior/maiden
+    }
+    // first-only LAST and only if it doesn't collide with a subject token.
+    const includeFirstOnly = !subjectTokens.has(first.toLowerCase());
+    if (includeFirstOnly) variants.push(first);
+
+    const uniq = [...new Set(variants)].sort((a, b) => b.length - a.length);
+    for (const v of uniq) {
+      // Unicode-aware boundaries: \b is ASCII-only; use Unicode lookarounds with
+      // the u flag so accented surnames (Renée, Müller) still match. Case-INSENSITIVE
+      // (i): WikiTree records are often all-caps ("MARY SMITH") and the model may
+      // render any casing — a case mismatch must NOT leak the name.
+      const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(v)}(?![\\p{L}\\p{N}])${dateParen}${cite}`, 'giu');
+      out = out.replace(re, relWord);
+    }
+  }
+  // Collapse "spouse spouse" / "the relative relative" artifacts + tidy spacing.
+  out = out.replace(/\b(spouse|relative|husband|wife)(\s+\1\b)+/gi, '$1');
+  // A consumed " [N]" can leave the relation word jammed against a surviving
+  // citation ("spouse[4]") — re-insert the single space.
+  out = out.replace(/\b(spouse|relative|husband|wife)\[/gi, '$1 [');
+  out = out.replace(/[ \t]{2,}/g, ' ').replace(/\s+([.,;!?])/g, '$1');
+  return out;
+}
+
+// INCREMENT 2 — strip app-originated names from a citation/source string ARRAY
+// for the public copy. `sources` is served RAW by global_public_stories (no
+// redaction), and the model can author an originated name into a citation
+// `description` — so the deterministic name-strip must also run over the source
+// descriptions, not just the bio prose, before a flagged story is published.
+// Reuses stripOriginatedNamesForPublic per element. Returns a new array.
+function stripOriginatedNamesFromSources(sources, originatedRelatives, subjects) {
+  if (!Array.isArray(sources)) return sources;
+  if (!Array.isArray(originatedRelatives) || !originatedRelatives.length) return sources;
+  return sources.map(s => typeof s === 'string'
+    ? stripOriginatedNamesForPublic(s, originatedRelatives, subjects) : s);
+}
+
 // `subjects` is the OCR subjects array (each {name, birth_date, death_date}) —
 // the deceased we are ALLOWED to name. Non-billable; reuses geminiCallWithFallback.
 async function redactLivingNamesForPublic(biography, subjects) {

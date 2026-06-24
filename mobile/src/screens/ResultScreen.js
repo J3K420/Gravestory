@@ -14,7 +14,7 @@ import { uploadGravestoneImage } from '../lib/api-r2';
 import { getTributes, setTribute } from '../lib/api-tributes';
 import { submitContentReport, REPORT_REASONS, REPORT_NOTE_MAX } from '../lib/api-reports';
 import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
-import { redactLivingNamesForPublic, stripOriginatedNamesForPublic, stripOriginatedNamesFromSources } from '../lib/api-gemini';
+import { redactLivingNamesForPublic, stripOriginatedNamesForPublic, stripOriginatedNamesFromSources, stripOriginatedNamesFromMentions, filterMentionsForPublic } from '../lib/api-gemini';
 import { useRefresh } from '../lib/use-refresh';
 import { deletePendingPhoto } from '../lib/pending';
 import { logEvent, EVENTS } from '../lib/analytics';
@@ -117,6 +117,7 @@ export default function ResultScreen({ navigation, route }) {
   const [gravePhotos, setGravePhotos]   = useState([]);
   const [livePortraits, setLivePortraits] = useState([]);
   const [symbolModal, setSymbolModal]   = useState(null); // { name, text }
+  const [mentionsModal, setMentionsModal] = useState(false); // "Also found in…" sheet
   const [markerModal, setMarkerModal]   = useState(false);
   const [markerPack, setMarkerPack]     = useState(MARKER_PACKS[0].id); // active picker tab
   const [aiModal, setAiModal]           = useState(false); // first-view AI-disclaimer explainer
@@ -365,7 +366,12 @@ export default function ResultScreen({ navigation, route }) {
     );
   }
 
-  const { name, dates, biography, sources = [], source_urls = [], location, portraits, graveData, symbol_meanings } = story;
+  const { name, dates, biography, sources = [], source_urls = [], location, portraits, graveData, symbol_meanings, mentions: storyMentions } = story;
+  // Mentions — name-safe one-line source pointers (resolveMentions). Shown as a
+  // single "Also found in…" chip opening a bottom sheet of tappable hyperlinks.
+  const mentions = Array.isArray(storyMentions)
+    ? storyMentions.filter(m => m && typeof m.sentence === 'string' && m.sentence.trim())
+    : [];
   // Symbols round-trip as a top-level column (set at scan time, mirrors web);
   // fall back to graveData for any older in-memory story that predates that.
   const symbols = Array.isArray(story.symbols) && story.symbols.length
@@ -526,6 +532,10 @@ export default function ResultScreen({ navigation, route }) {
           const _orig = Array.isArray(saved.originatedRelatives) ? saved.originatedRelatives : [];
           if (saved.has_originated_relatives && !_orig.length) {
             saved.public_biography = 'This public biography is being prepared.';
+            // Desync fail-safe: blank EVERY raw-served public column, not just bio.
+            saved.mentions = [];
+            saved.sources = [];
+            saved.source_urls = [];
           } else {
             const _stripped = stripOriginatedNamesForPublic(saved.biography, _orig, subjects);
             saved.public_biography = await redactLivingNamesForPublic(_stripped, subjects);
@@ -535,6 +545,12 @@ export default function ResultScreen({ navigation, route }) {
             if (_orig.length) {
               saved.sources = stripOriginatedNamesFromSources(saved.sources, _orig, subjects);
               saved.source_urls = stripOriginatedNamesFromSources(saved.source_urls, _orig, subjects);
+            }
+            // Mentions public floor: (1) drop a mention naming a living non-originated
+            // relative the model missed; (2) strip any app-originated name.
+            saved.mentions = filterMentionsForPublic(saved.mentions, subjects);
+            if (_orig.length) {
+              saved.mentions = stripOriginatedNamesFromMentions(saved.mentions, _orig, subjects);
             }
           }
         } catch (e) {
@@ -670,6 +686,10 @@ export default function ResultScreen({ navigation, route }) {
         const _orig = Array.isArray(updated.originatedRelatives) ? updated.originatedRelatives : [];
         if (updated.has_originated_relatives && !_orig.length) {
           updated.public_biography = 'This public biography is being prepared.';
+          // Desync fail-safe: blank EVERY raw-served public column, not just bio.
+          updated.mentions = [];
+          updated.sources = [];
+          updated.source_urls = [];
         } else {
           const _stripped = stripOriginatedNamesForPublic(updated.biography, _orig, subjects);
           updated.public_biography = await redactLivingNamesForPublic(_stripped, subjects);
@@ -678,6 +698,12 @@ export default function ResultScreen({ navigation, route }) {
           if (_orig.length) {
             updated.sources = stripOriginatedNamesFromSources(updated.sources, _orig, subjects);
             updated.source_urls = stripOriginatedNamesFromSources(updated.source_urls, _orig, subjects);
+          }
+          // Mentions public floor: drop a living non-originated name, then strip
+          // any app-originated name.
+          updated.mentions = filterMentionsForPublic(updated.mentions, subjects);
+          if (_orig.length) {
+            updated.mentions = stripOriginatedNamesFromMentions(updated.mentions, _orig, subjects);
           }
         }
       } catch (e) {
@@ -760,6 +786,10 @@ export default function ResultScreen({ navigation, route }) {
           const _orig = Array.isArray(updated.originatedRelatives) ? updated.originatedRelatives : [];
           if (updated.has_originated_relatives && !_orig.length) {
             updated.public_biography = 'This public biography is being prepared.';
+            // Desync fail-safe: blank EVERY raw-served public column, not just bio.
+            updated.mentions = [];
+            updated.sources = [];
+            updated.source_urls = [];
           } else {
             const _stripped = stripOriginatedNamesForPublic(updated.biography, _orig, subjects);
             updated.public_biography = await redactLivingNamesForPublic(_stripped, subjects);
@@ -768,6 +798,12 @@ export default function ResultScreen({ navigation, route }) {
             if (_orig.length) {
               updated.sources = stripOriginatedNamesFromSources(updated.sources, _orig, subjects);
               updated.source_urls = stripOriginatedNamesFromSources(updated.source_urls, _orig, subjects);
+            }
+            // Mentions public floor: drop a living non-originated name, then strip
+            // any app-originated name.
+            updated.mentions = filterMentionsForPublic(updated.mentions, subjects);
+            if (_orig.length) {
+              updated.mentions = stripOriginatedNamesFromMentions(updated.mentions, _orig, subjects);
             }
           }
         } catch (e) {
@@ -1053,6 +1089,20 @@ export default function ResultScreen({ navigation, route }) {
           </View>
         )}
 
+        {/* Mentions — one chip opening a sheet of name-safe source hyperlinks.
+            Shows on the owner's story AND on public/global stories (outbound links). */}
+        {mentions.length > 0 && (
+          <View style={styles.tagsRow}>
+            <TouchableOpacity
+              style={[styles.tag, styles.tagTappable]}
+              onPress={() => setMentionsModal(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.tagText, styles.tagTextTappable]}>Also found in… ›</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Tributes */}
         {story.grave_id && !isUnsaved && (
           <View style={styles.tributeSection}>
@@ -1284,6 +1334,40 @@ export default function ResultScreen({ navigation, route }) {
             <Text style={styles.symbolSheetName}>{symbolModal?.name}</Text>
             <Text style={styles.symbolSheetText}>{symbolModal?.text}</Text>
             <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setSymbolModal(null)} activeOpacity={0.7}>
+              <Text style={styles.symbolSheetCloseText}>Close</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Mentions sheet — name-safe one-line source hyperlinks. Each sentence is
+          the tappable link; a hit with an unusable URL (link-rot) renders as a
+          non-tappable line but still reads. */}
+      <Modal
+        visible={mentionsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMentionsModal(false)}
+      >
+        <Pressable style={styles.symbolOverlay} onPress={() => setMentionsModal(false)}>
+          <Pressable style={[styles.symbolSheet, { paddingBottom: insets.bottom + 36 }]} onPress={() => {}}>
+            <SwipeHandle onClose={() => setMentionsModal(false)} />
+            <Text style={styles.symbolSheetName}>Also found in…</Text>
+            {mentions.map((m, i) => {
+              const ok = typeof m.url === 'string' && /^https?:\/\//i.test(m.url);
+              return (
+                <TouchableOpacity
+                  key={i}
+                  style={styles.mentionRow}
+                  onPress={() => ok && Linking.openURL(m.url)}
+                  disabled={!ok}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.mentionLine, ok && styles.mentionLink]}>{m.sentence}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity style={styles.symbolSheetClose} onPress={() => setMentionsModal(false)} activeOpacity={0.7}>
               <Text style={styles.symbolSheetCloseText}>Close</Text>
             </TouchableOpacity>
           </Pressable>
@@ -1549,6 +1633,15 @@ const styles = StyleSheet.create({
   },
   sourceItem: { flex: 1, color: colors.ash, fontSize: 12.5, fontFamily: fonts.body, lineHeight: 19 },
   sourceLink: { color: colors.flame, textDecorationLine: 'underline' },
+
+  // Mentions sheet rows — one sentence per row; the whole sentence is the link.
+  mentionRow: {
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
+  mentionLine: { color: colors.parchment, fontFamily: fonts.serif, fontSize: 14.5, lineHeight: 21 },
+  mentionLink: { color: colors.flame, textDecorationLine: 'underline' },
 
   chipsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   chipsHint: {

@@ -266,6 +266,226 @@ Return only JSON.`;
   }
 }
 
+// ── MENTIONS: NORMALIZE RAW RESEARCH HITS ────────────────────────
+// Turn the per-source research results (which the pipeline otherwise discards
+// after the bio) into a uniform list of candidate "mentions" the generator can
+// describe. Each hit becomes { url, kind, snippet, year, source }. We keep this
+// pure/synchronous and source-agnostic so the same helper feeds web + mobile.
+//
+// Sources INCLUDED: Tavily web + FindAGrave (searchResults), Chronicling America
+// (chronResults), Internet Archive (archiveResults), Wikipedia (wikiSummary).
+// Sources EXCLUDED: Wikidata (structured, no per-page url/snippet) and WikiTree
+// (a corroboration object + the synthetic homepage source pushed at search time),
+// because neither is a real per-person web page a visitor can usefully open.
+function buildMentionHits({ searchResults, chronResults, archiveResults, wikiSummary } = {}) {
+  const hits = [];
+  const yearFrom = (s) => {
+    if (typeof s !== 'string') return null;
+    const m = s.match(/\b(1[6-9]\d\d|20\d\d)\b/);   // 1600–2099
+    return m ? m[1] : null;
+  };
+  const isHttp = (u) => typeof u === 'string' && /^https?:\/\//i.test(u);
+
+  // Tavily / FindAGrave web results: [{ title, url, content, source_type }]
+  if (Array.isArray(searchResults)) {
+    for (const r of searchResults) {
+      if (!r || !isHttp(r.url)) continue;
+      // Skip the synthetic WikiTree family-record source (homepage URL, relationship-only).
+      if (r.source_type === 'wikitree') continue;
+      const kind = r.source_type === 'memorial'
+        ? 'a FindAGrave memorial page'
+        : 'a present-day web page';
+      hits.push({ url: r.url, kind, snippet: (r.content || r.title || '').slice(0, 600),
+        year: yearFrom(r.title) || null, source: 'web' });
+    }
+  }
+  // Chronicling America: [{ title:'Paper (YYYY-MM-DD)', url, content }]
+  if (Array.isArray(chronResults)) {
+    for (const r of chronResults) {
+      if (!r || !isHttp(r.url)) continue;
+      hits.push({ url: r.url, kind: 'a Chronicling America historical newspaper page',
+        snippet: (r.content || '').slice(0, 800), year: yearFrom(r.title), source: 'chronicling' });
+    }
+  }
+  // Internet Archive: [{ title:'Book (YYYY)', url, content }]
+  if (Array.isArray(archiveResults)) {
+    for (const r of archiveResults) {
+      if (!r || !isHttp(r.url)) continue;
+      hits.push({ url: r.url, kind: 'an Internet Archive book or county history',
+        snippet: (r.content || '').slice(0, 800), year: yearFrom(r.title), source: 'archive' });
+    }
+  }
+  // Wikipedia summary: { title, extract } — no url; synthesize the article URL.
+  const wikis = Array.isArray(wikiSummary) ? wikiSummary : (wikiSummary ? [wikiSummary] : []);
+  for (const w of wikis) {
+    if (!w || typeof w.title !== 'string' || !w.title.trim()) continue;
+    const url = `https://en.wikipedia.org/wiki/${encodeURIComponent(w.title.trim().replace(/ /g, '_'))}`;
+    hits.push({ url, kind: 'a Wikipedia article', snippet: (w.extract || '').slice(0, 800),
+      year: null, source: 'wikipedia' });
+  }
+
+  // De-dupe by url (first wins) and order by source quality so the cap keeps the
+  // most useful hits: FindAGrave-confirmed > Wikipedia > newspapers/books > generic web.
+  const rank = { memorial: 0, wikipedia: 1, chronicling: 2, archive: 2, web: 3 };
+  const seen = new Set();
+  const deduped = [];
+  for (const h of hits) {
+    if (seen.has(h.url)) continue;
+    seen.add(h.url);
+    deduped.push(h);
+  }
+  deduped.sort((a, b) => {
+    const ra = a.kind === 'a FindAGrave memorial page' ? rank.memorial : rank[a.source];
+    const rb = b.kind === 'a FindAGrave memorial page' ? rank.memorial : rank[b.source];
+    return (ra ?? 9) - (rb ?? 9);
+  });
+  return deduped;
+}
+
+// ── GEMINI: RESOLVE MENTIONS ─────────────────────────────────────
+// Each scan fetches research hits (Tavily web, Chronicling America, Internet
+// Archive, Wikipedia) it uses for the bio and then DISCARDS. This turns the best
+// of them into short, NAME-SAFE one-sentence pointers ("Mentioned in a 1919
+// obituary in the Aiken Courier.") the result screen shows as a "Mentions" sheet
+// of tappable hyperlinks — on the owner's story AND on the public global map.
+//
+// Mirrors resolveSymbolMeanings (one batched call, null-guarded, fails CLOSED to
+// [] so the sheet is simply omitted on any error; NOT scan-limit-gated, not
+// billable to the user). The label text is AUTHORED by the model under the same
+// living-name rule as redactLivingNamesForPublic (S62), so no living relative's
+// name can reach the public map via a raw snippet — that name-safety is WHY this
+// column is exposed publicly while subjects/relationships are not.
+//
+// `rawHits` = output of buildMentionHits(); `subjects` = graveData.subjects (the
+// deceased allowlist). Caps input to MAX_SEND hits before the call.
+async function resolveMentions(rawHits, subjects) {
+  const MAX_SEND = 8;
+  if (!Array.isArray(rawHits) || rawHits.length === 0) return [];
+  const hits = rawHits
+    .filter(h => h && typeof h.url === 'string' && /^https?:\/\//i.test(h.url))
+    .slice(0, MAX_SEND);
+  if (hits.length === 0) return [];
+
+  const allowed = [];
+  if (Array.isArray(subjects)) {
+    for (const s of subjects) {
+      if (s && typeof s.name === 'string' && s.name.trim()) {
+        const d = [s.birth_date, s.death_date].filter(Boolean).join('–') || s.dates || '';
+        allowed.push(`${s.name.trim()}${d ? ` (${d})` : ''}`);
+      }
+    }
+  }
+
+  const prompt = `You are writing short pointer sentences for a gravestone-history app. Each item below is a real research hit ABOUT one or more DECEASED people. For each item, write ONE short, natural sentence a museum visitor would read, telling them WHERE this person is mentioned — e.g. "Mentioned in a 1919 obituary in the Aiken Courier." or "Appears in a county history from 1908." or "Has a memorial on Find a Grave.". Use the item's source kind and year. Do NOT summarize the content, quote it, or add facts not present in the snippet. Keep it under ~18 words. No citation markers, no quotation marks.
+
+THE DECEASED SUBJECT(S) — you MAY name these people exactly as written:
+${allowed.length ? allowed.map(n => `- ${n}`).join('\n') : '- (none listed — infer the subject and keep only that person\'s name)'}
+
+NAME-SAFETY RULES (follow EXACTLY):
+- For ANY person mentioned in a snippet who is NOT one of the deceased subjects above and is NOT confirmed dead by an explicit death year in the snippet, do NOT name them — refer to them by relationship only (her son, his wife, a daughter), or omit them.
+- If unsure whether a named person is living or dead, treat them as LIVING and do not name them. When in doubt, remove the name.
+- A person explicitly shown as deceased in the snippet (a death year, "the late", "predeceased") is NOT living — you may name them.
+
+QUALITY RULES:
+- If a snippet does NOT clearly refer to one of the deceased subjects above (e.g. it is about a different person who happens to share the surname), return null for that item. An honest null is better than pointing the visitor at the wrong person.
+- If you cannot write a confident, useful sentence, return null for that item.
+
+Return ONLY a JSON object whose keys are the item ids given below and whose values are the sentence string, or null. Example shape:
+{ "m0": "Mentioned in a 1919 obituary in the Aiken Courier.", "m1": null }
+
+Items:
+${hits.map((h, i) => `- m${i}: kind=${h.kind}; year=${h.year || 'unknown'}; snippet="${(h.snippet || '').slice(0, 400).replace(/"/g, "'")}"`).join('\n')}
+
+Return only JSON.`;
+
+  try {
+    const { data } = await geminiCallWithFallback({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+    });
+    if (!data || data.error || !data.candidates?.[0]?.content?.parts?.[0]?.text) return [];
+    const parsed = safeParseJSON(data.candidates[0].content.parts[0].text, {});
+    if (!parsed || typeof parsed !== 'object') return [];
+
+    const MAX_SHOW = 5;
+    const out = [];
+    const usedUrls = new Set();
+    for (let i = 0; i < hits.length; i++) {
+      const v = parsed[`m${i}`];
+      if (typeof v !== 'string' || !v.trim()) continue;   // drop null/empty
+      const hit = hits[i];
+      if (usedUrls.has(hit.url)) continue;
+      usedUrls.add(hit.url);
+      out.push({ sentence: v.trim(), url: hit.url, source: hit.source, year: hit.year || null });
+      if (out.length >= MAX_SHOW) break;
+    }
+    return out;
+  } catch (e) {
+    console.warn('resolveMentions failed (non-fatal):', e?.message || e);
+    return [];
+  }
+}
+
+// Deterministic fail-CLOSED backstop for the PUBLIC path: even though every
+// mention sentence is authored under the living-name rule above, an originated
+// relative's name could in principle survive. Mirror stripOriginatedNamesForPublic
+// over each mention sentence before a flagged story is published. Returns a new
+// array; never keeps a name on error. Empty originatedRelatives = pass-through.
+function stripOriginatedNamesFromMentions(mentions, originatedRelatives, subjects) {
+  if (!Array.isArray(mentions)) return mentions;
+  if (!Array.isArray(originatedRelatives) || !originatedRelatives.length) return mentions;
+  return mentions.map(m => {
+    if (!m || typeof m.sentence !== 'string') return m;
+    return { ...m, sentence: stripOriginatedNamesForPublic(m.sentence, originatedRelatives, subjects) };
+  });
+}
+
+// PUBLIC-PATH name-safety filter for mentions, independent of the originated-name
+// strip. resolveMentions authors sentences under the living-name rule, but a model
+// slip could name a LIVING non-originated relative (e.g. lifted from a FindAGrave
+// snippet) — and unlike the bio, mentions get no Gemini redactor at publish time.
+// This is the S62-consistent deterministic floor: DROP any mention whose sentence
+// contains a capitalized multi-word personal name NOT covered by the deceased
+// subjects allowlist. Conservative — it can drop a legitimate mention (e.g. a
+// newspaper name like "Aiken Courier"), but on the PUBLIC path "fewer, safer" beats
+// "more, riskier". Owner's own (non-public) copy keeps the full list. Returns a new
+// array. `subjects` = OCR deceased we are allowed to name.
+function filterMentionsForPublic(mentions, subjects) {
+  if (!Array.isArray(mentions)) return mentions;
+  // Allowlist tokens: every deceased subject's name parts + common source/place
+  // words that are NOT personal names (so we don't nuke "Find a Grave", "Aiken
+  // Courier", "Internet Archive", "Wikipedia", month names, etc.).
+  const allow = new Set();
+  if (Array.isArray(subjects)) {
+    for (const s of subjects) {
+      if (s && typeof s.name === 'string') {
+        for (const t of s.name.toLowerCase().split(/\s+/)) if (t.length > 1) allow.add(t);
+      }
+    }
+  }
+  const SOURCE_WORDS = ['find','a','grave','findagrave','billiongraves','ancestry','obituary',
+    'obituaries','newspaper','courier','times','herald','gazette','tribune','journal','press',
+    'news','record','register','county','history','archive','internet','wikipedia','wikitree',
+    'memorial','cemetery','legacy','com','org','january','february','march','april','may','june',
+    'july','august','september','october','november','december','st','saint','the','of','and'];
+  for (const w of SOURCE_WORDS) allow.add(w);
+
+  return mentions.filter(m => {
+    if (!m || typeof m.sentence !== 'string') return false;
+    // Find runs of 2+ consecutive Capitalized words (a likely full personal name).
+    // A single capitalized word is usually a source/place; a 2-word run "Michael
+    // Thompson" is the dangerous case. If every token of such a run is allow-listed,
+    // it's safe; otherwise DROP the whole mention from the public copy.
+    const runs = m.sentence.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g) || [];
+    for (const run of runs) {
+      const tokens = run.toLowerCase().split(/\s+/);
+      const allAllowed = tokens.every(t => allow.has(t));
+      if (!allAllowed) return false;   // an un-allowlisted multi-word Name → drop
+    }
+    return true;
+  });
+}
+
 // ── GEMINI: REDACT LIVING-RELATIVE NAMES FOR PUBLIC SHARING ───────
 // When a user makes a story PUBLIC (it then appears on the community global
 // map with a precise GPS pin), we must not re-identify or defame a LIVING

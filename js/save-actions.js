@@ -63,6 +63,13 @@ async function saveStory() {
       const _orig = Array.isArray(currentStory.originatedRelatives) ? currentStory.originatedRelatives : [];
       if (currentStory.has_originated_relatives && !_orig.length) {
         currentStory.public_biography = 'This public biography is being prepared.';
+        // Desync fail-safe: the flag is set but the names are gone, so we can't
+        // strip them. The placeholder protects the bio — but mentions/sources are
+        // ALSO served raw by the public RPC, so blank them too rather than publish
+        // un-stripped raw text. (Review: desync branch must cover every raw column.)
+        currentStory.mentions = [];
+        currentStory.sources = [];
+        currentStory.source_urls = [];
       } else {
         const _stripped = (typeof stripOriginatedNamesForPublic === 'function')
           ? stripOriginatedNamesForPublic(currentStory.biography, _orig, subjects)
@@ -74,6 +81,17 @@ async function saveStory() {
         if (_orig.length && typeof stripOriginatedNamesFromSources === 'function') {
           currentStory.sources = stripOriginatedNamesFromSources(currentStory.sources, _orig, subjects);
           currentStory.source_urls = stripOriginatedNamesFromSources(currentStory.source_urls, _orig, subjects);
+        }
+        // Mentions are served RAW publicly. Two-layer public floor: (1) drop any
+        // mention naming a LIVING non-originated relative the model failed to
+        // generalize (filterMentionsForPublic — the S62-consistent guard mentions
+        // otherwise lack, since they get no Gemini redactor); (2) strip any
+        // app-originated relative name (stripOriginatedNamesFromMentions).
+        if (typeof filterMentionsForPublic === 'function') {
+          currentStory.mentions = filterMentionsForPublic(currentStory.mentions, subjects);
+        }
+        if (_orig.length && typeof stripOriginatedNamesFromMentions === 'function') {
+          currentStory.mentions = stripOriginatedNamesFromMentions(currentStory.mentions, _orig, subjects);
         }
       }
     } catch (e) {

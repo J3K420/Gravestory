@@ -20,6 +20,8 @@ export function rowToStory(row) {
     inscription: row.inscription,
     symbols: row.symbols,
     symbol_meanings: row.symbol_meanings || null,
+    // Mentions (migration 022) — name-safe one-line source pointers.
+    mentions: Array.isArray(row.mentions) ? row.mentions : [],
     family_name: row.family_name,
     notes: row.notes,
     sources: row.sources,
@@ -59,6 +61,8 @@ function storyToRow(story, userId) {
     inscription: story.inscription || null,
     symbols: story.symbols || null,
     symbol_meanings: story.symbol_meanings || null,
+    // Mentions (migration 022) — name-safe one-line source pointers; null when empty.
+    mentions: Array.isArray(story.mentions) && story.mentions.length ? story.mentions : null,
     family_name: story.family_name || null,
     notes: story.notes || null,
     sources: story.sources || null,

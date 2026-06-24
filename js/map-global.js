@@ -108,6 +108,9 @@ async function fetchGlobalStories() {
       portrait_right_url: row.portrait_right_url || null,
       grave_id: row.grave_id || null,
       marker_style: row.marker_style || null,
+      // Mentions (migration 022) — name-safe source pointers from the RPC.
+      // Hand-mapped here (this path doesn't use rowToStory) or the sheet never shows.
+      mentions: Array.isArray(row.mentions) ? row.mentions : [],
       source: row.source || 'library',
       _contributor: row.contributor_name || 'Anonymous',
       _isGlobal: true

@@ -551,6 +551,33 @@
     margin-bottom: 1.5rem;
   }
 
+  /* Mentions sheet — a list of name-safe one-line source hyperlinks. Reuses the
+     parchment .symbol-sheet shell; each line styled like a source link. */
+  .mention-lines {
+    margin-bottom: 1.5rem;
+  }
+
+  .mention-line {
+    display: block;
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.98rem;
+    line-height: 1.4;
+    color: var(--moss);
+    text-decoration: underline;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(26,20,16,0.12);
+  }
+
+  .mention-line:last-child { border-bottom: none; }
+  .mention-line:hover { color: #5a6a48; }
+
+  /* Link-rot: a mention whose URL is unusable renders as plain (non-clickable) text. */
+  .mention-line-dead {
+    color: var(--ink);
+    text-decoration: none;
+    opacity: 0.85;
+  }
+
   .symbol-sheet-close {
     width: 100%;
     padding: 0.8rem;

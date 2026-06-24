@@ -17,7 +17,7 @@ const CLIENT_KEY = 'gs-client-2025';
 // the 5 write-site guards) is NEVER gated on this flag — it runs whenever a story
 // carries originated names, so a story persisted while the flag was ON stays
 // protected after the flag is flipped OFF. Ship dark.
-const ORIGINATE_RELATIVES = false;
+const ORIGINATE_RELATIVES = true;
 // Path B (stone names NOBODY -> strict-high origination) is a namesake-fabrication
 // risk on common names; ship it OFF and enable only after telemetry. Path A
 // (a stone-named spouse independently confirmed) is the only path live in Inc2.

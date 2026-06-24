@@ -31,5 +31,5 @@ const _injectedKey = Constants.expoConfig?.extra?.revenueCatApiKey || '';
 export const REVENUECAT_API_KEY = _injectedKey || (__DEV__ ? REVENUECAT_TEST_KEY : '');
 
 // Increment 2 — see web js/config.js. Single source, byte-parallel values.
-export const ORIGINATE_RELATIVES = false;
+export const ORIGINATE_RELATIVES = true;
 export const ORIGINATE_PATH_B = false;

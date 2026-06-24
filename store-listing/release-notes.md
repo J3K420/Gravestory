@@ -7,6 +7,34 @@ their own line. Max 500 characters per language.
 
 ---
 
+## versionCode 13 — Backgrounded scans + "story ready" notification
+
+Recommended (user-facing, names the feature):
+
+```
+<en-US>
+New: Step away while a scan is running and it keeps going — we'll send a notification when your story is ready so you can pick up right where you left off. Plus stability improvements and small fixes.
+</en-US>
+```
+
+Shorter alternative:
+
+```
+<en-US>
+Scans now keep running if you switch apps, and we'll notify you the moment your story is ready to read.
+</en-US>
+```
+
+Minimal / generic (if not calling out the feature yet):
+
+```
+<en-US>
+Bug fixes and performance improvements.
+</en-US>
+```
+
+---
+
 ## versionCode 12 — Listen to this story (text-to-speech)
 
 Recommended (user-facing, names the feature):

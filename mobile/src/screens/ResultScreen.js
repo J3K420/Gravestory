@@ -655,13 +655,14 @@ export default function ResultScreen({ navigation, route }) {
   // Export the story as a GEDCOM file for a family-tree app. Owner-only (the
   // button is hidden on global/sample stories). GEDCOM is unfamiliar to most
   // users, so a one-line explainer first sets the expectation that the share
-  // sheet (Save to Files / Drive / email) is HOW you keep the file — then we open
-  // it. Fail-soft with a friendly Alert.
+  // sheet is HOW you keep the file — then we open it. The available destinations
+  // vary by device (Drive, email, cloud apps, etc.), so the copy stays generic
+  // and does NOT name a specific option that may not appear. Fail-soft Alert.
   function handleExport() {
     if (exporting) return;
     Alert.alert(
       'Save your family-tree file',
-      'This creates a GEDCOM (.ged) file for genealogy apps like Ancestry or FamilySearch. On the next screen, choose “Save to Files”, Google Drive, or email to keep it.',
+      'This creates a GEDCOM (.ged) file for genealogy apps like Ancestry or FamilySearch. On the next screen, send it to Google Drive, email, or another app to keep it.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Continue', onPress: doExport },

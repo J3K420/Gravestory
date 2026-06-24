@@ -449,11 +449,23 @@ async function generateBiography(graveData, searchResults, wikiData, location, w
 
   // wikiData may be an array (multi-person stones with one WikiTree result per person)
   const wikiDataItems = Array.isArray(wikiData) ? wikiData.filter(Boolean) : (wikiData ? [wikiData] : []);
+  // Decision C (Inc2): build the WikiTree blob from an explicit ALLOWLIST.
+  // JSON.stringify(wd) would auto-leak any NEW return field (e.g.
+  // originatedRelatives) verbatim into the prompt with no control. Originated
+  // names reach the prompt ONLY through the controlled synthetic [WikiTree]
+  // source built at the call site (Decision B) — numbered, citable, and
+  // findable by the deterministic public strip.
+  const _WT_PROMPT_FIELDS = ['name', 'birth', 'death', 'birthLocation', 'deathLocation', 'wikiTreeId', 'bioSnippet'];
+  const _wtAllow = wd => {
+    const o = {};
+    for (const k of _WT_PROMPT_FIELDS) if (wd[k] != null) o[k] = wd[k];
+    return o;
+  };
   const wikiContext = wikiDataItems.length > 0
     ? wikiDataItems.map((wd, i) =>
         wikiDataItems.length > 1
-          ? `WikiTree genealogy record (person ${i + 1}): ${JSON.stringify(wd)}`
-          : `WikiTree genealogy record found: ${JSON.stringify(wd)}`
+          ? `WikiTree genealogy record (person ${i + 1}): ${JSON.stringify(_wtAllow(wd))}`
+          : `WikiTree genealogy record found: ${JSON.stringify(_wtAllow(wd))}`
       ).join('\n')
     : 'No WikiTree record found.';
 
@@ -503,12 +515,31 @@ async function generateBiography(graveData, searchResults, wikiData, location, w
 - Write a SHORT, attributive, fully-cited account (a few sentences to one short paragraph — NOT the long historical-figure treatment, because the stone itself does not name this person). Make clear the identification comes from the cemetery's burial records, e.g. "Burial records identify this as the grave of …[N]" — attribute it, do not assert it as if read from the stone. Every factual claim must carry an [N] marker to the Wikipedia/Wikidata source. Do not pad with general knowledge beyond what the numbered sources support.\n`
     : '';
 
+  // INCREMENT 2: when a synthetic [WikiTree] family-record source is present
+  // (origination fired at the call site), the model MAY name those relatives —
+  // but ONLY with the [N] anchor to that source, never from memory. If it cannot
+  // cite the record, it must use the relationship word, not the name. These names
+  // are stripped from the PUBLIC copy deterministically afterward.
+  // The names are listed HERE in the ephemeral prompt instruction (NOT in the
+  // citable source's description) so they can never be copied into a persisted
+  // citation `description`/`sources` field that the public map renders unstripped
+  // (C1 fix). Names are read from the raw wikiData, not the allowlisted context.
+  const _hasOriginated = Array.isArray(searchResults) &&
+    searchResults.some(r => r && r.source_type === 'wikitree' && /WikiTree family record/.test(r.title || ''));
+  const _origNames = _hasOriginated
+    ? wikiDataItems.flatMap(wd => Array.isArray(wd.originatedRelatives) ? wd.originatedRelatives : [])
+        .filter(r => r && r.name).map(r => `${r.name} (${r.relation || 'relative'})`)
+    : [];
+  const originatedBlock = (_hasOriginated && _origNames.length)
+    ? `\nFAMILY RECORD (genealogical, NOT on the stone): The [WikiTree] family-record source names the deceased's: ${_origNames.join('; ')}. These relatives are NOT engraved on this gravestone. You MAY weave them into the biography to enrich the family context, but ONLY when you append that source's [N] marker to the claim. If you cannot cite the record for a relative, refer to them by relationship only (e.g. "his wife") and do NOT state their name. Never state a relative's name without the [N] anchor. Do not assert anything about these relatives beyond their name and relationship.\n`
+    : '';
+
   const prompt = `You are GraveStory AI, a careful historian writing a respectful life history.
 Accuracy and dignity matter more than length or eloquence. Write only from the gravestone data and the numbered sources below. Do not use facts from memory or general knowledge unless a numbered source supports them. Never fabricate facts, relationships, events, or characterizations. A short, honest biography builds trust; an invented one destroys it.
 
 GRAVESTONE DATA:
 ${JSON.stringify(graveData, null, 2)}
-${multiSubjectBlock}${burialRecoveryBlock}
+${multiSubjectBlock}${burialRecoveryBlock}${originatedBlock}
 ${locationContext}
 
 ${searchContext}

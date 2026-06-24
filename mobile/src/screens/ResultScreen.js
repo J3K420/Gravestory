@@ -14,7 +14,7 @@ import { uploadGravestoneImage } from '../lib/api-r2';
 import { getTributes, setTribute } from '../lib/api-tributes';
 import { submitContentReport, REPORT_REASONS, REPORT_NOTE_MAX } from '../lib/api-reports';
 import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
-import { redactLivingNamesForPublic } from '../lib/api-gemini';
+import { redactLivingNamesForPublic, stripOriginatedNamesForPublic, stripOriginatedNamesFromSources } from '../lib/api-gemini';
 import { useRefresh } from '../lib/use-refresh';
 import { deletePendingPhoto } from '../lib/pending';
 import { logEvent, EVENTS } from '../lib/analytics';
@@ -519,7 +519,22 @@ export default function ResultScreen({ navigation, route }) {
         try {
           const subjects = Array.isArray(saved.subjects) ? saved.subjects
             : (Array.isArray(saved.graveData?.subjects) ? saved.graveData.subjects : []);
-          saved.public_biography = await redactLivingNamesForPublic(saved.biography, subjects);
+          // INCREMENT 2: strip app-originated names BEFORE the fail-open redactor;
+          // desync guard -> safe placeholder if flag set but names absent.
+          const _orig = Array.isArray(saved.originatedRelatives) ? saved.originatedRelatives : [];
+          if (saved.has_originated_relatives && !_orig.length) {
+            saved.public_biography = 'This public biography is being prepared.';
+          } else {
+            const _stripped = stripOriginatedNamesForPublic(saved.biography, _orig, subjects);
+            saved.public_biography = await redactLivingNamesForPublic(_stripped, subjects);
+            // `sources` is served RAW by the public RPC — strip originated names
+            // from citation descriptions too. Shared column; owner sees the name
+            // in the bio prose, so dropping it here is fine.
+            if (_orig.length) {
+              saved.sources = stripOriginatedNamesFromSources(saved.sources, _orig, subjects);
+              saved.source_urls = stripOriginatedNamesFromSources(saved.source_urls, _orig, subjects);
+            }
+          }
         } catch (e) {
           console.warn('public_biography redaction skipped on auto-public save (non-fatal):', e?.message || e);
         }
@@ -630,7 +645,21 @@ export default function ResultScreen({ navigation, route }) {
       try {
         const subjects = Array.isArray(updated.subjects) ? updated.subjects
           : (Array.isArray(updated.graveData?.subjects) ? updated.graveData.subjects : []);
-        updated.public_biography = await redactLivingNamesForPublic(updated.biography, subjects);
+        // INCREMENT 2: strip app-originated names BEFORE the fail-open redactor;
+        // desync guard -> safe placeholder if flag set but names absent.
+        const _orig = Array.isArray(updated.originatedRelatives) ? updated.originatedRelatives : [];
+        if (updated.has_originated_relatives && !_orig.length) {
+          updated.public_biography = 'This public biography is being prepared.';
+        } else {
+          const _stripped = stripOriginatedNamesForPublic(updated.biography, _orig, subjects);
+          updated.public_biography = await redactLivingNamesForPublic(_stripped, subjects);
+          // `sources`/`source_urls` are served RAW by the public RPC — strip
+          // originated names from both (model can author a name into either).
+          if (_orig.length) {
+            updated.sources = stripOriginatedNamesFromSources(updated.sources, _orig, subjects);
+            updated.source_urls = stripOriginatedNamesFromSources(updated.source_urls, _orig, subjects);
+          }
+        }
       } catch (e) {
         console.warn('public_biography redaction skipped (non-fatal):', e?.message || e);
       }
@@ -706,7 +735,21 @@ export default function ResultScreen({ navigation, route }) {
         try {
           const subjects = Array.isArray(updated.subjects) ? updated.subjects
             : (Array.isArray(updated.graveData?.subjects) ? updated.graveData.subjects : []);
-          updated.public_biography = await redactLivingNamesForPublic(updated.biography, subjects);
+          // INCREMENT 2: strip app-originated names BEFORE the fail-open redactor;
+          // desync guard -> safe placeholder if flag set but names absent.
+          const _orig = Array.isArray(updated.originatedRelatives) ? updated.originatedRelatives : [];
+          if (updated.has_originated_relatives && !_orig.length) {
+            updated.public_biography = 'This public biography is being prepared.';
+          } else {
+            const _stripped = stripOriginatedNamesForPublic(updated.biography, _orig, subjects);
+            updated.public_biography = await redactLivingNamesForPublic(_stripped, subjects);
+            // `sources`/`source_urls` are served RAW by the public RPC — strip
+            // originated names from both (model can author a name into either).
+            if (_orig.length) {
+              updated.sources = stripOriginatedNamesFromSources(updated.sources, _orig, subjects);
+              updated.source_urls = stripOriginatedNamesFromSources(updated.source_urls, _orig, subjects);
+            }
+          }
         } catch (e) {
           console.warn('public_biography redaction skipped on marker-pick update (non-fatal):', e?.message || e);
         }

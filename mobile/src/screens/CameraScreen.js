@@ -26,6 +26,7 @@ import { getLibraryAssetGps } from '../lib/media-gps';
 import { loadStories, saveStories } from '../lib/storage';
 import { savePendingPhoto, readPendingPhoto, deletePendingPhoto } from '../lib/pending';
 import { logEvent, EVENTS } from '../lib/analytics';
+import { ORIGINATE_RELATIVES } from '../lib/config';
 
 // Overall ceiling for the parallel research fan-out. The individual research
 // legs (Tavily, WikiTree, Wikidata, Chronicling America, Internet Archive,
@@ -593,6 +594,9 @@ export default function CameraScreen({ navigation, route }) {
       // is table-covered, so this costs nothing on clean stones.
       const symbolMeaningsPromise = resolveSymbolMeanings(graveData.symbols)
         .catch(e => { console.warn('Symbol-meaning resolution failed (non-fatal):', e?.message || e); return null; });
+      // Inc2: app-originated spouse names for THIS scan; [] on a cache hit.
+      // Hoisted so the story-build literal can read it (wikiData is block-scoped).
+      let _origUnique = [];
       if (cachedBio) {
         bioResult = {
           name: cachedBio.name,
@@ -718,6 +722,36 @@ export default function CameraScreen({ navigation, route }) {
           ...(chronResults || []),
           ...(archiveResults || []),
         ];
+
+        // INCREMENT 2: surface app-ORIGINATED spouse names as a numbered, citable
+        // [WikiTree] source (see web index.html for the full rationale).
+        const _origRaw = (typeof ORIGINATE_RELATIVES !== 'undefined' && ORIGINATE_RELATIVES)
+          ? (Array.isArray(wikiData) ? wikiData : [wikiData])
+              .filter(Boolean)
+              .flatMap(wd => Array.isArray(wd.originatedRelatives) ? wd.originatedRelatives : [])
+          : [];
+        const _seenOrig = new Set();
+        _origUnique = _origRaw.filter(r => {
+          const k = (r && r.name || '').toLowerCase().trim();
+          if (!k || _seenOrig.has(k)) return false;
+          _seenOrig.add(k); return true;
+        });
+        if (_origUnique.length) {
+          // The citable source must NOT contain the relative's NAME: a cited [N]
+          // copies its description into `sources`, which the public map renders
+          // UNSTRIPPED. So the source carries only relationship(s); the actual
+          // names reach the model via the originatedBlock prompt instruction
+          // (context, never persisted) and are removed from the public bio by the
+          // deterministic strip. (C1 fix.)
+          mergedSearchResults.push({
+            source_type: 'wikitree',
+            title: 'WikiTree family record',
+            content: 'Genealogical family record naming the deceased’s ' +
+              [...new Set(_origUnique.map(r => r.relation))].join(' and ') +
+              ' (from genealogical records, not the gravestone).',
+            url: 'https://www.wikitree.com/',
+          });
+        }
 
         const portraits = portraitArrays.flat();
         let wikipediaSummary = wikiSummaryResults.length === 1
@@ -938,6 +972,11 @@ export default function CameraScreen({ navigation, route }) {
         _unsaved: true,        // ResultScreen shows the Save button for this
         _base64: base64,       // needed for R2 upload at save time
         _primaryName: primaryName,
+        // INCREMENT 2: attach originated names + serve-side flag at BUILD time
+        // (see web). On a cache hit _origUnique is [] — correct. Mobile spreads
+        // ...bioResult first, which never carries these fields, so the literal wins.
+        originatedRelatives: _origUnique,
+        has_originated_relatives: _origUnique.length > 0,
       };
 
       // Research succeeded for a previously offline-scanned story — remove the

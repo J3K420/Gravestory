@@ -1,4 +1,4 @@
-import { PROXY_BASE, CLIENT_KEY } from './config';
+import { PROXY_BASE, CLIENT_KEY, ORIGINATE_RELATIVES, ORIGINATE_PATH_B } from './config';
 import { EXPAND as _EXPAND } from './abbreviations';
 
 // WikiTree matching needs lowercase — derive from the shared title-case table.
@@ -274,6 +274,57 @@ export async function searchWikiTree(graveData, location = null) {
       if (bestYear && Math.abs(bestYear - parseInt(birthYear, 10)) > 10) return null;
     }
 
+    // ── INCREMENT 2: ORIGINATE SPOUSE NAMES (private-bio enrichment only) ──
+    // Deterministic, strict gate. `best` already cleared the credibility floor
+    // (_nameAligned && _dateAligned, birth within 10yr). Per-match diff bands
+    // were loop-locals, so re-derive both from best vs the queried years.
+    let originatedRelatives = [];
+    if (typeof ORIGINATE_RELATIVES !== 'undefined' && ORIGINATE_RELATIVES) {
+      const _bestBirthY = parseInt((best.BirthDate || '').slice(0, 4), 10) || null;
+      const _bestDeathY = parseInt((best.DeathDate || '').slice(0, 4), 10) || null;
+      const _bDiff = (birthYearNum && _bestBirthY) ? Math.abs(_bestBirthY - birthYearNum) : null;
+      const _dDiff = (deathYearNum && _bestDeathY) ? Math.abs(_bestDeathY - deathYearNum) : null;
+
+      const _haveBirth = !!birthYearNum, _haveDeath = !!deathYearNum;
+      const _birthTight = !_haveBirth || (_bDiff !== null && _bDiff <= 2);
+      const _deathTight = !_haveDeath || (_dDiff !== null && _dDiff <= 2);
+      const _datesTight = (_haveBirth || _haveDeath) && _birthTight && _deathTight;
+
+      const _birthExact = !_haveBirth || _bDiff === 0;
+      const _deathExact = !_haveDeath || _dDiff === 0;
+      const _datesExact = (_haveBirth && _haveDeath) && _birthExact && _deathExact;
+
+      const _geoMatch = !!queryState && (
+        extractUSState(best.BirthLocation || '') === queryState ||
+        extractUSState(best.DeathLocation || '') === queryState
+      );
+
+      const _bestSpouseNames = best.Spouses
+        ? Object.values(best.Spouses).map(s => s && (s.LongName || s.Name || s.FirstName)).filter(Boolean)
+        : [];
+
+      // Path A — a stone-named spouse word-boundary-matches a candidate spouse.
+      const _stoneNamesSpouse = knownRelatives.spouse.length > 0;
+      const _pathA = bestScore >= 140 && _datesTight && _stoneNamesSpouse &&
+        knownRelatives.spouse.some(rn =>
+          _bestSpouseNames.some(cn => relationNameMatch(rn, cn)));
+
+      // Path B — stone names NOBODY: strict-high (SHIPPED DISABLED via flag).
+      const _pathB = (typeof ORIGINATE_PATH_B !== 'undefined' && ORIGINATE_PATH_B) &&
+        !_stoneNamesSpouse && _datesExact && bestScore >= 200 && _geoMatch;
+
+      if (_pathA || _pathB) {
+        for (const sp of _bestSpouseNames) {
+          const already = knownRelatives.spouse.some(rn => relationNameMatch(rn, sp));
+          if (!already) originatedRelatives.push({ name: String(sp).trim(), relation: 'spouse' });
+        }
+        if (originatedRelatives.length) {
+          console.warn('WikiTree originated', originatedRelatives.length,
+            'spouse name(s) [private-bio only]:', _pathA ? 'pathA' : 'pathB');
+        }
+      }
+    }
+
     return {
       name: `${best.FirstName || ''} ${best.LastNameAtBirth || best.LastNameCurrent || ''}`.trim(),
       birth: best.BirthDate || null,
@@ -282,6 +333,7 @@ export async function searchWikiTree(graveData, location = null) {
       deathLocation: best.DeathLocation || null,
       wikiTreeId: best.Name || null,
       bioSnippet: best.Bio ? best.Bio.slice(0, 1500) : null,
+      originatedRelatives,   // [] when flag off / gate fails. Spouses only. Inc2.
     };
   } catch (e) {
     console.warn('WikiTree fetch failed:', e.message);

@@ -1138,6 +1138,10 @@ async function startAnalysis() {
     }
 
     let story;
+    // Inc2: app-originated spouse names for THIS scan; [] on a cache hit (no
+    // fresh WikiTree run). Hoisted here so the build literal can read it —
+    // wikiData is block-scoped to the search branch and not visible there.
+    let _origUnique = [];
     if (cachedBio) {
       story = {
         name: cachedBio.name,
@@ -1234,6 +1238,41 @@ async function startAnalysis() {
         ...(chronResults || []),
         ...(archiveResults || []),
       ];
+
+      // INCREMENT 2: surface app-ORIGINATED spouse names as a numbered, citable
+      // [WikiTree] source so the PRIVATE bio may name them with an [N] anchor.
+      // It inherits the [WikiTree] label + a sequential [1..N] slot for free;
+      // Wikipedia summaries still append AFTER searchResults, so their indices
+      // shift up correctly and no index math breaks. _validateCitations keeps it
+      // only if Gemini cites it. The deterministic public strip removes these
+      // names (and their [N]) from the PUBLIC copy unconditionally.
+      const _origRaw = (typeof ORIGINATE_RELATIVES !== 'undefined' && ORIGINATE_RELATIVES)
+        ? (Array.isArray(wikiData) ? wikiData : [wikiData])
+            .filter(Boolean)
+            .flatMap(wd => Array.isArray(wd.originatedRelatives) ? wd.originatedRelatives : [])
+        : [];
+      const _seenOrig = new Set();
+      _origUnique = _origRaw.filter(r => {
+        const k = (r && r.name || '').toLowerCase().trim();
+        if (!k || _seenOrig.has(k)) return false;
+        _seenOrig.add(k); return true;
+      });
+      if (_origUnique.length) {
+        // The citable source must NOT contain the relative's NAME: a cited [N]
+        // copies its description into `sources`, which the public map renders
+        // UNSTRIPPED. So the source carries only relationship(s); the actual
+        // names reach the model via the originatedBlock prompt instruction
+        // (context, never persisted) and are removed from the public bio by the
+        // deterministic strip. (C1 fix.)
+        mergedSearchResults.push({
+          source_type: 'wikitree',
+          title: 'WikiTree family record',
+          content: 'Genealogical family record naming the deceased’s ' +
+            [...new Set(_origUnique.map(r => r.relation))].join(' and ') +
+            ' (from genealogical records, not the gravestone).',
+          url: 'https://www.wikitree.com/',
+        });
+      }
 
       let wikipediaSummary = wikiSummaryResults.length === 1
         ? wikiSummaryResults[0]
@@ -1472,6 +1511,13 @@ async function startAnalysis() {
       _snapped: gpsSnapped || undefined,
       source: currentPhotoSource,
       grave_id: graveId,
+      // INCREMENT 2: attach originated names + serve-side flag at BUILD time so
+      // the 019 floor + all 5 public write sites are protected even when this
+      // story is later reloaded from a row, and the strip has the names to remove.
+      // On a cache hit _origUnique is [] (no fresh WikiTree run) — correct: the
+      // cache-hit viewer was already served the redacted/placeholder public copy.
+      originatedRelatives: _origUnique,
+      has_originated_relatives: _origUnique.length > 0,
     };
     renderResult(currentStory);
     showScreen('result');

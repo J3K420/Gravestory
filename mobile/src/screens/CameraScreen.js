@@ -559,7 +559,7 @@ export default function CameraScreen({ navigation, route }) {
             const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
             const { data: row } = await supabase
               .from('stories')
-              .select('name,dates,biography,public_biography,location,inscription,symbols,symbol_meanings,sources,source_urls,portrait_left_url,portrait_right_url,portraits,grave_id')
+              .select('name,dates,biography,public_biography,has_originated_relatives,location,inscription,symbols,symbol_meanings,sources,source_urls,portrait_left_url,portrait_right_url,portraits,grave_id')
               .eq('grave_id', cachedGraveId)
               .eq('is_public', true)
               .is('deleted_at', null)
@@ -600,9 +600,14 @@ export default function CameraScreen({ navigation, route }) {
           // Reuse the living-name-REDACTED public copy when present — the cached
           // story belongs to a DIFFERENT user, so handing them the raw bio would
           // re-expose living relatives' names that redaction hid on the public
-          // map. Falls back to the raw bio for public stories that predate
-          // redaction (public_biography NULL), matching the global-map RPC.
-          biography: cachedBio.public_biography || cachedBio.biography,
+          // map. Unflagged rows fall back to the raw bio for public stories that
+          // predate redaction (public_biography NULL), matching the global-map RPC.
+          // A row carrying APP-ORIGINATED relative names must NEVER fall back to
+          // the raw bio (it would leak originated names to this other user); serve
+          // a safe placeholder instead — mirrors migration 019's flag-guarded RPC.
+          biography: cachedBio.has_originated_relatives
+            ? (cachedBio.public_biography || 'This public biography is being prepared.')
+            : (cachedBio.public_biography || cachedBio.biography),
           location: cachedBio.location,
           inscription: cachedBio.inscription,
           symbols: cachedBio.symbols,

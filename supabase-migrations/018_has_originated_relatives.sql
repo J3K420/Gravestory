@@ -1,0 +1,34 @@
+-- ================================================================
+-- GraveStory: has_originated_relatives flag (originated-names safety floor)
+-- Paste into Supabase SQL editor and run. Run BEFORE migration 019.
+-- ================================================================
+--
+-- Increment 1 of the "originated relatives" feature (a later increment will let
+-- WikiTree ORIGINATE parent/spouse names — relatives NOT engraved on the stone —
+-- into the owner's PRIVATE biography). The one non-negotiable invariant of that
+-- feature: an app-ORIGINATED name must NEVER reach a PUBLIC surface.
+--
+-- This column is the join key that enforces it. A story whose `biography` prose
+-- contains app-originated names will be flagged true (by the later increment).
+-- Every public read/serve then refuses to fall back to the raw `biography` for a
+-- flagged row (see migration 019 + the bio-cache guards in the client) — it
+-- serves `public_biography` (the redacted copy) or a safe placeholder, never the
+-- originated names.
+--
+-- Shipped AHEAD of the writer (expand-then-migrate): nothing sets it true yet, so
+-- it is inert today — every existing and new row is explicitly false. This lets
+-- the read-side floor (019 + caches) ship and be proven now, so the later
+-- writer turn-on is low-risk.
+--
+-- NOT NULL DEFAULT false: every legacy row is explicitly false (no NULL-flag
+-- ambiguity). This is load-bearing for 019's legacy proof — "flagged AND
+-- public_biography NULL" is an impossible-today state, so the floor's new branch
+-- is unreachable until the writer ships and cannot regress any live row.
+--
+-- Idempotent: ADD COLUMN IF NOT EXISTS. Safe to re-run. Inherits the existing
+-- `stories` RLS policies (no new policy needed; same as 007/010/015). The column
+-- is NOT exposed by global_public_stories (it is an internal serve-side guard).
+-- ================================================================
+
+ALTER TABLE public.stories
+  ADD COLUMN IF NOT EXISTS has_originated_relatives boolean NOT NULL DEFAULT false;

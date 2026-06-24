@@ -135,6 +135,28 @@ export default function CemeteryMapScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { focusStory = null } = route.params || {};
 
+  // Home shortcut for the header. This screen is reached from the result/bio
+  // page (single-grave focus) where the focused story can be UNSAVED — and
+  // navigate('Home') pops the whole stack, unmounting the underlying Result and
+  // discarding that in-memory story. So when the focused story is unsaved, gate
+  // the jump behind the same "Discard this story?" confirmation the result page
+  // uses, so a one-tap Home can't silently drop it. navigate('Home') pops to the
+  // existing root Home rather than pushing a duplicate.
+  function handleHome() {
+    if (focusStory?._unsaved) {
+      Alert.alert(
+        'Discard this story?',
+        "You haven't saved this story yet. Leaving now will discard it.",
+        [
+          { text: 'Keep editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: () => navigation.navigate('Home') },
+        ]
+      );
+      return;
+    }
+    navigation.navigate('Home');
+  }
+
   const mapRef = useRef(null);
   const [mappedStories, setMappedStories] = useState([]);
   const [geocoding, setGeocoding] = useState(true);
@@ -318,7 +340,15 @@ export default function CemeteryMapScreen({ navigation, route }) {
           <MapStack size={16} color={colors.flame} />
           <Text style={styles.headerTitle}>Cemetery Map</Text>
         </View>
-        <View style={styles.headerSide} />
+        <TouchableOpacity
+          onPress={handleHome}
+          style={[styles.headerSide, styles.headerSideRight]}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go to home screen"
+        >
+          <Text style={styles.backText}>Home</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Map */}
@@ -508,6 +538,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.stone,
   },
   headerSide: { width: 80 },
+  // Right-align the Home label in its fixed 80px slot so the header reads
+  // Back (left) · title (center) · Home (right) symmetrically.
+  headerSideRight: { alignItems: 'flex-end' },
   headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   backText: { color: colors.ashDim, fontSize: 15, fontFamily: fonts.body },
   headerTitle: { color: colors.parchment, fontSize: 16, fontFamily: fonts.name, letterSpacing: 0.3 },

@@ -757,13 +757,25 @@ async function forwardGeocode(locationStr, personName, dates) {
 
   // Cache lookup — if we already verified this person's grave at this cemetery, use it.
   // Cemetery name is the first comma-segment of locationStr (e.g. "Pacific View Memorial Park").
+  // The key includes the geoTokens (city/state) so same-named people in same-named
+  // cemeteries in different places don't collide onto one cached coordinate.
   const cemeteryNameForKey = locationStr.split(',')[0].trim();
-  const cacheKey = personName ? graveCacheKey(personName, cemeteryNameForKey, dates) : null;
+  const geoContextForKey = geoTokens.join('_');
+  const cacheKey = personName ? graveCacheKey(personName, cemeteryNameForKey, dates, geoContextForKey) : null;
   if (cacheKey) {
     const cached = readGraveCache(cacheKey);
+    // Defense-in-depth: a cached precise node must still sit inside the cemetery we
+    // just resolved for THIS location, or we drop it rather than serve a wrong pin.
     if (cached) {
-      console.log('💾 Cache hit for', cacheKey, '→', cached);
-      return { ...cached, isCemetery: true, lowConfidence };
+      const bb = cemeteryCoords.bbox ? cemeteryCoords.bbox.map(Number) : null;
+      const insideBbox = bb &&
+        cached.lat >= bb[0] - 0.01 && cached.lat <= bb[1] + 0.01 &&
+        cached.lng >= bb[2] - 0.01 && cached.lng <= bb[3] + 0.01;
+      if (!bb || insideBbox) {
+        console.log('💾 Cache hit for', cacheKey, '→', cached);
+        return { ...cached, isCemetery: true, lowConfidence };
+      }
+      console.log('💾 Cache hit REJECTED (outside resolved cemetery bbox):', cacheKey);
     }
   }
 

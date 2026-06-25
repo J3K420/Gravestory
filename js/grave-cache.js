@@ -5,12 +5,16 @@
 // correct pin even when OSM is temporarily down.
 const GRAVE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-function graveCacheKey(personName, cemeteryName, dates) {
+function graveCacheKey(personName, cemeteryName, dates, geoContext = '') {
   // Normalize to lowercase alphanumeric+underscore for a stable key
   const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   const yearMatch = (dates || '').match(/\d{4}/g) || [];
   const yearKey = yearMatch.slice(0, 2).join('-') || 'na';
-  return `grave_v2:${norm(personName)}:${norm(cemeteryName)}:${yearKey}`;
+  // geoContext (city/state tokens) is part of the key so two same-named people in
+  // same-named cemeteries in DIFFERENT cities/states don't collide onto one cached
+  // coordinate (serving a precise pin in the wrong place). v3 — bumped from v2, which
+  // omitted geoContext; stale v2 entries are never read and expire on their own TTL.
+  return `grave_v3:${norm(personName)}:${norm(cemeteryName)}:${norm(geoContext)}:${yearKey}`;
 }
 
 function readGraveCache(key) {

@@ -1070,7 +1070,11 @@ export default function CameraScreen({ navigation, route }) {
       // Wikidata burial coords are documented/confident, so a pin sourced from them
       // is NOT flagged — that's why famous library scans (e.g. Amy Winehouse) no
       // longer show the "approximate location" disclaimer.
-      const lowConfidence = (geoResult?.lowConfidence || (!gps && geoIsApproximate && !usedWikidataCoords)) || undefined;
+      // Both low-confidence sources require the ABSENCE of real GPS. A real EXIF/device
+      // fix places the pin at the user's actual position (refinedGps = gps wins above),
+      // so the AI bio-location's state guess can't make that pin "approximate" — gating
+      // the state-mismatch flag on !gps stops an accurate on-site pin being mislabelled.
+      const lowConfidence = (!gps && (geoResult?.lowConfidence || (geoIsApproximate && !usedWikidataCoords))) || undefined;
 
       // Read default visibility from user metadata
       const { data: { session } } = await supabase.auth.getSession();
@@ -1977,9 +1981,17 @@ function IlluminatedLedger({ stepIndex }) {
 }
 
 function extractExifGps(exif) {
-  if (!exif?.GPSLatitude || !exif?.GPSLongitude) return null;
+  // Guard against a MISSING component, not a falsy-zero one: latitude 0 (equator)
+  // or longitude 0 (prime meridian) is a valid coordinate, so `!value` would wrongly
+  // discard a real fix. Mirror media-gps.js: require both present and reject only the
+  // exact (0,0) null-island fix some cameras write when no GPS lock was acquired.
+  if (exif?.GPSLatitude == null || exif?.GPSLongitude == null) return null;
   const lat = exif.GPSLatitudeRef === 'S' ? -Math.abs(exif.GPSLatitude) : Math.abs(exif.GPSLatitude);
   const lng = exif.GPSLongitudeRef === 'W' ? -Math.abs(exif.GPSLongitude) : Math.abs(exif.GPSLongitude);
+  // Reject anything that didn't coerce to a real number (malformed/partial EXIF: ''
+  // → 0, NaN, etc.) so a bogus 0/NaN coordinate never reaches the pin.
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat === 0 && lng === 0) return null;
   return { lat, lng };
 }
 

@@ -540,8 +540,10 @@ export default function ResultScreen({ navigation, route }) {
         );
       }
 
-      // Strip transient pipeline-only fields before persisting.
-      const { _unsaved, _base64, _primaryName, ...clean } = story;
+      // Strip transient pipeline-only fields before persisting. `_unmapped` is a
+      // display-only flag the cemetery map adds to a story it couldn't geocode; it must
+      // never reach storage (it would double-count the row on a later map visit).
+      const { _unsaved, _base64, _primaryName, _unmapped, ...clean } = story;
       let saved = { ...clean, grave_id: graveId, marker_style: markerStyle };
 
       // If this story is saving straight to PUBLIC (default_visibility=public),

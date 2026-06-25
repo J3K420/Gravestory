@@ -158,6 +158,11 @@ export default function CemeteryMapScreen({ navigation, route }) {
   }
 
   const mapRef = useRef(null);
+  // Session-local cache of geocoded coords, keyed by story.timestamp. Stops a
+  // pull-to-refresh from re-rolling a GPS-less story's coordinate (and so the pin
+  // jumping). Lives only for this screen visit — never persisted (a geocoded
+  // centroid must not reach storage / grave-linking / the global map).
+  const geocodeMemo = useRef({});
   const [mappedStories, setMappedStories] = useState([]);
   const [geocoding, setGeocoding] = useState(true);
   const [selectedStory, setSelectedStory] = useState(null);
@@ -194,37 +199,68 @@ export default function CemeteryMapScreen({ navigation, route }) {
     // Pass the single OCR name + dates so forwardGeocode can try the named
     // grave-node search before settling for the cemetery centroid; centroid
     // fallbacks are flagged approximate so the pin shows the drag-to-correct hint.
+    //
+    // A story that has a location string but geocodes to nothing (forwardGeocode
+    // returns null for a too-vague location, or a transient Nominatim/Photon miss)
+    // is NOT dropped — it's kept as an `_unmapped` story so it stays visible in the
+    // bottom list (with the count split) and the user can still open it. Previously
+    // such a story silently vanished from BOTH the map and the list.
+    //
+    // We never persist a geocode into story.gps: a cemetery-CENTROID coordinate set
+    // as gps would feed findOrCreateGrave + the global map (gps-set is the trigger),
+    // polluting them with an approximate point. Instead a session-local memo
+    // (geocodeMemo) caches the first successful resolution per story for THIS screen
+    // visit, so a pull-to-refresh doesn't re-roll the coordinate (different best-match
+    // node, or centroid-vs-node after the grave-cache TTL) and make the pin jump.
+    // A story is EITHER mapped (has a coordinate) or _unmapped — never both. We clear
+    // any stale `_unmapped` on the placeable branches so a row that was unmappable on a
+    // prior visit (or a pre-fix poisoned save) can't be double-counted once it places.
     const resolved = [];
     for (const story of stories) {
       if (story.gps) {
-        resolved.push(story);
+        resolved.push(story._unmapped ? { ...story, _unmapped: undefined } : story);
       } else if (story.location) {
-        const searchName = story.graveData?.primary_name || story.name || null;
-        const coords = await forwardGeocode(story.location, searchName, story.dates);
+        const memoKey = story.timestamp;
+        let coords = memoKey != null ? geocodeMemo.current[memoKey] : null;
+        if (!coords) {
+          const searchName = story.graveData?.primary_name || story.name || null;
+          coords = await forwardGeocode(story.location, searchName, story.dates);
+          if (coords && memoKey != null) geocodeMemo.current[memoKey] = coords;
+        }
         if (coords) {
           resolved.push({
             ...story,
+            _unmapped: undefined,
             gps: { lat: coords.lat, lng: coords.lng },
             _lowConfidence: story._lowConfidence || coords.lowConfidence || coords.approximate === true || undefined,
           });
+        } else {
+          // Couldn't place it — keep it visible (list-only), no marker.
+          resolved.push({ ...story, _unmapped: true });
         }
       }
+      // A story with neither gps nor location can't be placed or even labelled by
+      // cemetery; it's intentionally omitted (nothing to show on a cemetery map).
     }
 
-    setMappedStories(spreadOverlappingPins(resolved));
+    // Markers need a coordinate; the list shows everything (mapped + unmapped).
+    const placeable = resolved.filter(s => s.gps);
+    setMappedStories([...spreadOverlappingPins(placeable), ...resolved.filter(s => s._unmapped)]);
     setGeocoding(false);
 
-    if (resolved.length === 0) return;
+    if (placeable.length === 0) return;
 
-    // Animate map to the appropriate position after geocoding
+    // Animate map to the appropriate position after geocoding. Only PLACEABLE stories
+    // (those with a coordinate) can frame the map — unmapped ones have no gps. A focus
+    // story that itself ended up unmapped falls through to no-op (nothing to frame).
     setTimeout(() => {
       if (!mapRef.current) return;
       const focusMapped = focusStory
-        ? resolved.find(s => s.timestamp === focusStory.timestamp)
+        ? placeable.find(s => s.timestamp === focusStory.timestamp)
         : null;
 
-      if (resolved.length === 1 || focusMapped) {
-        const target = focusMapped || resolved[0];
+      if (placeable.length === 1 || focusMapped) {
+        const target = focusMapped || placeable[0];
         mapRef.current.animateToRegion(
           {
             latitude: target.gps.lat,
@@ -236,11 +272,34 @@ export default function CemeteryMapScreen({ navigation, route }) {
         );
       } else {
         mapRef.current.fitToCoordinates(
-          resolved.map(s => ({ latitude: s.gps.lat, longitude: s.gps.lng })),
+          placeable.map(s => ({ latitude: s.gps.lat, longitude: s.gps.lng })),
           { edgePadding: { top: 60, right: 40, bottom: 260, left: 40 }, animated: true }
         );
       }
     }, 300);
+  }
+
+  // Strip the DISPLAY-ONLY enrichment this screen adds before handing a story to
+  // navigation. resolveStories attaches `gps` (often a cemetery centroid) and
+  // `_lowConfidence` to GPS-less stories just to draw a marker, and `_unmapped` to
+  // ones that couldn't be placed. For an UNSAVED story those must NOT ride along to
+  // ResultScreen.handleSave — a centroid `gps` there would stake the canonical grave +
+  // global-map pin at the centroid (the exact pollution we avoid by not persisting
+  // geocodes). For a SAVED story the centroid gps is harmless (handleSave early-returns
+  // on !_unsaved) but `_unmapped` must never reach storage, so always drop it.
+  function storyForNav(story) {
+    if (!story) return story;
+    const { _unmapped, ...rest } = story;
+    // Did WE synthesize this story's gps? It was gps-less on load and we geocoded it,
+    // so a memo entry exists for its timestamp. (A story that arrived with REAL gps has
+    // no memo entry — it never entered the geocode branch.) For an UNSAVED such story,
+    // drop the synthesized gps/_lowConfidence so handleSave can't persist the centroid
+    // into grave-linking / the global map.
+    const synthesized = story.timestamp != null && !!geocodeMemo.current[story.timestamp];
+    if (story._unsaved && synthesized) {
+      return { ...rest, gps: undefined, _lowConfidence: undefined };
+    }
+    return rest;
   }
 
   function flyToGrave(story) {
@@ -330,17 +389,24 @@ export default function CemeteryMapScreen({ navigation, route }) {
     );
   }
 
+  const mappedCount = mappedStories.filter(s => s.gps).length;
+  const unmappedCount = mappedStories.filter(s => s._unmapped).length;
   const panelTitle = geocoding
     ? 'Locating graves…'
     : mappedStories.length === 0
       ? 'No location data yet'
-      : `${mappedStories.length} grave${mappedStories.length !== 1 ? 's' : ''} mapped`;
+      : mappedCount === 0
+        // Everything had a location string but nothing could be placed.
+        ? `${unmappedCount} grave${unmappedCount !== 1 ? 's' : ''} without a map location`
+        : `${mappedCount} grave${mappedCount !== 1 ? 's' : ''} mapped` +
+          (unmappedCount > 0 ? ` · ${unmappedCount} without location` : '');
 
   // Any pin the user hasn't yet placed exactly. GPS drops pins near the grave but
   // rarely on it (often 10–30 m off, worse under tree cover), so dragging each pin
   // onto its real grave is the EXPECTED step — surfaced as an obvious prompt the
   // moment the map opens, not buried in a per-pin callout.
-  const unplacedCount = mappedStories.filter(s => !s.userCorrected).length;
+  // Only PLACED-but-unconfirmed pins count — an unmapped story has no marker to drag.
+  const unplacedCount = mappedStories.filter(s => s.gps && !s.userCorrected).length;
   // Hidden while a callout is open (selectedStory) — they share the top of the map,
   // and the open callout already carries its own per-pin "place this pin" block.
   const showPlaceHint = !geocoding && unplacedCount > 0 && !placeHintDismissed && !selectedStory;
@@ -381,7 +447,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
           initialRegion={DEFAULT_REGION}
           onPress={() => { setSelectedStory(null); setBioExpanded(false); }}
         >
-          {mappedStories.map((story, i) => (
+          {mappedStories.filter(s => s.gps).map((story, i) => (
             <GraveMarker
               // `userCorrected` is in the key so placing a pin REMOUNTS the marker:
               // react-native-maps only re-rasterizes a custom marker while
@@ -505,7 +571,7 @@ export default function CemeteryMapScreen({ navigation, route }) {
               )}
               <TouchableOpacity
                 style={[styles.calloutBtn, styles.calloutBtnPrimary]}
-                onPress={() => { setSelectedStory(null); setBioExpanded(false); navigation.navigate('Result', { story: selectedStory }); }}
+                onPress={() => { setSelectedStory(null); setBioExpanded(false); navigation.navigate('Result', { story: storyForNav(selectedStory) }); }}
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel="Open full biography"
@@ -534,19 +600,25 @@ export default function CemeteryMapScreen({ navigation, route }) {
           ) : (
             mappedStories.map((story, i) => (
               <View key={story.timestamp ?? i} style={styles.graveItem}>
-                {/* Tap row → fly to marker on map */}
-                <TouchableOpacity style={styles.graveItemMain} onPress={() => flyToGrave(story)} activeOpacity={0.7}>
+                {/* Tap row → fly to marker (mapped) or open the story (unmapped, no marker) */}
+                <TouchableOpacity
+                  style={styles.graveItemMain}
+                  onPress={() => story._unmapped ? navigation.navigate('Result', { story: storyForNav(story) }) : flyToGrave(story)}
+                  activeOpacity={0.7}
+                >
                   <Text style={styles.graveName} numberOfLines={1}>
                     {story.name || 'Unknown'}
                   </Text>
-                  {!!story.dates && (
-                    <Text style={styles.graveDates}>{story.dates}</Text>
+                  {story._unmapped ? (
+                    <Text style={styles.graveNoLocation}>⚠ No map location — open to view</Text>
+                  ) : (
+                    !!story.dates && <Text style={styles.graveDates}>{story.dates}</Text>
                   )}
                 </TouchableOpacity>
                 {/* Story button → open result screen */}
                 <TouchableOpacity
                   style={styles.storyBtn}
-                  onPress={() => navigation.navigate('Result', { story })}
+                  onPress={() => navigation.navigate('Result', { story: storyForNav(story) })}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.storyBtnText}>Story →</Text>
@@ -692,6 +764,7 @@ const styles = StyleSheet.create({
   graveItemMain: { flex: 1 },
   graveName: { color: colors.parchment, fontSize: 14, fontFamily: fonts.name },
   graveDates: { color: colors.ash, fontSize: 12, fontFamily: fonts.bodyItalic, marginTop: 1 },
+  graveNoLocation: { color: colors.ashDim, fontSize: 11.5, fontFamily: fonts.body, marginTop: 2 },
 
   storyBtn: {
     borderWidth: 1, borderColor: colors.line,

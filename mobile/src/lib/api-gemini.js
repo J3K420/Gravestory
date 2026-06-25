@@ -98,7 +98,18 @@ Return only JSON.`;
     return;
   }
 
-  const text = data.candidates[0].content.parts[0].text;
+  // Verify must FAIL OPEN on its own failures — only an explicit is_gravestone===false
+  // rejects. A safety-blocked / empty Gemini response ({ promptFeedback: { blockReason } }
+  // with no candidates, or a SAFETY finishReason with no content.parts) carries no
+  // data.error, so without this guard the unguarded candidates[0]...text read throws a
+  // TypeError that surfaces as the generic "Analysis Failed" screen — failing CLOSED and
+  // hard-blocking a legitimate gravestone photo. Proceed to OCR instead, like the
+  // data.error branch above and the three sibling Gemini calls in this file. [search-audit #5]
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    console.warn('verifyIsGravestone — no candidate text (blocked/empty response), proceeding anyway.');
+    return;
+  }
   const parsed = safeParseJSON(text, { is_gravestone: true, confidence: 'low', reason: '' });
 
   if (parsed.is_gravestone === false) {

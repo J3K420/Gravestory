@@ -6,13 +6,21 @@
 - **Always commit and push at the end of every session.** Do not leave work uncommitted.
 - **Mobile JS changes ship via OTA to the `production` channel** (where live testers are): `npx eas update --branch production --environment production`. Verify with `eas channel:list` before publishing. Native-module changes need a new build, not an OTA.
 - **Any web change must bump the `CACHE` version in `sw.js`** (increment the `gravestory-vN` number at the top of `sw.js`) or users keep the old cached shell.
-- Web and mobile are parallel codebases. Search/biography logic lives in BOTH `js/` and `mobile/src/lib/` — apply behavioral changes to both unless explicitly web- or mobile-only.
+- Web and mobile are parallel codebases. Search/biography logic lives in BOTH `js/` and `mobile/src/lib/` — apply behavioral changes to both unless explicitly web- or mobile-only. **⚠️ Provisional — see "Planned direction: web → app landing page" below: the owner intends to reduce the web app to a thin marketing/SEO page, so before porting non-trivial pipeline logic to web, confirm whether that web path will survive the pivot. Don't sink effort into web pipeline parity that's about to be deleted.**
 
 ## What this app does
 
 GraveStory is a mobile-first PWA (+ Expo Android app) for cemetery visitors. The user photographs a gravestone; the app produces a biographical story about the person buried there.
 
 **Core flow:** photo → EXIF/device GPS → Gemini gravestone verification → Gemini OCR (structured JSON) → parallel research (Tavily, WikiTree, Wikidata, Chronicling America, Internet Archive, Wikipedia) → Nominatim/Overpass geocoding → Gemini biography → save / share / per-cemetery Leaflet map → optional public sharing on community global map.
+
+## Planned direction: web → app landing page (not yet scheduled)
+
+The owner intends, at some point, to **strip the full web app (PWA scan pipeline) down to a thin landing page** whose job is to point visitors to the native apps on the **Google Play Store (Android)** and the **Apple App Store (iOS)**. The interactive scan/research pipeline becomes **mobile-only**; the web app is no longer a co-equal product surface.
+
+- **Likely retained on web:** a public **community global map** — kept partly as a real feature and partly as an **SEO surface** (indexable cemetery/biography pages to drive organic discovery and app installs). The exact scope (which bio content is indexable, how pages are generated) is undecided.
+- **Implication for the parity rule above:** this pivot weakens the "apply behavioral changes to BOTH web and mobile" rule. Most `js/` pipeline code (OCR, Tavily/WikiTree/Wikidata/Wikipedia research, biography generation, save/sync) is a candidate for **deletion**, not continued parity. **Before investing effort porting non-trivial logic to web, ask whether that code survives the pivot.** The global-map + public-bio-serving paths are the parts most likely to stay (they feed the SEO/landing page), so parity still matters THERE.
+- **Status:** a stated intention, **not yet planned or scheduled** — no timeline, no design. Treat it as directional context for prioritization decisions, not an active task. Confirm with the owner before acting on it.
 
 ---
 

@@ -68,15 +68,65 @@ function imageFilenameMatchesPerson(imageUrl, queriedNameSet) {
     // Strip Wikimedia thumbnail size prefix ("800px-OriginalName" → "OriginalName")
     const stripped = file.replace(/^\d+px-/, '');
     const tokens = stripped.split(/[\s_\-.()]+/).filter(t => t.length > 1);
+
+    // EPONYM / OBJECT guard: a thing named AFTER the person (a ship, school, bridge,
+    // award, crater…) carries the person's full name verbatim, so the exact-token path
+    // below would happily accept "USS_George_Washington.jpg" as George Washington's
+    // portrait. Reject outright when the filename names such an object. [search-audit F5]
+    const EPONYM = new Set([
+      'uss','hms','ss','rms','class','submarine','carrier','frigate','destroyer','battleship',
+      'school','university','college','academy','institute','library','hospital','clinic',
+      'bridge','tunnel','highway','road','street','avenue','airport','station','terminal',
+      'building','hall','tower','center','centre','stadium','arena','theatre','theater',
+      'park','garden','square','plaza','dam','reservoir','lake','mount','mountain','river',
+      'county','township','village','statue','bust','monument','plaque','mural','fountain',
+      'award','medal','prize','trophy','cup','stamp','banknote','coin','crater','asteroid',
+      'comet','glacier','locomotive','aircraft','airplane','tank','rocket','species','genus',
+    ]);
+    // Reject on an eponym token ONLY when it isn't part of the person's own name —
+    // otherwise a legitimate surname that happens to be an eponym word (Rosa Parks,
+    // a "Hall"/"Lake"/"Rivers"/"Mount" surname) would have their own portrait rejected.
+    // queriedNameSet holds the lowercased name tokens. [search-audit F5]
+    if (tokens.some(t => EPONYM.has(t) && !queriedNameSet.has(t))) return false;
+
     const nameLike = tokens.filter(t => !GENERIC.has(t) && !/^\d+$/.test(t) && t.length >= 3);
 
     if (nameLike.length === 0) return true;
 
-    // Use substring containment in both directions so CamelCase tokens like
-    // "houdinichains" or "harryhoudini" still match nameSet entries "houdini"/"harry".
+    // A single shared name token is too weak when the FILENAME offers more to match
+    // against — "washington" alone matches many namesake people/objects. Require ≥2
+    // distinct queried tokens to match only when BOTH the person's name has ≥2
+    // significant tokens AND the filename carries ≥2 name-like tokens to match them.
+    // That still rejects a shared-surname collision ("Robert_Washington_athlete" for
+    // George Washington) but does NOT reject a legitimate surname-only lead thumbnail
+    // ("Lincoln.jpg"), which has only one token to offer. Mononyms keep single-match.
+    // The eponym guard above is the primary defense for ship/monument/award filenames;
+    // this count rule is the residual catch when no eponym keyword is present. [search-audit F5]
+    const requiredMatches = (queriedNameSet.size >= 2 && nameLike.length >= 2) ? 2 : 1;
+    const matchedNames = new Set();
+
+    // Exact token match is the safe path (a person's real surname matches their own
+    // portrait regardless of length). For the CamelCase-glue case ("harryhoudini" /
+    // "houdinichains" should still match "houdini"), allow containment ONLY when the
+    // shorter operand is a meaningful length AND sits at a boundary of the longer one.
+    // The old unbounded bidirectional substring let a short token like "lee" accept a
+    // wrong-person image whose filename merely contained it ("Leeson", "Mayflower",
+    // "wushu") — exactly the wrong-person leak this guard exists to block. [search-audit #2]
     for (const t of nameLike) {
       for (const name of queriedNameSet) {
-        if (t === name || t.includes(name) || name.includes(t)) return true;
+        let hit = false;
+        if (t === name) {
+          hit = true;
+        } else {
+          const [shortTok, longTok] = t.length <= name.length ? [t, name] : [name, t];
+          if (shortTok.length >= 4 && (longTok.startsWith(shortTok) || longTok.endsWith(shortTok))) {
+            hit = true;
+          }
+        }
+        if (hit) {
+          matchedNames.add(name);
+          if (matchedNames.size >= requiredMatches) return true;
+        }
       }
     }
     return false;

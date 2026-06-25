@@ -757,15 +757,38 @@ export default function CameraScreen({ navigation, route }) {
         // the Wikipedia lookup matches the right person, not the primary's dates.
         const deceasedSubjects = Array.isArray(graveData.subjects) ? graveData.subjects.filter(s => s && s.name) : [];
         const isMulti = deceasedSubjects.length > 1 || (graveData.multiple_subjects === true && graveData.names?.length > 1);
+        // When the isMulti path falls back to graveData.names (multiple_subjects===true
+        // but a thin subjects[] array), those entries are RAW role-tagged OCR strings —
+        // "George (deceased)", "Lizzie Knuver (wife)". Passing them unstripped into
+        // WikiTree/Wikipedia issues a polluted query (LastName "(wife)") AND researches a
+        // LIVING relative as if deceased. searchForPerson (api-tavily.js) already strips
+        // these; do the same here: drop entries whose role tag marks a living relation,
+        // and strip the parenthetical from the rest. [search-audit #3]
+        const LIVING_ROLE = /\((?:[^)]*\b(?:wife|husband|spouse|son|daughter|mother|father|child|children|sister|brother|survived|living)\b[^)]*)\)/i;
+        const cleanResearchName = n => (n || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+        const _cleanedMultiNames = (Array.isArray(graveData.names) ? graveData.names : [])
+          .filter(n => n && !LIVING_ROLE.test(n))
+          .map(cleanResearchName)
+          .filter(Boolean);
+        // If filtering left nothing (every name was a living relative, or names was
+        // malformed), fall back to the deceased's own name so the real subject is still
+        // researched — never research zero people on an isMulti stone. [search-audit #3]
+        const namesForResearch = _cleanedMultiNames.length > 0 ? _cleanedMultiNames : [primaryOcrName];
         const researchTargets = deceasedSubjects.length > 1
           ? deceasedSubjects.slice(0, 3).map(s => ({ name: s.name, dates: [s.birth_date, s.death_date].filter(Boolean).join(' ') }))
-          : (isMulti ? graveData.names.slice(0, 3) : [primaryOcrName]).map(n => ({ name: n, dates: datesStr }));
+          : (isMulti ? namesForResearch.slice(0, 3) : [primaryOcrName]).map(n => ({ name: n, dates: datesStr }));
         const wikiNames = researchTargets.map(t => t.name);
 
         // For multi-person stones, search WikiTree for each of the first 2 deceased people.
+        // Each target carries its OWN dates: top-level graveData.birth_date/death_date
+        // reflect only the PRIMARY person, so spreading them onto every WikiTree search
+        // (below) would filter+score+floor-check a secondary subject against the wrong
+        // years — a namesake with the primary's years would beat the real person and
+        // pass the credibility floor. Thread per-subject dates the way researchTargets
+        // already does for the Wikipedia path. [search-audit #1]
         const wikiTreeTargets = deceasedSubjects.length > 1
-          ? deceasedSubjects.slice(0, 2).map(s => s.name)
-          : (isMulti ? graveData.names.slice(0, 2) : [primaryOcrName]);
+          ? deceasedSubjects.slice(0, 2).map(s => ({ name: s.name, birth_date: s.birth_date, death_date: s.death_date }))
+          : (isMulti ? namesForResearch.slice(0, 2) : [primaryOcrName]).map(n => ({ name: n }));
 
         // Fetch portraits for every person on the stone (wikiNames), not just the
         // primary name — on multi-person stones the primary subject (e.g. Cynthia Levy)
@@ -777,7 +800,16 @@ export default function CameraScreen({ navigation, route }) {
         // stone-only / free-source bio instead of hanging.
         const legs = [
           searchForPerson(graveData, locationHint, cemeteryName),
-          ...wikiTreeTargets.map(name => searchWikiTree({ ...graveData, primary_name: name }, locationHint)),
+          // Override primary_name AND (when the subject carries its own) birth/death
+          // dates, so a secondary subject is searched against THEIR years, not the
+          // primary's. undefined per-subject dates leave the spread graveData value
+          // intact (single-subject / isMulti-via-names path is unchanged). [search-audit #1]
+          ...wikiTreeTargets.map(t => searchWikiTree({
+            ...graveData,
+            primary_name: t.name,
+            ...(t.birth_date != null ? { birth_date: t.birth_date } : {}),
+            ...(t.death_date != null ? { death_date: t.death_date } : {}),
+          }, locationHint)),
           // Wikidata: high confidence always; medium confidence only when a death
           // year is present. queryWikidata's death-year proximity filter (rejects
           // candidates >5yr off, returns null if all rejected) guards against

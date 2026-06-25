@@ -78,8 +78,17 @@ async function ocrWindow(identifier, surname, firstName) {
   try {
     const res = await fetch(url, { headers: { 'Accept': 'text/plain' } });
     if (!res.ok) return null;
+    // RN's fetch has no ReadableStream, so we must read the whole body with .text() —
+    // the Content-Length check is the ONLY guard against buffering a huge OCR file.
+    // Treat a missing/zero Content-Length as UNKNOWN size and refuse: the old
+    // `if (len && …)` let a headerless (e.g. chunked) response fall through to
+    // buffering the entire file, defeating the cap this guard exists to enforce.
+    // archive.org djvu.txt for full books can be hundreds of MB. [search-audit #4]
     const len = parseInt(res.headers.get('content-length') || '0', 10);
-    if (len && len > IA_MAX_OCR_BYTES) return null; // too big to buffer on-device
+    // Refuse unless the header proves the file is within the cap. A missing header
+    // (len 0), a non-numeric header (NaN), and a negative header (`-5 > CAP` is false,
+    // which would otherwise fall through and buffer) all count as "size unknown". [search-audit #4]
+    if (!Number.isFinite(len) || len <= 0 || len > IA_MAX_OCR_BYTES) return null;
 
     const text = await res.text();
     const clean = text.replace(/\s+/g, ' ').trim();

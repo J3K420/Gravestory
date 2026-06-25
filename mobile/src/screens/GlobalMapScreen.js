@@ -7,6 +7,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import MapView, { Marker } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
 import { rowToStory } from '../lib/sync';
+import { spreadOverlappingPins } from '../lib/map-utils';
+import { readGlobalMapCache, writeGlobalMapCache, resetGlobalMapCache } from '../lib/global-map-cache';
 import { useRefresh } from '../lib/use-refresh';
 import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
@@ -14,7 +16,6 @@ import { Globe } from '../components/Icons';
 import { GraveMarkerSvg } from '../components/GraveMarkers';
 
 const DEFAULT_REGION = { latitude: 30, longitude: -20, latitudeDelta: 110, longitudeDelta: 130 };
-const CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Renders a grave's first-wins chosen marker on the global map (the same 20
 // gold glyphs as the cemetery map). Not draggable. tracksViewChanges starts
@@ -44,10 +45,6 @@ function GlobalGraveMarker({ story, onPress }) {
     </Marker>
   );
 }
-
-let _cache = null;
-let _cacheTime = 0;
-let _cacheUserId = null;
 
 export default function GlobalMapScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -80,8 +77,9 @@ export default function GlobalMapScreen({ navigation }) {
 
   async function fetchStories(currentUser) {
     const cacheKey = currentUser ? currentUser.id : 'guest';
-    if (_cache && _cacheUserId === cacheKey && Date.now() - _cacheTime < CACHE_TTL_MS) {
-      setStories(_cache);
+    const cached = readGlobalMapCache(cacheKey);
+    if (cached) {
+      setStories(cached);
       setLoading(false);
       return;
     }
@@ -116,21 +114,24 @@ export default function GlobalMapScreen({ navigation }) {
         deduped.push(s);
       }
 
-      _cache = deduped;
-      _cacheTime = Date.now();
-      _cacheUserId = cacheKey;
-      setStories(deduped);
+      // Fan out exact-overlap pins (centroid clusters) the SAME way the cemetery map
+      // does, so a grave renders at the same spot on both maps. Deterministic per
+      // grave, so it's stable across fetches and matches the other screen.
+      const spread = spreadOverlappingPins(deduped);
+
+      writeGlobalMapCache(cacheKey, spread);
+      setStories(spread);
       setLoading(false);
-      if (deduped.length > 0) {
+      if (spread.length > 0) {
         setTimeout(() => {
-          if (deduped.length === 1) {
+          if (spread.length === 1) {
             mapRef.current?.animateToRegion(
-              { latitude: deduped[0].gps.lat, longitude: deduped[0].gps.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 },
+              { latitude: spread[0].gps.lat, longitude: spread[0].gps.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 },
               800
             );
           } else {
             mapRef.current?.fitToCoordinates(
-              deduped.map(s => ({ latitude: s.gps.lat, longitude: s.gps.lng })),
+              spread.map(s => ({ latitude: s.gps.lat, longitude: s.gps.lng })),
               { edgePadding: { top: 60, right: 40, bottom: 280, left: 40 }, animated: true }
             );
           }
@@ -144,7 +145,7 @@ export default function GlobalMapScreen({ navigation }) {
   }
 
   const { refreshControl } = useRefresh(async () => {
-    _cache = null;
+    resetGlobalMapCache();
     const { data: { session } } = await supabase.auth.getSession();
     await fetchStories(session?.user ?? null);
   });

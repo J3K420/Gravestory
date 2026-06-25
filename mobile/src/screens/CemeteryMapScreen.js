@@ -8,9 +8,11 @@ import MapView, { Marker } from 'react-native-maps';
 import { GraveMarkerSvg } from '../components/GraveMarkers';
 import { MapStack } from '../components/Icons';
 import { loadStories, saveStories } from '../lib/storage';
-import { cloudUpdateStory, updateGraveLocation } from '../lib/sync';
+import { cloudUpdateStory, updateGraveLocation, findOrCreateGrave } from '../lib/sync';
+import { resetGlobalMapCache } from '../lib/global-map-cache';
 import { supabase } from '../lib/supabase';
 import { forwardGeocode } from '../lib/api-nominatim';
+import { spreadOverlappingPins } from '../lib/map-utils';
 import { useRefresh } from '../lib/use-refresh';
 import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
@@ -102,26 +104,10 @@ const markerStyles = StyleSheet.create({
   },
 });
 
-// Stories that all fell back to the same cemetery-center coordinate render as
-// one stacked marker — the pins underneath are invisible and untappable. Fan
-// exact-overlap groups out in a small ring (~7 m per step) so every grave stays
-// visible. Display-only: the saved gps is untouched, and drag-to-correct still
-// persists wherever the user drops the pin.
-function spreadOverlappingPins(stories) {
-  const seen = {};
-  return stories.map(story => {
-    if (!story.gps) return story;
-    const key = `${story.gps.lat.toFixed(5)},${story.gps.lng.toFixed(5)}`;
-    const n = seen[key] = (seen[key] === undefined ? 0 : seen[key] + 1);
-    if (n === 0) return story;
-    const angle = n * (Math.PI / 4);
-    const ring = 0.00006 * Math.ceil(n / 8); // ~6.7 m of latitude per ring
-    return {
-      ...story,
-      gps: { lat: story.gps.lat + ring * Math.cos(angle), lng: story.gps.lng + ring * Math.sin(angle) },
-    };
-  });
-}
+// spreadOverlappingPins moved to ../lib/map-utils so the GLOBAL map fans coincident
+// pins identically — otherwise the same grave drew at different spots on the two maps
+// (a corrected pin looked "right here, wrong there"). See map-utils for the
+// determinism note (stable per-grave ring slot).
 
 // Geographic center of the contiguous US — used before any graves are located
 const DEFAULT_REGION = {
@@ -372,17 +358,54 @@ export default function CemeteryMapScreen({ navigation, route }) {
             const uid = session?.user?.id ?? null;
             const allStories = await loadStories(uid);
             const idx = allStories.findIndex(s => s.timestamp === story.timestamp);
+
+            // Backfill a missing grave link BEFORE persisting. Without a grave_id the
+            // correction never reaches the canonical graves row, so the global map's
+            // RPC (which serves the corrected coordinate FROM that row) keeps showing
+            // the stale per-story coordinate — the "right on my map, wrong on global"
+            // bug. Mirrors ResultScreen.handlePickMarker's self-heal.
+            //
+            // CRITICAL: search at the story's ORIGINAL coordinate, not the DRAGGED one.
+            // find_or_create_grave dedups within a ~20 m box; if we searched at newGps
+            // after a long drag (common in a big cemetery), the existing grave could sit
+            // outside that box and we'd MINT A DUPLICATE at the dragged spot. Searching
+            // at story.gps (where the grave actually is) relinks the existing row, and
+            // updateGraveLocation below then moves it to newGps.
+            let graveId = story.grave_id || null;
+            if (!graveId && session?.user) {
+              const primaryName = story.graveData?.primary_name || story._primaryName || story.name || '';
+              const lookupGps = story.gps || newGps; // original position; newGps only if somehow absent
+              if (primaryName) {
+                graveId = await findOrCreateGrave(
+                  primaryName, lookupGps.lat, lookupGps.lng, story.is_public, story.marker_style,
+                );
+              }
+            }
+            // Never downgrade an existing link: keep whatever grave_id the story had if
+            // the backfill produced nothing.
+            updated.grave_id = graveId || story.grave_id || undefined;
+
             if (idx >= 0) {
-              allStories[idx] = { ...allStories[idx], gps: newGps, userCorrected: true, _lowConfidence: false };
+              allStories[idx] = {
+                ...allStories[idx],
+                gps: newGps, userCorrected: true, _lowConfidence: false,
+                grave_id: graveId || allStories[idx].grave_id,
+              };
               await saveStories(allStories, uid);
             }
             if (session?.user) {
               await cloudUpdateStory(updated, session.user);
             }
-            // Propagate correction to the canonical grave pin (first correction wins)
-            if (story.grave_id) {
-              await updateGraveLocation(story.grave_id, newGps.lat, newGps.lng);
+            // Propagate the correction to the canonical grave row so the global map's
+            // RPC serves it. updateGraveLocation moves graves.lat/lng + sets
+            // user_corrected. (Migration 024 lets the SAME user re-correct an already-
+            // corrected grave — refinement drags used to silently no-op at the DB.)
+            if (graveId) {
+              await updateGraveLocation(graveId, newGps.lat, newGps.lng);
             }
+            // Drop the community-map cache so a return there refetches the corrected
+            // pin immediately instead of waiting out the 5-min TTL.
+            resetGlobalMapCache();
           },
         },
       ]

@@ -97,10 +97,18 @@ async function handleMarkerDragEnd(marker, story) {
     savedStories[idx]._lowConfidence = false;
     await persistUpdate(savedStories[idx]);
   }
-  // 2. Write to the verified-grave cache with max score so it beats future Overpass results
+  // 2. Write to the verified-grave cache with max score so it beats future Overpass results.
+  // The geoContext (city/state tokens) MUST be derived exactly as forwardGeocode does, or
+  // the v3 key written here won't match the key forwardGeocode reads with — and a different
+  // scan of the same grave could never reuse this user correction via the cache.
   if (story.name && story.location) {
     const cemeteryNameForKey = story.location.split(',')[0].trim();
-    const key = graveCacheKey(story.name, cemeteryNameForKey, story.dates);
+    const geoContextForKey = story.location.split(',').map(p => p.trim()).filter(Boolean)
+      .slice(1)
+      .map(p => p.toLowerCase())
+      .filter(p => p.length >= 3 && !['usa', 'us', 'united states'].includes(p))
+      .join('_');
+    const key = graveCacheKey(story.name, cemeteryNameForKey, story.dates, geoContextForKey);
     writeGraveCache(key, { lat: newLat, lng: newLng }, 'user-corrected', 999);
   }
   // 3. Update the marker's popup to show the corrected badge

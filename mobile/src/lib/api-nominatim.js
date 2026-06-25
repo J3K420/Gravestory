@@ -154,11 +154,23 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
   if (!cemeteryCoords) return null;
 
   // ── Grave cache lookup ────────────────────────────────────────────
+  // Key includes the geoTokens (city/state) so same-named people in same-named
+  // cemeteries in different places don't collide onto one cached coordinate.
   const cemeteryNameForKey = locationStr.split(',')[0].trim();
-  const cacheKey = personName ? graveCacheKey(personName, cemeteryNameForKey, dates) : null;
+  const geoContextForKey = geoTokens.join('_');
+  const cacheKey = personName ? graveCacheKey(personName, cemeteryNameForKey, dates, geoContextForKey) : null;
   if (cacheKey) {
     const cached = await readGraveCache(cacheKey);
-    if (cached) return { ...cached, isCemetery: true, lowConfidence };
+    // Defense-in-depth: a cached precise node must still sit inside the cemetery we
+    // just resolved for THIS location. If it doesn't (a key collision slipped through,
+    // or the cemetery moved/was re-resolved), drop it rather than serve a wrong pin.
+    if (cached) {
+      const bb = cemeteryCoords.bbox ? cemeteryCoords.bbox.map(Number) : null;
+      const insideBbox = bb &&
+        cached.lat >= bb[0] - 0.01 && cached.lat <= bb[1] + 0.01 &&
+        cached.lng >= bb[2] - 0.01 && cached.lng <= bb[3] + 0.01;
+      if (!bb || insideBbox) return { ...cached, isCemetery: true, lowConfidence };
+    }
   }
 
   // ── Grave name search within cemetery area ───────────────────────
@@ -182,7 +194,14 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
       const [s, n, w, e] = cemeteryCoords.bbox.map(Number);
       const pad = 0.002;
       const { lat: cLat, lng: cLng } = cemeteryCoords;
-      const threshold = Math.max(nameTokens.length === 1 ? 1 : 2, Math.ceil(nameTokens.length * 0.75));
+      // Require a 100% name-token match. Both passes below (Nominatim viewbox, Photon)
+      // are UNtagged — Overpass is blocked on mobile, so unlike web there is no
+      // tag-filtered pass that earns the looser 75% bar. Untagged bbox nodes are
+      // arbitrary named features (roads, buildings), so accepting a partial match would
+      // place — and 30-day-cache — a precise-looking pin on the wrong feature. This
+      // mirrors web forwardGeocode, which uses nameTokens.length (100%) for its untagged
+      // pass and reserves the 75% threshold for the tagged-Overpass pass mobile lacks.
+      const threshold = nameTokens.length;
 
       const inBox = (lat, lon) =>
         lat >= s - pad && lat <= n + pad && lon >= w - pad && lon <= e + pad;

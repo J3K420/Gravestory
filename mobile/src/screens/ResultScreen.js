@@ -908,8 +908,11 @@ export default function ResultScreen({ navigation, route }) {
       setStory(synced);
       updated.id = synced.id; // keep the local ref's id for the stake call below
     }
-    // Stake this grave's permanent global-map pin (first-wins, NULL-guarded
-    // server-side). No-ops if already staked or the story has no grave_id.
+    // Stake this grave's global-map pin. First-wins against strangers, but the
+    // original staker (this owner) can re-pick freely — migration 025 added
+    // owner-aware re-staking, so a SECOND marker change now propagates to the
+    // community map instead of silently no-opping. No-ops only for a stranger
+    // re-picking an owned grave, or when the story has no grave_id.
     if (updated.grave_id && user) setGraveMarker(updated.grave_id, styleId);
     setSavingMarker(false);
   }

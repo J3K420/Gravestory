@@ -314,11 +314,12 @@ export async function findOrCreateGrave(name, lat, lng, isPublic = false, marker
   }
 }
 
-// Stakes a grave's permanent global-map marker, first-wins. The RPC only
-// writes when graves.marker_style is still NULL, so the first user to pick
-// wins forever; later pickers and location corrections no-op. Non-fatal.
-// Used when the marker is changed AFTER the grave already exists (the user
-// re-picks on a saved story).
+// Stakes a grave's global-map marker. First-wins against STRANGERS, but the
+// ORIGINAL staker can re-pick their own pin (migration 025 added owner-aware
+// re-staking: the RPC writes when the grave is unstaked, owned-by-nobody-yet
+// (legacy), or owned by the caller). A stranger re-picking an owned grave still
+// no-ops. Non-fatal. Used when the marker is changed AFTER the grave already
+// exists (the user re-picks on a saved story).
 export async function setGraveMarker(graveId, styleId) {
   if (!graveId || !styleId) return;
   try {

@@ -1,0 +1,29 @@
+Q1) How did you recruit users for your closed test?
+We recruited through a dedicated Android-testing community whose members opt in for the full 14-day period, plus a few friends who installed and tried the app. Together this gave us enough engaged testers to cover the core flow on real devices throughout the window.
+
+Q2) How easy was it to recruit testers for your app?
+Reasonably easy. A tester community filled most slots quickly and friends covered the rest. The harder part was sustaining active engagement across the full 14 days, which we managed by keeping testers updated as we shipped fixes.
+
+Q3) Describe the engagement you received from testers.
+Testers opened the app across multiple sessions on real devices, running the full flow: photographing real gravestones, generating biographies, viewing them on the cemetery map, correcting pins, and using the community map. Outdoor field use surfaced real GPS and accuracy issues we then fixed.
+
+Q4) Provide a summary of the feedback you received, and how you collected it.
+Collected via a written tester report and direct messages. Testers reported grave pins landing ~20m off outdoors, and a corrected pin reverting after a marker pick. They also suggested feature-focused store screenshots and an in-app rating option. We fixed the bugs and acted on the suggestions.
+
+Q5) Who is the intended audience for your app?
+GraveStory is for genealogists, family historians, and anyone visiting cemeteries to research or remember the deceased - generally an adult audience, given the subject matter (death, historical records) and AI-generated biographical content.
+
+Q6) Describe how your app provides value to the users.
+GraveStory turns a gravestone photo into a source-cited biography of the person buried there. It reads the inscription and researches public records (WikiTree, Wikidata, Wikipedia, newspaper archives). It uses the photo's GPS to identify the cemetery, helping disambiguate names and find records.
+
+Q7) How many installs do you expect in your first year?
+1k - 10k.
+
+Q8) What changes did you make based on your closed test?
+We shipped several OTA updates during the test. From tester reports: a drag-to-place pin prompt and badge after pins landed ~20m off, and a fix for a marker pick reverting a corrected pin. We also added an in-app rating button, new store screenshots, and research-accuracy and privacy improvements.
+
+Q9) How did you decide that your app is ready for production?
+The 14-day test ran the full flow on real devices outdoors with no crashes, and we fixed every issue it surfaced - especially GPS accuracy. We also completed Google Play's requirements: account deletion, an accurate Data safety form, an AI disclaimer, and a report button on every story.
+
+Q10) What did you do differently this time? (re-applicants only)
+We treated the closed test as a real quality gate: we acted on specific tester feedback and used the window to harden accuracy, content reporting, account deletion, and the privacy of living relatives named in shared stories - making the app more polished and trustworthy than when testing began.

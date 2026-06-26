@@ -19,13 +19,29 @@ The form has 3 stages: **Overview questions → Data types → Security practice
 
 > "Collected" = leaves the device. "Shared" = sent to a third party separate from you. Google
 > treats your own backend (Supabase/Worker/R2) as "you," but a third-party **processor**
-> (Gemini, RevenueCat, the geocoders) still counts as **shared** unless it's an on-your-behalf
-> service-provider relationship. To stay safe and accurate, declare the items below as **shared**
-> where a distinct company receives the data — under-declaring is the bigger risk.
+> (Gemini, RevenueCat, the geocoders) is exempt from "shared" if it's an on-your-behalf
+> **service-provider** relationship (processes data only on your instruction, doesn't build its
+> own profiles). **VERDICT (2026-06-25, confirmed against Google's Data safety doc + RevenueCat's
+> own guidance): all of GraveStory's third parties qualify as service providers, so the correct
+> answer is "Collected, NOT shared" for everything.**
+> - **Gemini** returns OCR on your instruction → exempt.
+> - **RevenueCat** explicitly tells devs to mark purchase history "Collected" (service provider);
+>   only flip to "Shared" if you wire RevenueCat→3rd-party integrations (we do NOT — code only
+>   calls configure/logIn/logOut/getOfferings/purchasePackage/restorePurchases).
+> - **Nominatim/Photon/Tavily/WikiTree/Wikidata/Wikipedia/LoC/IA** return geocoding/search
+>   results on request; research queries carry DECEASED people's names from public memorials.
+> So the Play preview showing **"No data shared with third parties" is CORRECT** for this app.
 
 ---
 
-## Stage 2 — Data types to DECLARE (collected, and shared where noted)
+## ⚠️ Two minor items to double-check in the live form (neither blocks)
+1. **"Name" (Personal info)** — the editable display name is shown PUBLICLY on the community
+   map ("Shared by {name}"). If users have a display name, declare **Name = Collected**
+   (purpose: App functionality + Account management) in addition to Email. Confirm it's ticked.
+2. **Account-creation method** — the app is **OAuth-only** (no in-app password). Ticking
+   "Username and password" too is low-risk but strictly the accurate answer is **OAuth only**.
+
+## Stage 2 — Data types to DECLARE (collected; NOT shared — see verdict above)
 
 For each: mark **Collected = Yes**. **Processed ephemerally?** = No for anything stored (most
 of these persist in Supabase); the AI image call could be argued ephemeral but it's safer to

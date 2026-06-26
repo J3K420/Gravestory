@@ -1,0 +1,11 @@
+<en-US>
+What's new in this update:
+- More accurate grave-pin placement, with an easier drag-to-correct on the map
+- Your corrected pin locations now match between your cemetery map and the community map
+- Fixed stories without GPS occasionally disappearing from the cemetery map
+- New: tap a pin and reframe the whole cemetery to get your bearings
+- Quick Home shortcut added to the map screens
+- A reminder to place your grave pin after saving a story
+- Improved biography research accuracy, including better matching of historical figures and portraits
+- Stability, performance, and privacy improvements
+</en-US>

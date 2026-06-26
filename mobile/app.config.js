@@ -27,7 +27,13 @@ export default {
     },
     android: {
       package: 'com.gravestory.app',
-      versionCode: 14,
+      versionCode: 15,
+      // The RevenueCat (react-native-purchases) and Play Services SDKs add
+      // com.google.android.gms.permission.AD_ID to the merged manifest by default.
+      // GraveStory does NOT read the advertising ID, so we strip it here to keep the
+      // manifest consistent with the Data safety declaration ("Advertising ID: not
+      // collected"). A manifest-vs-declaration mismatch is a top Play rejection cause.
+      blockedPermissions: ['com.google.android.gms.permission.AD_ID'],
       adaptiveIcon: {
         backgroundColor: '#14100b',
         foregroundImage: './assets/android-icon-foreground.png',

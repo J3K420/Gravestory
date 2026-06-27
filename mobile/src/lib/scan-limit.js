@@ -63,20 +63,8 @@ export async function checkScanLimit(userId, user = null) {
   return { count: usedCount, limit: totalAllowance, atLimit, isGuest: false, purchased };
 }
 
-// Returns true on success, false on failure. Caller should warn the user on false
-// so they know the scan was not counted against their allowance (not silently ignore).
-export async function incrementScanCount(userId) {
-  if (!userId) {
-    const stored = parseInt((await AsyncStorage.getItem(GUEST_COUNT_KEY)) || '0', 10);
-    await AsyncStorage.setItem(GUEST_COUNT_KEY, String(stored + 1));
-    return true;
-  }
-  try {
-    const { error } = await supabase.from('scan_events').insert({ user_id: userId });
-    if (error) throw error;
-    return true;
-  } catch (e) {
-    console.warn('scan_events insert failed — scan was not counted:', e.message);
-    return false;
-  }
-}
+// NOTE (S78): the former client-side incrementScanCount() was REMOVED. Scans are now
+// recorded SERVER-SIDE only, by commit_reservation via the Worker /commit-scan route
+// (see scan-token.js commitScan). A client-side scan_events INSERT would be a second,
+// untrusted write path to the cost counter — deliberately gone. checkScanLimit above
+// stays as an advisory pre-picker fast-path; reserve_scan is the authoritative gate.

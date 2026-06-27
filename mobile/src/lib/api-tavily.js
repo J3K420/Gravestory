@@ -1,4 +1,5 @@
-import { PROXY_BASE, CLIENT_KEY } from './config';
+import { PROXY_BASE } from './config';
+import { proxyHeaders } from './scan-token';
 import { EXPAND } from './abbreviations';
 
 // Returns [original, expandedVariant?] — if the first token of the name is a known
@@ -242,7 +243,9 @@ export async function searchForPerson(graveData, location, cemeteryName) {
       if (domains) body.include_domains = domains;
       return fetch(`${PROXY_BASE}/tavily`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
+        // proxyHeaders() attaches X-Scan-Token — /tavily is scan-token gated on the
+        // Worker; raw CLIENT_KEY would 403 once SCAN_TOKEN_ENFORCE flips on.
+        headers: proxyHeaders(),
         body: JSON.stringify(body),
       }).then(res => res.json());
     })
@@ -306,7 +309,8 @@ export async function extractFindAGraveDetail(results, deathYear) {
     try {
       const res = await fetch(`${PROXY_BASE}/tavily-extract`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
+        // /tavily-extract is scan-token gated — see proxyHeaders note above.
+        headers: proxyHeaders(),
         body: JSON.stringify({
           urls: fg.url,
           extract_depth: 'advanced',

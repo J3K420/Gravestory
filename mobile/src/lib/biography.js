@@ -1,4 +1,5 @@
-import { PROXY_BASE, CLIENT_KEY } from './config';
+import { PROXY_BASE } from './config';
+import { proxyHeaders } from './scan-token';
 import { safeParseJSON } from './util-json';
 
 // Maps lowercased symbol keywords (as returned by Gemini OCR) to their conventional
@@ -350,7 +351,9 @@ function fetchWithTimeout(url, init) {
 async function geminiText(payload) {
   const init = {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
+    // generateBiography runs INSIDE the scan window — /gemini is scan-token gated,
+    // so attach X-Scan-Token via proxyHeaders() or it 403s once enforcement is on.
+    headers: proxyHeaders(),
     body: JSON.stringify(payload),
   };
   try {

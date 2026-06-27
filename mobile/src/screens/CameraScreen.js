@@ -21,7 +21,8 @@ import { searchInternetArchive } from '../lib/api-internetarchive';
 import { fetchWikipediaPortraits, fetchWikipediaArticleSummary } from '../lib/api-wikipedia';
 import { generateBiography } from '../lib/biography';
 import { forwardGeocode, reverseGeocode, reverseGeocodeCemetery } from '../lib/api-nominatim';
-import { checkScanLimit, incrementScanCount } from '../lib/scan-limit';
+import { checkScanLimit } from '../lib/scan-limit';
+import { beginScan, endScan, commitScan } from '../lib/scan-token';
 import { getLibraryAssetGps } from '../lib/media-gps';
 import { loadStories, saveStories } from '../lib/storage';
 import { savePendingPhoto, readPendingPhoto, deletePendingPhoto } from '../lib/pending';
@@ -699,6 +700,49 @@ export default function CameraScreen({ navigation, route }) {
         }
       }
 
+      // ── SERVER-SIDE SCAN GATE (S78 / audit 2026-06-26) ──────────────
+      // The authoritative cost control. beginScan() calls the Worker /begin-scan,
+      // which verifies the JWT, CHECKS the user's allowance (read-only — records
+      // NOTHING), and mints the short-lived scan token that proxyHeaders() attaches to
+      // every subsequent paid call (symbol-resolution, research, biography). Placed
+      // HERE — after OCR + the bio-cache decision, before any scan-token-gated call
+      // (resolveSymbolMeanings below is the first) — so that a verify-REJECTED photo
+      // never reaches here (verify + OCR ran on the JWT route). The scan is RECORDED
+      // later by commitScan() — only AFTER the biography is successfully produced — so
+      // a mid-pipeline failure costs nothing, with no client-triggerable delete to
+      // abuse (the old client incrementScanCount was removed in S78; a refund route
+      // was tried and rejected as an allowance-reset vector). A bio-CACHE hit still
+      // commits one scan (parity with web), because the cache branch also reaches the
+      // commit below. [re-review 2026-06-26]
+      const scanGate = await beginScan();
+      if (!scanGate.allowed) {
+        // Clear the in-flight markers so leaving doesn't log scan_abandoned, and
+        // route to the right surface. We're past the picker (photo taken, loader up).
+        // (endScan() runs in the finally below.)
+        pipelineActiveRef.current = false;
+        setLoading(false);
+        if (scanGate.code === 'AT_LIMIT') {
+          logEvent(EVENTS.SCAN_LIMIT_HIT, { count: scanGate.used, limit: scanGate.allowance, isGuest: false });
+          navigation.navigate('Paywall', { count: scanGate.used, limit: scanGate.allowance, type: 'scan', isGuest: false });
+        } else if (scanGate.code === 'NO_AUTH') {
+          // Signed out (session expired between picker and here) — send to sign-in.
+          navigation.navigate('Auth');
+        } else {
+          // CHECK_FAILED / network — begin-scan failed CLOSED server-side, so NO scan
+          // was consumed. Surface the error screen with the offline-queue option (the
+          // photo is preserved so the user can research it once back online). Mirrors
+          // the existing _checkFailed → offerOfflineScan path. Object shape so the
+          // renderer's pipelineError.message / .base64 (Save & Research Later) work.
+          setPipelineError({
+            message: scanGate.error || 'Could not start the scan. Please check your connection and try again.',
+            base64: pending ? null : base64,
+            fromCamera,
+            gps,
+          });
+        }
+        return;
+      }
+
       let bioResult;
       let resolvedPortraits;
       // AI-resolved meanings for symbols the static SYMBOL_CONTEXT table can't
@@ -1112,10 +1156,22 @@ export default function CameraScreen({ navigation, route }) {
       const { data: { session } } = await supabase.auth.getSession();
       const defaultPublic = session?.user?.user_metadata?.default_public ?? false;
 
-      // Biography resolved successfully — count this as a used scan.
-      // (This is the cost gate — the paid AI work is done regardless of whether
-      // the user chooses to save, so the scan is counted at scan time, not save time.)
-      await incrementScanCount(session?.user?.id ?? null);
+      // RECORD THE SCAN (S78 / re-review 2026-06-26). The biography is now produced
+      // (full pipeline OR cache hit — both paths converge here), so commit the scan
+      // server-side: commitScan() → /commit-scan → commit_reservation() flips the
+      // pending reservation to a permanent scan_event. /begin-scan only RESERVED an
+      // allowance slot + armed the token earlier, so a mid-pipeline failure before this
+      // point never recorded anything — the pending hold ages out via its TTL (failure
+      // costs nothing, with no client-triggerable delete). Awaited but non-fatal: a
+      // failed commit (offline / already-expired) leaves the scan uncounted — the safe
+      // direction — and we still show the bio the user already paid compute for.
+      // This is the SOLE client scan recorder (old incrementScanCount removed in S78).
+      try {
+        const c = await commitScan();
+        if (!c.committed) console.warn('commitScan: scan not recorded (offline or raced past limit)');
+      } catch (e) {
+        console.warn('commitScan failed (non-fatal):', e?.message || e);
+      }
 
       // Build the story but DO NOT persist it yet. Persistence (local save, cloud
       // save, R2 upload, canonical-grave linking, grave_photos contribution) now
@@ -1219,15 +1275,23 @@ export default function CameraScreen({ navigation, route }) {
       pipelineActiveRef.current = false; // resolved into the error screen, not abandoned
       logEvent(EVENTS.PIPELINE_ERROR, { stage: 'pipeline', message: err?.message, dur_ms: Date.now() - pipelineStartRef.current });
       console.warn('Pipeline error:', String(err), 'message:', err?.message, 'stack:', err?.stack);
+      // No scan refund needed: the scan is only RECORDED by commitScan() AFTER the bio
+      // succeeds, so a failure here (before commit) never recorded one — it already
+      // costs nothing. [re-review 2026-06-26: replaced the refund mechanism]
       // For fresh scans, offer to queue the photo for later — the common cause
       // here is the signal dropping mid-pipeline. Resumed pending scans are
       // already queued, so they just get the error.
       setPipelineError({
         message: err.message || 'Something went wrong. Please try again.',
         base64: pending ? null : base64,
-        gps,
         fromCamera,
+        gps,
       });
+    } finally {
+      // Clear the per-scan token at the end of EVERY scan (success, error, or the
+      // gate's early return above) so a stale token is never reused across scans.
+      // Non-essential (tokens expire in minutes) but tidy + defensive. [S78]
+      endScan();
     }
   }
 

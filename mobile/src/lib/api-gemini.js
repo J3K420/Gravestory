@@ -1,4 +1,5 @@
-import { PROXY_BASE, CLIENT_KEY } from './config';
+import { PROXY_BASE } from './config';
+import { proxyHeaders, jwtProxyHeaders, GEMINI_JWT_PATH } from './scan-token';
 import { safeParseJSON } from './util-json';
 import { SYMBOL_CONTEXT } from './biography';
 
@@ -23,10 +24,29 @@ function extractErrMsg(dataError) {
   return dataError.message || dataError.status || dataError.detail || JSON.stringify(dataError);
 }
 
-async function geminiCallWithFallback(payload) {
+// mode selects the Worker route + auth:
+//   'scan' (default) → /gemini/ with X-Scan-Token (proxyHeaders) — calls AFTER beginScan,
+//                      INSIDE the scan window: resolveSymbolMeanings, resolveMentions,
+//                      and biography (biography.js uses proxyHeaders directly).
+//   'jwt'            → /gemini-jwt/ with Authorization: Bearer <jwt> (jwtProxyHeaders),
+//                      NO scan token, does NOT consume a scan — for calls that run
+//                      BEFORE the scan is counted or at publish-time, where no scan
+//                      token exists: verifyIsGravestone + readGravestone (both before
+//                      beginScan) and redactLivingNamesForPublic (publish-time). Returns
+//                      { data: { error: { code: 401 } }, model } when not signed in, so
+//                      verify fails OPEN and redact fails CLOSED. [audit 2026-06-26]
+async function geminiCallWithFallback(payload, mode = 'scan') {
+  const base = mode === 'jwt' ? `${PROXY_BASE}${GEMINI_JWT_PATH}` : `${PROXY_BASE}/gemini`;
+  const headers = mode === 'jwt' ? await jwtProxyHeaders() : proxyHeaders();
+  if (mode === 'jwt' && !headers) {
+    // No signed-in session — the JWT route requires a real user. Surface a
+    // recognizable AUTH error (code 401) so verify can fail OPEN (proceed) while
+    // redactLivingNamesForPublic fails CLOSED (must NOT publish unredacted). [#13]
+    return { data: { error: { message: 'Not signed in', code: 401 } }, model: PRIMARY };
+  }
   const init = {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Client-Key': CLIENT_KEY },
+    headers,
     body: JSON.stringify(payload),
   };
 
@@ -46,14 +66,14 @@ async function geminiCallWithFallback(payload) {
   };
 
   try {
-    const res = await fetchWithTimeout(`${PROXY_BASE}/gemini/${PRIMARY}`, init);
+    const res = await fetchWithTimeout(`${base}/${PRIMARY}`, init);
     const data = await res.json().catch(() => ({ error: { message: 'Invalid JSON' } }));
     if (!shouldFallback(res, data)) return { data, model: PRIMARY };
   } catch (err) {
     console.warn(`Primary fetch failed (${err.message}) — falling back`);
   }
 
-  const res2 = await fetchWithTimeout(`${PROXY_BASE}/gemini/${FALLBACK}`, init);
+  const res2 = await fetchWithTimeout(`${base}/${FALLBACK}`, init);
   const data2 = await res2.json().catch(() => ({ error: { message: 'Invalid JSON from fallback' } }));
   return { data: data2, model: FALLBACK };
 }
@@ -88,10 +108,12 @@ Return ONLY a valid JSON object with these exact fields:
 
 Return only JSON.`;
 
+  // mode 'jwt': verify runs BEFORE beginScan (a non-gravestone photo must not burn a
+  // scan), so it authenticates with the user JWT, not a scan token. [audit 2026-06-26]
   const { data } = await geminiCallWithFallback({
     contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }] }],
     generationConfig: { temperature: 0.1 },
-  });
+  }, 'jwt');
 
   if (data.error) {
     console.warn('verifyIsGravestone error — proceeding anyway. Response:', JSON.stringify(data));
@@ -175,10 +197,17 @@ Populate "subjects" with one entry for EVERY DECEASED person visible anywhere in
 
 If multiple deceased people share the stone, use the names array and pick the most prominent as primary_name, and list every deceased person with their own dates in subjects. Return only JSON.`;
 
+  // mode 'jwt': OCR runs BEFORE beginScan mints the scan token (the scan is counted
+  // AFTER OCR so a non-gravestone doesn't burn a scan), so — like verifyIsGravestone —
+  // it must authenticate with the user JWT on the /gemini-jwt route, NOT a scan token
+  // it doesn't have yet. A scan-token-mode OCR here would 403 under enforcement (no
+  // token is armed until line ~718 of the pipeline). It also no-ops cleanly for a
+  // signed-out user (jwtProxyHeaders → null → data.error), closing the free-OCR
+  // window before beginScan's NO_AUTH gate. [review 2026-06-26 #1/#3/#11]
   const { data } = await geminiCallWithFallback({
     contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }] }],
     generationConfig: { temperature: 0.1 },
-  });
+  }, 'jwt');
   if (data.error) {
     console.warn('readGravestone API error. Full response:', JSON.stringify(data));
     throw new Error(extractErrMsg(data.error) || 'Gemini API error');
@@ -548,6 +577,43 @@ export function stripOriginatedNamesFromSources(sources, originatedRelatives, su
     ? stripOriginatedNamesForPublic(s, originatedRelatives, subjects) : s);
 }
 
+// Returned by redactLivingNamesForPublic when redaction could NOT run because the
+// user's session is missing/expired (the JWT route can't authenticate). The caller
+// MUST treat this as "do not publish raw": write this placeholder as public_biography
+// AND blank the raw-served public columns (sources/source_urls/mentions). Failing to
+// recognize it would re-leak a living relative's name on session expiry. [#13]
+export const REDACTION_UNAVAILABLE = 'This public biography is being prepared.';
+
+// True when a JWT-route Gemini failure means we COULD NOT authenticate/verify the
+// user (no session, expired/unverifiable JWT → Worker 401/403, OR Supabase
+// unreachable → 503 CHECK_FAILED), as opposed to a benign Gemini hiccup. These must
+// fail CLOSED on the public path; benign failures keep the long-standing fail-open.
+//
+// The error can arrive in several shapes, so check ALL of them [re-verify 2026-06-26]:
+//   • client no-session sentinel: { error: { message:'Not signed in', code:401 } }
+//   • Worker requireUserJwt 401/403: a FLAT { error:'<string>', code:'NO_AUTH'|'BAD_AUTH' }
+//     — note `code` is a SIBLING of `error`, not nested, so we must read data.code too.
+//   • Worker/Supabase 503: code 'CHECK_FAILED' (auth verify unreachable → fail closed).
+function isJwtAuthError(data) {
+  if (!data) return false;
+  // Top-level code sibling (Worker flat error shape) — the case the first fix missed.
+  const topCode = String(data.code || '').toUpperCase();
+  if (topCode === 'NO_AUTH' || topCode === 'BAD_AUTH' || topCode === 'CHECK_FAILED') return true;
+  const e = data.error;
+  if (!e) return false;
+  if (typeof e === 'object') {
+    if (e.code === 401 || e.code === 403 || e.code === 503) return true;
+    const ec = String(e.code || '').toUpperCase();
+    if (ec === 'NO_AUTH' || ec === 'BAD_AUTH' || ec === 'CHECK_FAILED') return true;
+    const m = (e.message || '').toLowerCase();
+    return m.includes('not signed in') || m.includes('sign in') || m.includes('expired')
+        || m.includes('no_auth') || m.includes('bad_auth') || m.includes('verify session');
+  }
+  const s = String(e).toLowerCase();
+  return s.includes('sign in') || s.includes('no_auth') || s.includes('bad_auth')
+      || s.includes('expired') || s.includes('unauthorized') || s.includes('verify session');
+}
+
 export async function redactLivingNamesForPublic(biography, subjects) {
   if (typeof biography !== 'string' || !biography.trim()) return biography;
 
@@ -587,10 +653,24 @@ ${biography}
 Return only JSON.`;
 
   try {
+    // mode 'jwt': redaction runs at Save/Share/make-public — OUTSIDE any scan window
+    // (an already-saved story toggled public has no scan token at all). Authenticate
+    // with the user JWT so it can't 403 under scan-token enforcement. [audit 2026-06-26]
     const { data } = await geminiCallWithFallback({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
-    });
+    }, 'jwt');
+    // FAIL CLOSED on an AUTH failure (no/expired session): returning the original
+    // here would publish an UNREDACTED bio with a living relative's name — the exact
+    // S62 regression. Return the placeholder sentinel so the caller writes the
+    // placeholder AND blanks the raw-served public columns. [review 2026-06-26 #13]
+    if (isJwtAuthError(data)) {
+      console.warn('redactLivingNamesForPublic: auth failure — failing CLOSED (not publishing unredacted)');
+      return REDACTION_UNAVAILABLE;
+    }
+    // Benign Gemini failure (hiccup / malformed / safety block): keep the
+    // long-standing fail-OPEN behavior (return the original) so legitimate sharing
+    // isn't broken by a transient model error. This is unchanged from pre-S78.
     if (!data || data.error || !data.candidates?.[0]?.content?.parts?.[0]?.text) return biography;
     const parsed = safeParseJSON(data.candidates[0].content.parts[0].text, {});
     const out = parsed && typeof parsed.public_biography === 'string' ? parsed.public_biography.trim() : '';

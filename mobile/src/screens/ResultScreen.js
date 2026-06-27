@@ -14,7 +14,7 @@ import { uploadGravestoneImage } from '../lib/api-r2';
 import { getTributes, setTribute } from '../lib/api-tributes';
 import { submitContentReport, REPORT_REASONS, REPORT_NOTE_MAX } from '../lib/api-reports';
 import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
-import { redactLivingNamesForPublic, stripOriginatedNamesForPublic, stripOriginatedNamesFromSources, stripOriginatedNamesFromMentions, filterMentionsForPublic } from '../lib/api-gemini';
+import { redactLivingNamesForPublic, REDACTION_UNAVAILABLE, stripOriginatedNamesForPublic, stripOriginatedNamesFromSources, stripOriginatedNamesFromMentions, filterMentionsForPublic } from '../lib/api-gemini';
 import { useRefresh } from '../lib/use-refresh';
 import { deletePendingPhoto } from '../lib/pending';
 import { logEvent, EVENTS } from '../lib/analytics';
@@ -566,18 +566,26 @@ export default function ResultScreen({ navigation, route }) {
           } else {
             const _stripped = stripOriginatedNamesForPublic(saved.biography, _orig, subjects);
             saved.public_biography = await redactLivingNamesForPublic(_stripped, subjects);
-            // `sources` is served RAW by the public RPC — strip originated names
-            // from citation descriptions too. Shared column; owner sees the name
-            // in the bio prose, so dropping it here is fine.
-            if (_orig.length) {
-              saved.sources = stripOriginatedNamesFromSources(saved.sources, _orig, subjects);
-              saved.source_urls = stripOriginatedNamesFromSources(saved.source_urls, _orig, subjects);
-            }
-            // Mentions public floor: (1) drop a mention naming a living non-originated
-            // relative the model missed; (2) strip any app-originated name.
-            saved.mentions = filterMentionsForPublic(saved.mentions, subjects);
-            if (_orig.length) {
-              saved.mentions = stripOriginatedNamesFromMentions(saved.mentions, _orig, subjects);
+            if (saved.public_biography === REDACTION_UNAVAILABLE) {
+              // Redaction failed CLOSED (session expired) — blank every raw-served
+              // public column so no living name leaks via sources/mentions. [#13]
+              saved.mentions = [];
+              saved.sources = [];
+              saved.source_urls = [];
+            } else {
+              // `sources` is served RAW by the public RPC — strip originated names
+              // from citation descriptions too. Shared column; owner sees the name
+              // in the bio prose, so dropping it here is fine.
+              if (_orig.length) {
+                saved.sources = stripOriginatedNamesFromSources(saved.sources, _orig, subjects);
+                saved.source_urls = stripOriginatedNamesFromSources(saved.source_urls, _orig, subjects);
+              }
+              // Mentions public floor: (1) drop a mention naming a living non-originated
+              // relative the model missed; (2) strip any app-originated name.
+              saved.mentions = filterMentionsForPublic(saved.mentions, subjects);
+              if (_orig.length) {
+                saved.mentions = stripOriginatedNamesFromMentions(saved.mentions, _orig, subjects);
+              }
             }
           }
         } catch (e) {
@@ -770,17 +778,25 @@ export default function ResultScreen({ navigation, route }) {
         } else {
           const _stripped = stripOriginatedNamesForPublic(updated.biography, _orig, subjects);
           updated.public_biography = await redactLivingNamesForPublic(_stripped, subjects);
-          // `sources`/`source_urls` are served RAW by the public RPC — strip
-          // originated names from both (model can author a name into either).
-          if (_orig.length) {
-            updated.sources = stripOriginatedNamesFromSources(updated.sources, _orig, subjects);
-            updated.source_urls = stripOriginatedNamesFromSources(updated.source_urls, _orig, subjects);
-          }
-          // Mentions public floor: drop a living non-originated name, then strip
-          // any app-originated name.
-          updated.mentions = filterMentionsForPublic(updated.mentions, subjects);
-          if (_orig.length) {
-            updated.mentions = stripOriginatedNamesFromMentions(updated.mentions, _orig, subjects);
+          if (updated.public_biography === REDACTION_UNAVAILABLE) {
+            // Redaction failed CLOSED (session expired) — blank every raw-served
+            // public column so no living name leaks via sources/mentions. [#13]
+            updated.mentions = [];
+            updated.sources = [];
+            updated.source_urls = [];
+          } else {
+            // `sources`/`source_urls` are served RAW by the public RPC — strip
+            // originated names from both (model can author a name into either).
+            if (_orig.length) {
+              updated.sources = stripOriginatedNamesFromSources(updated.sources, _orig, subjects);
+              updated.source_urls = stripOriginatedNamesFromSources(updated.source_urls, _orig, subjects);
+            }
+            // Mentions public floor: drop a living non-originated name, then strip
+            // any app-originated name.
+            updated.mentions = filterMentionsForPublic(updated.mentions, subjects);
+            if (_orig.length) {
+              updated.mentions = stripOriginatedNamesFromMentions(updated.mentions, _orig, subjects);
+            }
           }
         }
       } catch (e) {
@@ -885,17 +901,25 @@ export default function ResultScreen({ navigation, route }) {
           } else {
             const _stripped = stripOriginatedNamesForPublic(updated.biography, _orig, subjects);
             updated.public_biography = await redactLivingNamesForPublic(_stripped, subjects);
-            // `sources`/`source_urls` are served RAW by the public RPC — strip
-            // originated names from both (model can author a name into either).
-            if (_orig.length) {
-              updated.sources = stripOriginatedNamesFromSources(updated.sources, _orig, subjects);
-              updated.source_urls = stripOriginatedNamesFromSources(updated.source_urls, _orig, subjects);
-            }
-            // Mentions public floor: drop a living non-originated name, then strip
-            // any app-originated name.
-            updated.mentions = filterMentionsForPublic(updated.mentions, subjects);
-            if (_orig.length) {
-              updated.mentions = stripOriginatedNamesFromMentions(updated.mentions, _orig, subjects);
+            if (updated.public_biography === REDACTION_UNAVAILABLE) {
+              // Redaction failed CLOSED (session expired) — blank every raw-served
+              // public column so no living name leaks via sources/mentions. [#13]
+              updated.mentions = [];
+              updated.sources = [];
+              updated.source_urls = [];
+            } else {
+              // `sources`/`source_urls` are served RAW by the public RPC — strip
+              // originated names from both (model can author a name into either).
+              if (_orig.length) {
+                updated.sources = stripOriginatedNamesFromSources(updated.sources, _orig, subjects);
+                updated.source_urls = stripOriginatedNamesFromSources(updated.source_urls, _orig, subjects);
+              }
+              // Mentions public floor: drop a living non-originated name, then strip
+              // any app-originated name.
+              updated.mentions = filterMentionsForPublic(updated.mentions, subjects);
+              if (_orig.length) {
+                updated.mentions = stripOriginatedNamesFromMentions(updated.mentions, _orig, subjects);
+              }
             }
           }
         } catch (e) {

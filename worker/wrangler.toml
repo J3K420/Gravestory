@@ -10,11 +10,31 @@ account_id = "2d619125d0ccbcd40083cee777ae6222"
 ALLOWED_ORIGIN = "https://j3k420.github.io"
 R2_PUBLIC_URL = "https://pub-0550b9a48a574a0b812771f0ea4c9377.r2.dev"
 SUPABASE_URL  = "https://idbrjonofqrsykqsqpwo.supabase.co"
+# Per-scan token enforcement on /gemini + /tavily + /tavily-extract.
+#   "false" (default) → TRANSITION MODE: a token is verified when present but a
+#                       request without one is still served + logged. Deploy in
+#                       this mode FIRST so clients without the token-sending OTA
+#                       keep working during rollout.
+#   "true"            → ENFORCE: paid routes require a valid X-Scan-Token (403
+#                       otherwise). Flip ONLY after `wrangler tail` shows tokens
+#                       arriving from all clients (no more "missing" transition logs).
+#
+# ⚠️⚠️ DO NOT FLIP TO "true" UNTIL BOTH ARE TRUE (audit 2026-06-26): ⚠️⚠️
+#   1. The MOBILE token OTA is live AND `wrangler tail` shows X-Scan-Token on
+#      BOTH the /gemini AND /tavily* paths (no remaining "missing" transition logs).
+#   2. The WEB pipeline (js/) is EITHER retired (landing-page pivot) OR ported to
+#      send begin-scan + X-Scan-Token. As of this change the web PWA still calls
+#      /gemini and /tavily with ONLY X-Client-Key and has NO token machinery —
+#      flipping enforce WILL 403 every web scan and take the live web app offline.
+#   Also confirm SCAN_TOKEN_SECRET + SUPABASE_SERVICE_KEY are set (begin-scan 500s
+#   without the secret; under enforce, requireScanToken 503s rather than open a hole).
+SCAN_TOKEN_ENFORCE = "false"
 
 # Secrets (set via `wrangler secret put` — never store values here):
 #   GEMINI_KEY
 #   TAVILY_KEY
 #   CLIENT_KEY
+#   SCAN_TOKEN_SECRET          # HMAC key for per-scan tokens — generate a random 32+ byte value
 #   REVENUECAT_WEBHOOK_SECRET
 #   SUPABASE_SERVICE_KEY
 

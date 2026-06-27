@@ -550,7 +550,10 @@ export default function ResultScreen({ navigation, route }) {
       // it never passes through the share toggle — so redact living-relative
       // names here, before its first cloud save reaches the global map. Same
       // guard + fail-safe as _doTogglePublic.
-      if (saved.is_public && !saved.public_biography && saved.biography) {
+      // Re-redact when public_biography is missing OR is the fail-closed placeholder
+      // (session expired last time) — so redaction self-heals on the next save once
+      // the session is valid, instead of the placeholder sticking forever. [#stickiness]
+      if (saved.is_public && (!saved.public_biography || saved.public_biography === REDACTION_UNAVAILABLE) && saved.biography) {
         try {
           const subjects = Array.isArray(saved.subjects) ? saved.subjects
             : (Array.isArray(saved.graveData?.subjects) ? saved.graveData.subjects : []);
@@ -762,7 +765,7 @@ export default function ResultScreen({ navigation, route }) {
     // once and cached on the row; the redacted copy is what the global RPC
     // serves. Fails safe: redactLivingNamesForPublic returns the original on
     // any error, so sharing never breaks.
-    if (updated.is_public && !updated.public_biography && updated.biography) {
+    if (updated.is_public && (!updated.public_biography || updated.public_biography === REDACTION_UNAVAILABLE) && updated.biography) {
       try {
         const subjects = Array.isArray(updated.subjects) ? updated.subjects
           : (Array.isArray(updated.graveData?.subjects) ? updated.graveData.subjects : []);
@@ -885,7 +888,7 @@ export default function ResultScreen({ navigation, route }) {
       // (e.g. made public before S62 redaction shipped), redact before this
       // re-write reaches the cloud. No-op when already redacted. Same guard +
       // fail-safe as handleSave / _doTogglePublic.
-      if (updated.is_public && !updated.public_biography && updated.biography) {
+      if (updated.is_public && (!updated.public_biography || updated.public_biography === REDACTION_UNAVAILABLE) && updated.biography) {
         try {
           const subjects = Array.isArray(updated.subjects) ? updated.subjects
             : (Array.isArray(updated.graveData?.subjects) ? updated.graveData.subjects : []);

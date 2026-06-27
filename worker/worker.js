@@ -20,9 +20,13 @@
 //                             to abuse the endpoint and can be rotated independently.
 //   SCAN_TOKEN_SECRET       — HMAC key for the per-scan tokens minted by /begin-scan and required
 //                             by the paid /gemini and /tavily routes. The REAL server-side cost
-//                             control: a token is issued only after consume_scan() records the scan
-//                             against the user's allowance, so the paid pipeline can no longer be
-//                             driven by anyone holding the (public) CLIENT_KEY or spoofing Origin.
+//                             control: /begin-scan reserves an allowance slot (reserve_scan) and
+//                             issues a token naming that reservation; each paid call then spends one
+//                             unit of the reservation's finite per-route call budget (consume_budget),
+//                             and the scan is RECORDED (commit_reservation) once the bio succeeds. So
+//                             the paid pipeline can no longer be driven by anyone holding the (public)
+//                             CLIENT_KEY or spoofing Origin, and a leaked token is bounded to one
+//                             scan's budget rather than unbounded calls.
 //   REVENUECAT_WEBHOOK_SECRET — must match the Authorization Bearer value in RevenueCat dashboard
 //   SUPABASE_SERVICE_KEY    — Supabase service-role key (bypasses RLS; never expose to clients)
 //
@@ -44,22 +48,22 @@ const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const TAVILY_URL  = 'https://api.tavily.com/search';
 const TAVILY_EXTRACT_URL = 'https://api.tavily.com/extract';
 
-// Per-scan token lifetime. One scan fires many proxy calls (OCR + symbol-resolution
-// + biography Gemini, plus up to 6 Tavily slots + 2 extracts), so the token must
-// outlive a whole scan but not be reusable indefinitely.
+// Per-scan token / reservation lifetime. The begin→commit window spans the ENTIRE
+// research fan-out + biography, and a single Gemini call can take up to 30s
+// (biography.js TIMEOUT_MS), with biography running serially AFTER the fan-out — so
+// on flaky cellular a real foreground scan can run well over a minute, and a briefly
+// backgrounded scan (the JS thread freezes — architectural, see the resuming-scan
+// work) resumes later still. The TTL must comfortably exceed that or, under enforce,
+// a slow/resumed scan's late paid calls hit consume_budget's `expires_at > now()`
+// filter → 402 → the pipeline breaks mid-flight after real spend already landed.
 //
-// ⚠️ KNOWN RESIDUAL RISK (audit 2026-06-26): this stateless HMAC token gates ENTRY
-// but NOT VOLUME — while valid, it authorizes an UNBOUNDED number of paid calls. A
-// leaked/extracted token is therefore an all-you-can-drain pass on the prepaid
-// Tavily pool for its remaining lifetime, off a SINGLE recorded scan. A stateless
-// token cannot bound call volume; the real fix is a per-token call budget in
-// KV/Durable Objects (consume_scan returns a scan_id; each paid call atomically
-// decrements a remaining-calls budget) — deferred to backlog #11 (Worker budget
-// guard). To cap the residual until then we keep the TTL SHORT: a real scan
-// completes well under 3 min even on flaky cellular, so a leaked token buys an
-// attacker only minutes, not a quarter-hour. Do NOT lengthen this without the
-// KV budget guard in place.
-const SCAN_TOKEN_TTL_SECONDS = 3 * 60;
+// 10 min covers a slow + briefly-backgrounded scan with margin. IMPORTANT: the call
+// VOLUME is bounded by the per-route reservation BUDGET (consume_budget), NOT by this
+// TTL — so a longer TTL does NOT widen the leaked-token attack surface (a leaked token
+// still drains at most one scan's 6 Gemini / 12 Tavily budget). The TTL only governs
+// how long an abandoned reservation holds its allowance slot before aging out. So we
+// can afford a generous TTL for pipeline resilience without weakening the cost control.
+const SCAN_TOKEN_TTL_SECONDS = 10 * 60;
 
 // Allowlist of model IDs that may be called. Prevents callers from requesting
 // expensive or experimental models we don't intend to expose.
@@ -134,6 +138,9 @@ export default {
       if (url.pathname === '/begin-scan') {
         return await handleBeginScan(request, env, origin, allowed);
       }
+      if (url.pathname === '/commit-scan') {
+        return await handleCommitScan(request, env, origin, allowed);
+      }
       // JWT-gated Gemini (NO scan token, does NOT consume a scan). For the paid
       // Gemini calls that legitimately happen BEFORE the scan is counted or at
       // publish-time — where no scan token exists:
@@ -147,24 +154,32 @@ export default {
       //     leak to the public map (the S62 guard). [audit 2026-06-26]
       // Bounded by requiring a valid Supabase JWT (a real account, ban-able) — not
       // the public CLIENT_KEY — so it is not the open faucet the bare /gemini route was.
+      // RESIDUAL (documented): /gemini-jwt is NOT covered by the per-scan reservation
+      // budget (verify + OCR must run BEFORE begin-scan), so a scripted holder of a
+      // valid JWT can call verify/OCR Gemini beyond the 8/12 reservation cap, bounded
+      // only by their (ban-able) account. Acceptable for launch; a per-user rate limit
+      // here is the fast-follow if abused. [re-review 2026-06-27]
       if (url.pathname.startsWith('/gemini-jwt/')) {
         const gate = await requireUserJwt(request, env, origin, allowed);
         if (gate) return gate;
         return await handleGemini(request, url, env, origin, allowed, '/gemini-jwt/');
       }
-      // Paid routes — require a valid per-scan token (see verifyScanToken).
+      // Paid routes — require a valid per-scan token AND spend one unit of that
+      // reservation's per-route call budget (requireScanBudget). The budget is what
+      // makes the token a HARD limit on call VOLUME (not just entry). 'gemini' and
+      // 'tavily' are the two budget buckets; /tavily-extract shares the tavily bucket.
       if (url.pathname.startsWith('/gemini/')) {
-        const gate = await requireScanToken(request, env, origin, allowed);
+        const gate = await requireScanBudget(request, env, 'gemini', origin, allowed);
         if (gate) return gate;
         return await handleGemini(request, url, env, origin, allowed);
       }
       if (url.pathname === '/tavily') {
-        const gate = await requireScanToken(request, env, origin, allowed);
+        const gate = await requireScanBudget(request, env, 'tavily', origin, allowed);
         if (gate) return gate;
         return await handleTavily(request, env, origin, allowed);
       }
       if (url.pathname === '/tavily-extract') {
-        const gate = await requireScanToken(request, env, origin, allowed);
+        const gate = await requireScanBudget(request, env, 'tavily', origin, allowed);
         if (gate) return gate;
         return await handleTavilyExtract(request, env, origin, allowed);
       }
@@ -187,16 +202,23 @@ export default {
   },
 };
 
-// ── Per-scan token: /begin-scan + verification ────────────────────
+// ── Per-scan metering: /begin-scan (RESERVE) + /commit-scan (RECORD) ────
 //
-// THE server-side cost control. One scan = many paid proxy calls, so we cannot
-// meter per call. Instead the client calls /begin-scan ONCE per scan with the
-// user's Supabase JWT; we verify it, resolve the authoritative user_id +
-// is_unlimited from app_metadata, atomically record the scan against the user's
-// allowance via consume_scan() (returns allowed/denied), and — only when allowed —
-// mint a short-lived HMAC token bound to that user. The paid routes require that
-// token. A client holding only the public CLIENT_KEY (or spoofing Origin) cannot
-// mint a token, so cannot drive the paid pipeline.
+// THE server-side cost control. One scan = many paid proxy calls, so the token alone
+// can't meter (a stateless token authorizes UNBOUNDED calls for its TTL). The fix is a
+// per-scan RESERVATION (scan_reservations, migration 029) that bounds BOTH minting and
+// call volume, with NO client-triggerable delete (a "refund my scan" route is, by
+// construction, an allowance-reset vector — abandoned, see migration 027 history):
+//   • /begin-scan — verify JWT → reserve_scan() (advisory-locked: counts live pending
+//     holds toward allowance, so it BOUNDS token minting; creates a reservation with
+//     finite per-route call budgets) → mint a token NAMING that reservation. A client
+//     with only the public CLIENT_KEY can't mint one.
+//   • paid routes — verify token + consume_budget() one unit per call (requireScanBudget),
+//     so a leaked token drains at most one scan's budget, not the whole pool.
+//   • /commit-scan — verify JWT + token → commit_reservation() flips the pending hold
+//     to a permanent scan_event → called ONCE after the biography is produced.
+//   A mid-pipeline failure never commits → the pending hold ages out via its TTL →
+//   the scan costs nothing, with no delete a client could abuse.
 async function handleBeginScan(request, env, origin, allowed) {
   if (request.method !== 'POST') {
     return json({ error: 'Method not allowed' }, 405, origin, allowed);
@@ -215,20 +237,35 @@ async function handleBeginScan(request, env, origin, allowed) {
   }
   const { userId, isUnlimited } = auth;
 
-  // 2. Atomically check allowance + record the scan (service-role RPC).
-  const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/consume_scan`, {
+  // 2. RESERVE: allowance check (counting live pending holds) + create a reservation
+  //    carrying this scan's per-route call budgets. The reservation holds an allowance
+  //    slot immediately (bounds token minting) and is decremented per paid call
+  //    (bounds volume). It records NO permanent scan_event — that happens at commit.
+  const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/reserve_scan`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'apikey': env.SUPABASE_SERVICE_KEY,
       'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     },
-    body: JSON.stringify({ p_user_id: userId, p_is_unlimited: isUnlimited }),
+    body: JSON.stringify({
+      p_user_id: userId,
+      p_is_unlimited: isUnlimited,
+      p_ttl_seconds: SCAN_TOKEN_TTL_SECONDS,
+      // Budgets with headroom over the real worst case so a legitimate scan never
+      // 402s, while an abused token is still bounded to one scan's spend.
+      // Gemini: 3 logical scan-window calls (resolveSymbolMeanings, generateBiography,
+      // resolveMentions), EACH of which fires a 2nd /gemini request to the fallback
+      // model on 503/429/overload — so the real worst case is up to 6 (3×fallback).
+      // 8 leaves margin. Tavily: up to 6 search slots + 2 extract = 8; 12 leaves margin.
+      p_gemini: 8,
+      p_tavily: 12,
+    }),
   });
   if (!rpcRes.ok) {
     // Supabase failure — fail CLOSED (never hand out a token we can't account for).
     const detail = await rpcRes.text().catch(() => '');
-    console.warn('begin-scan consume_scan failed', JSON.stringify({ userId, status: rpcRes.status, detail: detail.slice(0, 200) }));
+    console.warn('begin-scan reserve_scan failed', JSON.stringify({ userId, status: rpcRes.status, detail: detail.slice(0, 200) }));
     return json({ error: 'Could not verify scan allowance', code: 'CHECK_FAILED' }, 503, origin, allowed);
   }
   const result = await rpcRes.json().catch(() => null);
@@ -240,15 +277,63 @@ async function handleBeginScan(request, env, origin, allowed) {
     }, 402, origin, allowed);
   }
 
-  // 3. Mint the scan token bound to this user.
-  const scanToken = await mintScanToken(userId, env.SCAN_TOKEN_SECRET);
+  // 3. Mint the token naming this reservation. exp = the DB-computed reservation
+  //    expiry, so the stateless token-expiry and the row's expires_at agree exactly.
+  const scanToken = await mintScanToken(result.reservation_id, userId, result.expires_at, env.SCAN_TOKEN_SECRET);
   return json({ token: scanToken, used: result.used, allowance: result.allowance }, 200, origin, allowed);
+}
+
+// /commit-scan — convert the pending reservation into a permanent scan_event AFTER
+// the pipeline succeeds. JWT-gated AND token-gated: the reservation id comes from the
+// signed X-Scan-Token (so a caller can only commit the reservation they were issued),
+// and the token's userId must match the JWT's userId. commit_reservation flips
+// pending→committed + INSERTs the scan_event (idempotent on retry). There is NO
+// delete/refund counterpart — "failure costs nothing" is achieved by simply NOT
+// committing (the pending hold ages out via its TTL), which a client cannot abuse to
+// reset its allowance. [re-review 2026-06-26: reservation/budget model]
+async function handleCommitScan(request, env, origin, allowed) {
+  if (request.method !== 'POST') {
+    return json({ error: 'Method not allowed' }, 405, origin, allowed);
+  }
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+    return json({ error: 'Supabase not configured' }, 500, origin, allowed);
+  }
+  if (!env.SCAN_TOKEN_SECRET) {
+    return json({ error: 'SCAN_TOKEN_SECRET not configured' }, 500, origin, allowed);
+  }
+  // JWT identity.
+  const auth = await resolveUser(request, env);
+  if (!auth.userId) {
+    return json({ error: auth.error || 'Unauthorized', code: auth.code || 'NO_AUTH' }, auth.status || 401, origin, allowed);
+  }
+  // Reservation id from the signed token; the token's userId must match the JWT.
+  const tok = request.headers.get('X-Scan-Token') || '';
+  const v = tok ? await verifyScanToken(tok, env.SCAN_TOKEN_SECRET) : { valid: false };
+  if (!v.valid || v.userId !== auth.userId) {
+    return json({ error: 'Invalid scan token', code: 'BAD_SCAN_TOKEN' }, 400, origin, allowed);
+  }
+  const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/commit_reservation`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    },
+    body: JSON.stringify({ p_reservation_id: v.reservationId, p_user_id: auth.userId }),
+  });
+  if (!rpcRes.ok) {
+    const detail = await rpcRes.text().catch(() => '');
+    console.warn('commit-scan commit_reservation failed', JSON.stringify({ userId: auth.userId, status: rpcRes.status, detail: detail.slice(0, 200) }));
+    return json({ error: 'Could not record scan', code: 'COMMIT_FAILED' }, 503, origin, allowed);
+  }
+  const result = await rpcRes.json().catch(() => null);
+  return json({ committed: result?.committed === true }, 200, origin, allowed);
 }
 
 // Verify the caller's Supabase JWT (Authorization: Bearer) against /auth/v1/user
 // and return the authoritative { userId, isUnlimited }. On any failure returns
 // { userId: null, status, code, error } so the caller can shape its own response.
-// Shared by /begin-scan and the /gemini-jwt gate (DRY — the same auth check).
+// Shared by /begin-scan, /commit-scan and the /gemini-jwt gate (DRY — same auth check).
 async function resolveUser(request, env) {
   const authHeader = request.headers.get('Authorization') || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
@@ -278,7 +363,7 @@ async function resolveUser(request, env) {
 }
 
 // Gate for /gemini-jwt: require a valid Supabase JWT (not a scan token). Returns a
-// Response (4xx/5xx) to BLOCK, or null to proceed. Unlike requireScanToken there is
+// Response (4xx/5xx) to BLOCK, or null to proceed. Unlike requireScanBudget there is
 // NO transition mode — this route is brand new, so every client that calls it always
 // sends the JWT; there is no legacy un-authed caller to grandfather in.
 async function requireUserJwt(request, env, origin, allowed) {
@@ -292,77 +377,129 @@ async function requireUserJwt(request, env, origin, allowed) {
   return null;
 }
 
-// Returns a Response (the 403) when the gate should BLOCK, or null when the
-// request may proceed. In transition mode (SCAN_TOKEN_ENFORCE !== "true") a
-// missing/invalid token is logged but allowed through, so clients without the
-// token-sending OTA keep working during rollout.
-async function requireScanToken(request, env, origin, allowed) {
+// Gate for a paid route. Verifies the scan-token ENVELOPE (authentic + unexpired),
+// then SPENDS one unit of that reservation's per-route call budget (consume_budget).
+// The budget is the real cost control — it bounds call VOLUME, so a leaked token can
+// drain at most one scan's worth, not the whole prepaid pool. Returns a Response to
+// BLOCK, or null to proceed (budget decremented).
+//
+// route is 'gemini' or 'tavily' (the budget bucket).
+//
+// Fail direction:
+//   • ENFORCE (SCAN_TOKEN_ENFORCE="true"): every failure fails CLOSED — bad/missing
+//     token → 403, exhausted/expired budget → 402, Supabase unreachable → 503. Better
+//     an outage than an open faucet on prepaid funds.
+//   • TRANSITION ("false"/unset): observe but ALLOW — logs each failure (incl. a
+//     "would_block" for an exhausted budget) and proceeds, so the worker can deploy
+//     before the token-sending OTA AND so real budget consumption can be watched in
+//     `wrangler tail` to confirm the budgets are sized right BEFORE flipping enforce.
+async function requireScanBudget(request, env, route, origin, allowed) {
   const enforce = String(env.SCAN_TOKEN_ENFORCE || '').toLowerCase() === 'true';
+  const path = new URL(request.url).pathname;
   const tok = request.headers.get('X-Scan-Token') || '';
 
-  // Misconfiguration trap (audit 2026-06-26): with SCAN_TOKEN_SECRET unset, no
-  // token can ever verify, so in transition mode EVERY paid call silently passes
-  // unmetered and the operator believes the fix is live when it is completely
-  // inert. /begin-scan 500s on the unset secret, but nothing surfaces on the paid
-  // routes. Log loudly on every paid request so it is caught in `wrangler tail`.
+  // Misconfiguration trap (audit 2026-06-26): with SCAN_TOKEN_SECRET unset, no token
+  // can verify, so in transition mode EVERY paid call silently passes unmetered.
+  // Log loudly so it's caught in tail; under enforce, fail closed.
   if (!env.SCAN_TOKEN_SECRET) {
     console.error('SCAN metering INERT: SCAN_TOKEN_SECRET unset — paid routes are unmetered',
-      JSON.stringify({ path: new URL(request.url).pathname, enforce }));
-    // With no secret we cannot verify; under enforcement that means a hard 503
-    // (fail closed — better an outage than a silent open door), and in transition
-    // mode fall through to the un-tokened-allow path below (with the error logged).
+      JSON.stringify({ path, enforce }));
     if (enforce) {
       return json({ error: 'Scan metering misconfigured', code: 'METERING_INERT' }, 503, origin, allowed);
     }
+    return null;  // transition: allow (logged)
   }
 
-  const ok = tok && env.SCAN_TOKEN_SECRET
-    ? await verifyScanToken(tok, env.SCAN_TOKEN_SECRET)
-    : false;
+  // 1. Verify the token envelope (cheap, no DB). Yields the reservationId + userId.
+  const v = tok ? await verifyScanToken(tok, env.SCAN_TOKEN_SECRET) : { valid: false };
+  if (!v.valid) {
+    if (!enforce) {
+      console.warn('scan-token transition', JSON.stringify({ reason: tok ? 'invalid_or_expired' : 'missing', path }));
+      return null;
+    }
+    return json({ error: 'Scan token required', code: 'NO_SCAN_TOKEN' }, 403, origin, allowed);
+  }
 
-  if (ok) return null;  // valid token — proceed
-
-  if (!enforce) {
-    // Transition mode: observe but do not block. Distinguish "no token at all"
-    // (old client) from "bad/expired token" (bug) so the logs are actionable.
-    console.warn('scan-token transition', JSON.stringify({
-      reason: tok ? 'invalid_or_expired' : 'missing',
-      path: new URL(request.url).pathname,
-    }));
+  // 2. Spend one unit of the reservation's per-route budget (atomic decrement-or-fail).
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+    // Can't reach the budget store. Under enforce fail closed; transition allow.
+    if (enforce) return json({ error: 'Budget store unavailable', code: 'BUDGET_CHECK_FAILED' }, 503, origin, allowed);
     return null;
   }
-  return json({ error: 'Scan token required', code: 'NO_SCAN_TOKEN' }, 403, origin, allowed);
+  let dec, rpcRes;
+  try {
+    rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/consume_budget`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': env.SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      },
+      body: JSON.stringify({ p_reservation_id: v.reservationId, p_user_id: v.userId, p_route: route }),
+    });
+    dec = rpcRes.ok ? await rpcRes.json().catch(() => null) : null;
+  } catch {
+    dec = null; rpcRes = null;
+  }
+
+  if (!rpcRes || !rpcRes.ok || dec == null) {
+    // Supabase failure — fail CLOSED under enforce, observe under transition.
+    console.warn('consume_budget transport failure', JSON.stringify({ route, path, status: rpcRes?.status }));
+    if (enforce) return json({ error: 'Could not verify scan budget', code: 'BUDGET_CHECK_FAILED' }, 503, origin, allowed);
+    return null;
+  }
+
+  if (dec.ok !== true) {
+    // Budget exhausted / expired / wrong user. Under enforce 402; transition observe.
+    if (!enforce) {
+      console.warn('scan-budget would_block', JSON.stringify({ route, path, reason: dec.reason }));
+      return null;
+    }
+    return json({ error: 'Scan budget exhausted', code: 'BUDGET_EXHAUSTED', reason: dec.reason }, 402, origin, allowed);
+  }
+
+  return null;  // budget decremented — proceed to the upstream paid call
 }
 
-// Token format: base64url(`${userId}.${expEpochSeconds}`) + "." + base64url(HMAC-SHA256).
-// Stateless (no DB lookup on the hot path); the HMAC binds userId+exp so it can't
-// be forged or extended. Bound to one recorded scan of allowance already consumed.
-async function mintScanToken(userId, secret) {
-  // exp uses request-time wall clock; Workers expose Date in the request scope.
-  const exp = Math.floor(Date.now() / 1000) + SCAN_TOKEN_TTL_SECONDS;
-  const payload = `${userId}.${exp}`;
+// Token format: base64url(`${reservationId}.${userId}.${exp}`) + "." + base64url(HMAC).
+// The HMAC binds reservationId+userId+exp so the client can't forge/extend it. The
+// reservationId NAMES the server-side call budget (scan_reservations) that the paid
+// routes decrement — the token is a fast forgery-proof envelope, the budget is the
+// real limit. reservationId + userId are UUIDs (no '.'), so the 3-field split is
+// unambiguous. exp is passed in (the DB-computed reservation expiry) so the
+// stateless token-expiry and the row's expires_at agree exactly.
+async function mintScanToken(reservationId, userId, exp, secret) {
+  const payload = `${reservationId}.${userId}.${exp}`;
   const sig = await hmacSha256(payload, secret);
   return `${b64urlEncode(payload)}.${b64urlEncode(sig)}`;
 }
 
+// Returns { valid:false } on bad sig / malformed / expired, or
+// { valid:true, reservationId, userId, exp } on a verified, unexpired envelope.
+// NOTE: a valid envelope does NOT mean budget remains — the paid route must still
+// call consume_budget. This only proves authenticity + non-expiry (cheap, no DB).
 async function verifyScanToken(tok, secret) {
   try {
     const dot = tok.indexOf('.');
-    if (dot < 0) return false;
+    if (dot < 0) return { valid: false };
     const payloadB64 = tok.slice(0, dot);
     const sigB64 = tok.slice(dot + 1);
     const payload = b64urlDecodeToString(payloadB64);
     const expectedSig = await hmacSha256(payload, secret);
-    // Constant-time compare of the raw signature bytes.
-    if (!timingSafeEqualStr(sigB64, b64urlEncode(expectedSig))) return false;
-    const sep = payload.lastIndexOf('.');
-    if (sep < 0) return false;
-    const exp = parseInt(payload.slice(sep + 1), 10);
-    if (!Number.isFinite(exp)) return false;
-    if (Math.floor(Date.now() / 1000) > exp) return false;  // expired
-    return true;
+    if (!timingSafeEqualStr(sigB64, b64urlEncode(expectedSig))) return { valid: false };
+    // payload = reservationId.userId.exp — split on the FIRST two dots only (the
+    // two UUIDs contain none; exp is a plain integer).
+    const d1 = payload.indexOf('.');
+    const d2 = payload.indexOf('.', d1 + 1);
+    if (d1 < 0 || d2 < 0) return { valid: false };
+    const reservationId = payload.slice(0, d1);
+    const userId = payload.slice(d1 + 1, d2);
+    const exp = parseInt(payload.slice(d2 + 1), 10);
+    if (!reservationId || !userId || !Number.isFinite(exp)) return { valid: false };
+    if (Math.floor(Date.now() / 1000) > exp) return { valid: false };  // expired
+    return { valid: true, reservationId, userId, exp };
   } catch {
-    return false;
+    return { valid: false };
   }
 }
 
@@ -654,10 +791,14 @@ async function handleUpload(request, env, origin, allowed) {
   // public R2 domain is stored XSS / arbitrary-content hosting (audit 2026-06-26).
   // Normalize to the validated type and never echo a caller-chosen Content-Type.
   const RASTER = { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
-  // Coerce a non-string contentType (number/object) to a clean 415 rather than a
-  // TypeError → opaque 500 on .toLowerCase(). [audit 2026-06-26]
-  const ctRaw = typeof body.contentType === 'string' ? body.contentType : '';
-  const requested = (ctRaw || 'image/jpeg').toLowerCase().split(';')[0].trim();
+  // contentType is attacker-controlled. ABSENT (undefined/null) → default to JPEG.
+  // PRESENT but not a string (number/object) → malformed: reject 415 (don't silently
+  // treat it as JPEG, and never let .toLowerCase() throw a TypeError → opaque 500).
+  // [audit 2026-06-26; re-verify: present-non-string now 415s, matching the comment]
+  if (body.contentType != null && typeof body.contentType !== 'string') {
+    return json({ error: 'Invalid contentType' }, 415, origin, allowed);
+  }
+  const requested = (body.contentType || 'image/jpeg').toLowerCase().split(';')[0].trim();
   const ext = RASTER[requested];
   if (!ext) {
     return json({ error: 'Only JPEG, PNG, or WebP images are allowed' }, 415, origin, allowed);
@@ -1046,7 +1187,10 @@ function corsHeaders(origin, allowed) {
   return {
     'Access-Control-Allow-Origin': acao,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Client-Key, Authorization',
+    // X-Scan-Token must be advertised or a browser CORS preflight for a token-bearing
+    // paid call fails. Not reachable from mobile (no Origin → no preflight), but
+    // pre-arms the eventual web token port so it isn't a silent landmine. [re-verify]
+    'Access-Control-Allow-Headers': 'Content-Type, X-Client-Key, Authorization, X-Scan-Token',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };

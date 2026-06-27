@@ -22,7 +22,7 @@ import { fetchWikipediaPortraits, fetchWikipediaArticleSummary } from '../lib/ap
 import { generateBiography } from '../lib/biography';
 import { forwardGeocode, reverseGeocode, reverseGeocodeCemetery } from '../lib/api-nominatim';
 import { checkScanLimit } from '../lib/scan-limit';
-import { beginScan, endScan } from '../lib/scan-token';
+import { beginScan, endScan, commitScan } from '../lib/scan-token';
 import { getLibraryAssetGps } from '../lib/media-gps';
 import { loadStories, saveStories } from '../lib/storage';
 import { savePendingPhoto, readPendingPhoto, deletePendingPhoto } from '../lib/pending';
@@ -702,19 +702,18 @@ export default function CameraScreen({ navigation, route }) {
 
       // ── SERVER-SIDE SCAN GATE (S78 / audit 2026-06-26) ──────────────
       // The authoritative cost control. beginScan() calls the Worker /begin-scan,
-      // which verifies the JWT, atomically records ONE scan via consume_scan(), and
-      // mints the short-lived scan token that proxyHeaders() attaches to every
-      // subsequent paid call (OCR symbol-resolution, research, biography). Placed
+      // which verifies the JWT, CHECKS the user's allowance (read-only — records
+      // NOTHING), and mints the short-lived scan token that proxyHeaders() attaches to
+      // every subsequent paid call (symbol-resolution, research, biography). Placed
       // HERE — after OCR + the bio-cache decision, before any scan-token-gated call
-      // (resolveSymbolMeanings below is the first) — so that:
-      //   • a verify-REJECTED photo never reaches here (it returns far above), so a
-      //     non-gravestone does NOT burn a scan (verify ran on the JWT route);
-      //   • a bio-CACHE hit still consumes exactly one scan (parity with web, which
-      //     counts even on a cache hit), because we gate before the cachedBio branch;
-      //   • the scan is recorded exactly ONCE, server-side — the old client-side
-      //     incrementScanCount() below has been REMOVED to avoid double-counting.
-      // The pre-picker checkScanLimit() is now an advisory fast-path; THIS is the
-      // real gate (it can't be skipped or raced — consume_scan is atomic).
+      // (resolveSymbolMeanings below is the first) — so that a verify-REJECTED photo
+      // never reaches here (verify + OCR ran on the JWT route). The scan is RECORDED
+      // later by commitScan() — only AFTER the biography is successfully produced — so
+      // a mid-pipeline failure costs nothing, with no client-triggerable delete to
+      // abuse (the old client incrementScanCount was removed in S78; a refund route
+      // was tried and rejected as an allowance-reset vector). A bio-CACHE hit still
+      // commits one scan (parity with web), because the cache branch also reaches the
+      // commit below. [re-review 2026-06-26]
       const scanGate = await beginScan();
       if (!scanGate.allowed) {
         // Clear the in-flight markers so leaving doesn't log scan_abandoned, and
@@ -1157,11 +1156,22 @@ export default function CameraScreen({ navigation, route }) {
       const { data: { session } } = await supabase.auth.getSession();
       const defaultPublic = session?.user?.user_metadata?.default_public ?? false;
 
-      // NOTE (S78 / audit 2026-06-26): the scan was already recorded SERVER-SIDE by
-      // consume_scan() inside beginScan() near the top of this function. The old
-      // client-side incrementScanCount() call that used to live here has been REMOVED
-      // — keeping both would INSERT two scan_events rows per scan and burn the user's
-      // allowance at 2×. consume_scan is now the single authoritative scan recorder.
+      // RECORD THE SCAN (S78 / re-review 2026-06-26). The biography is now produced
+      // (full pipeline OR cache hit — both paths converge here), so commit the scan
+      // server-side: commitScan() → /commit-scan → commit_reservation() flips the
+      // pending reservation to a permanent scan_event. /begin-scan only RESERVED an
+      // allowance slot + armed the token earlier, so a mid-pipeline failure before this
+      // point never recorded anything — the pending hold ages out via its TTL (failure
+      // costs nothing, with no client-triggerable delete). Awaited but non-fatal: a
+      // failed commit (offline / already-expired) leaves the scan uncounted — the safe
+      // direction — and we still show the bio the user already paid compute for.
+      // This is the SOLE client scan recorder (old incrementScanCount removed in S78).
+      try {
+        const c = await commitScan();
+        if (!c.committed) console.warn('commitScan: scan not recorded (offline or raced past limit)');
+      } catch (e) {
+        console.warn('commitScan failed (non-fatal):', e?.message || e);
+      }
 
       // Build the story but DO NOT persist it yet. Persistence (local save, cloud
       // save, R2 upload, canonical-grave linking, grave_photos contribution) now
@@ -1265,6 +1275,9 @@ export default function CameraScreen({ navigation, route }) {
       pipelineActiveRef.current = false; // resolved into the error screen, not abandoned
       logEvent(EVENTS.PIPELINE_ERROR, { stage: 'pipeline', message: err?.message, dur_ms: Date.now() - pipelineStartRef.current });
       console.warn('Pipeline error:', String(err), 'message:', err?.message, 'stack:', err?.stack);
+      // No scan refund needed: the scan is only RECORDED by commitScan() AFTER the bio
+      // succeeds, so a failure here (before commit) never recorded one — it already
+      // costs nothing. [re-review 2026-06-26: replaced the refund mechanism]
       // For fresh scans, offer to queue the photo for later — the common cause
       // here is the signal dropping mid-pipeline. Resumed pending scans are
       // already queued, so they just get the error.

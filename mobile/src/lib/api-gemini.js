@@ -584,21 +584,34 @@ export function stripOriginatedNamesFromSources(sources, originatedRelatives, su
 // recognize it would re-leak a living relative's name on session expiry. [#13]
 export const REDACTION_UNAVAILABLE = 'This public biography is being prepared.';
 
-// True when a JWT-route Gemini failure is an AUTH failure (no session / expired or
-// unverifiable JWT → Worker 401/403), as opposed to a benign Gemini hiccup. Auth
-// failures must fail CLOSED on the public path; benign failures keep the long-standing
-// fail-open (return original). data.error may be a nested object (code 401) or a Worker
-// string error ('Sign in…' / code NO_AUTH|BAD_AUTH).
+// True when a JWT-route Gemini failure means we COULD NOT authenticate/verify the
+// user (no session, expired/unverifiable JWT → Worker 401/403, OR Supabase
+// unreachable → 503 CHECK_FAILED), as opposed to a benign Gemini hiccup. These must
+// fail CLOSED on the public path; benign failures keep the long-standing fail-open.
+//
+// The error can arrive in several shapes, so check ALL of them [re-verify 2026-06-26]:
+//   • client no-session sentinel: { error: { message:'Not signed in', code:401 } }
+//   • Worker requireUserJwt 401/403: a FLAT { error:'<string>', code:'NO_AUTH'|'BAD_AUTH' }
+//     — note `code` is a SIBLING of `error`, not nested, so we must read data.code too.
+//   • Worker/Supabase 503: code 'CHECK_FAILED' (auth verify unreachable → fail closed).
 function isJwtAuthError(data) {
-  const e = data?.error;
+  if (!data) return false;
+  // Top-level code sibling (Worker flat error shape) — the case the first fix missed.
+  const topCode = String(data.code || '').toUpperCase();
+  if (topCode === 'NO_AUTH' || topCode === 'BAD_AUTH' || topCode === 'CHECK_FAILED') return true;
+  const e = data.error;
   if (!e) return false;
   if (typeof e === 'object') {
-    if (e.code === 401 || e.code === 403) return true;
+    if (e.code === 401 || e.code === 403 || e.code === 503) return true;
+    const ec = String(e.code || '').toUpperCase();
+    if (ec === 'NO_AUTH' || ec === 'BAD_AUTH' || ec === 'CHECK_FAILED') return true;
     const m = (e.message || '').toLowerCase();
-    return m.includes('not signed in') || m.includes('sign in') || m.includes('expired') || m.includes('no_auth') || m.includes('bad_auth');
+    return m.includes('not signed in') || m.includes('sign in') || m.includes('expired')
+        || m.includes('no_auth') || m.includes('bad_auth') || m.includes('verify session');
   }
   const s = String(e).toLowerCase();
-  return s.includes('sign in') || s.includes('no_auth') || s.includes('bad_auth') || s.includes('expired') || s.includes('unauthorized');
+  return s.includes('sign in') || s.includes('no_auth') || s.includes('bad_auth')
+      || s.includes('expired') || s.includes('unauthorized') || s.includes('verify session');
 }
 
 export async function redactLivingNamesForPublic(biography, subjects) {

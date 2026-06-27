@@ -3,12 +3,18 @@ import { supabase } from './supabase';
 
 // ── Per-scan token (mobile) ───────────────────────────────────────
 //
-// The server-side cost control. Before a scan runs its (many) paid Gemini/Tavily
-// proxy calls, the client calls beginScan() ONCE. The Worker verifies the user's
-// JWT, atomically records the scan against their allowance (consume_scan RPC), and
-// — only if allowed — returns a short-lived HMAC token bound to that user. Every
-// paid proxy call then sends that token as X-Scan-Token; the Worker rejects paid
-// calls without a valid token (once SCAN_TOKEN_ENFORCE is on).
+// The server-side cost control, split CHECK / COMMIT so a failed scan costs nothing:
+//   • beginScan() — called ONCE before the paid calls. The Worker verifies the JWT,
+//     RESERVES an allowance slot + per-route call budget (reserve_scan — records no
+//     permanent scan_event), and — only if under allowance — returns a short-lived
+//     HMAC token naming that reservation. Every paid proxy call sends it as
+//     X-Scan-Token; the Worker verifies it AND spends one unit of the reservation's
+//     budget per call (so a leaked token is bounded to one scan's worth).
+//   • commitScan() — called ONCE after the biography succeeds. The Worker converts the
+//     pending reservation into a permanent scan_event (commit_reservation). A
+//     mid-pipeline failure never commits → the pending hold ages out via its TTL →
+//     free, with no client-triggerable delete to abuse (a refund route was rejected
+//     in review as an allowance-reset vector). [re-review 2026-06-26]
 //
 // The token lives in module scope for the duration of the current scan. proxyHeaders()
 // is the single source of headers for paid calls, so no call site can forget it.
@@ -80,6 +86,45 @@ export function proxyHeaders(extra = {}) {
 // reused across scans. Non-essential (tokens expire), but tidy.
 export function endScan() {
   _scanToken = null;
+}
+
+// Record the scan — call ONCE, only AFTER the biography is successfully produced.
+// /begin-scan only RESERVED an allowance slot + armed the token; THIS converts the
+// pending reservation into a permanent scan_event (server-side commit_reservation).
+// A mid-pipeline failure simply never calls this → the pending hold ages out via its
+// TTL and the scan costs nothing, with no client-triggerable delete to abuse.
+// MUST send X-Scan-Token: the Worker reads the reservation id from the (signed) token
+// so it commits exactly the reservation that was issued (and asserts the token's user
+// matches the JWT). Returns { committed }. committed=false means the reservation was
+// already committed/expired (rare). Best-effort: a network failure returns
+// committed:false — the bio is still shown (uncounted scan is the safe direction;
+// better than charging for nothing). [re-review 2026-06-26: reservation model]
+export async function commitScan() {
+  let jwt = null;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    jwt = session?.access_token || null;
+  } catch {
+    jwt = null;
+  }
+  if (!jwt || !_scanToken) return { committed: false };
+  try {
+    const res = await fetch(`${PROXY_BASE}/commit-scan`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-Key': CLIENT_KEY,
+        'Authorization': `Bearer ${jwt}`,
+        'X-Scan-Token': _scanToken,
+      },
+    });
+    let body = null;
+    try { body = await res.json(); } catch { body = null; }
+    if (res.ok) return { committed: body?.committed === true };
+  } catch {
+    // network failure — uncounted scan (safe direction); bio still shown.
+  }
+  return { committed: false };
 }
 
 // Headers for a JWT-authorized Gemini call that runs OUTSIDE a scan window and must

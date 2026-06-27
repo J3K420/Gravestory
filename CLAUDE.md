@@ -6,7 +6,7 @@
 - **Always commit and push at the end of every session.** Do not leave work uncommitted.
 - **Mobile JS changes ship via OTA to the `production` channel** (where live testers are): `npx eas update --branch production --environment production`. Verify with `eas channel:list` before publishing. Native-module changes need a new build, not an OTA.
 - **Any web change must bump the `CACHE` version in `sw.js`** (increment the `gravestory-vN` number at the top of `sw.js`) or users keep the old cached shell.
-- Web and mobile are parallel codebases. Search/biography logic lives in BOTH `js/` and `mobile/src/lib/` — apply behavioral changes to both unless explicitly web- or mobile-only. **⚠️ Provisional — see "Planned direction: web → app landing page" below: the owner intends to reduce the web app to a thin marketing/SEO page, so before porting non-trivial pipeline logic to web, confirm whether that web path will survive the pivot. Don't sink effort into web pipeline parity that's about to be deleted.**
+- **Mobile is the product; web is becoming a landing page. DO NOT maintain web/mobile parity for the scan/research pipeline.** Historically `js/` and `mobile/src/lib/` were parallel codebases kept in sync. That rule is RETIRED (decided 2026-06-27): the owner is turning the web app into a **thin pointer to the native apps** (see "Planned direction" below), so the web scan/research pipeline (`js/` OCR, Tavily/WikiTree/Wikidata/Wikipedia research, biography, save/sync) is a **deletion candidate, not a parity target**. Apply mobile changes to mobile only. Do NOT port pipeline logic to `js/`. The **community global map + public-bio serving** paths are the exception — they survive the pivot as the SEO/landing surface, so changes THERE still apply to both. When unsure whether a web path survives, treat it as not-surviving (don't invest) and confirm with the owner.
 
 ## What this app does
 
@@ -14,13 +14,13 @@ GraveStory is a mobile-first PWA (+ Expo Android app) for cemetery visitors. The
 
 **Core flow:** photo → EXIF/device GPS → Gemini gravestone verification → Gemini OCR (structured JSON) → parallel research (Tavily, WikiTree, Wikidata, Chronicling America, Internet Archive, Wikipedia) → Nominatim/Overpass geocoding → Gemini biography → save / share / per-cemetery Leaflet map → optional public sharing on community global map.
 
-## Planned direction: web → app landing page (not yet scheduled)
+## Planned direction: web → app landing page (DECIDED — direction is settled)
 
-The owner intends, at some point, to **strip the full web app (PWA scan pipeline) down to a thin landing page** whose job is to point visitors to the native apps on the **Google Play Store (Android)** and the **Apple App Store (iOS)**. The interactive scan/research pipeline becomes **mobile-only**; the web app is no longer a co-equal product surface.
+The owner is taking the web app from a co-equal product surface to a **thin landing page** whose job is to point visitors to the native apps on the **Google Play Store (Android)** and the **Apple App Store (iOS)**. The interactive scan/research pipeline is **mobile-only going forward**. The web PWA scan pipeline (`js/`) is a **deletion candidate** — do not extend it or keep it at parity with mobile.
 
-- **Likely retained on web:** a public **community global map** — kept partly as a real feature and partly as an **SEO surface** (indexable cemetery/biography pages to drive organic discovery and app installs). The exact scope (which bio content is indexable, how pages are generated) is undecided.
-- **Implication for the parity rule above:** this pivot weakens the "apply behavioral changes to BOTH web and mobile" rule. Most `js/` pipeline code (OCR, Tavily/WikiTree/Wikidata/Wikipedia research, biography generation, save/sync) is a candidate for **deletion**, not continued parity. **Before investing effort porting non-trivial logic to web, ask whether that code survives the pivot.** The global-map + public-bio-serving paths are the parts most likely to stay (they feed the SEO/landing page), so parity still matters THERE.
-- **Status:** a stated intention, **not yet planned or scheduled** — no timeline, no design. Treat it as directional context for prioritization decisions, not an active task. Confirm with the owner before acting on it.
+- **Retained on web:** a public **community global map**, kept both as a real feature and as an **SEO surface** (indexable cemetery/biography pages to drive organic discovery + app installs). Exact scope (which bio content is indexable, how pages are generated) is still TBD, but the global-map + public-bio-serving paths are the parts that SURVIVE — changes there still apply to web.
+- **Decided 2026-06-27:** the parity rule is RETIRED (see the "DO NOT maintain web/mobile parity" bullet under Working conventions). Mobile changes go to mobile only; don't port pipeline logic to `js/`.
+- **Status:** the DIRECTION is settled. The execution (when web is actually stripped, what the landing page looks like) is not yet scheduled/designed — but no longer "confirm before acting on the direction." When building, default to mobile-only for pipeline work without re-asking.
 
 ---
 

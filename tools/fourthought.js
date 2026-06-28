@@ -7,8 +7,17 @@
  * "Cognicism" framework). FourThought logs four kinds of timestamped,
  * staked claims — PREDICTIONS, STATEMENTS, REFLECTIONS, QUESTIONS — and
  * grades predictions against reality after the fact. Each claim carries a
- * VALENCE (how much it aligns with what you value, 1–10) and an UNCERTAINTY
- * (how unsure you are it's true / will happen, 0–1).
+ * CERTAINTY (how sure you are it's true / will happen) and we add a VALENCE
+ * (how much you'd value it landing) for ROI.
+ *
+ * CERTAINTY scale matches the FourThought source verbatim — his browser
+ * extension (github.com/speakerjohnash/fourthought_BE, popup.html) defines
+ * `<input id="certainty" min="0" max="100" value="100">`: a 0–100 percentage,
+ * higher = more certain, default 100. (An earlier draft of this tool used an
+ * inverted 0–1 "uncertainty"; corrected after checking the source.) VALENCE
+ * (1–10, how much you value the outcome) is OUR extension for ROI — the
+ * glossary names valence as a real voting mechanism but his client omits it
+ * and doesn't fix a scale, so the 1–10 range is our choice.
  *
  * This is a faithful SINGLE-AUTHOR SUBSET: the social machinery of the full
  * protocol (Ŧrust, community valence voting, Deep Democracy consensus) is
@@ -28,7 +37,7 @@
  * activity from the linked branch since the prediction's timestamp.
  *
  * Commands:
- *   predict   "<text>" --valence N --uncertainty F [--branch B] [--cost-estimate T] [--tag X]
+ *   predict   "<text>" --valence N --certainty C [--branch B] [--cost-estimate T] [--tag X]
  *   statement "<text>" [--tag X]
  *   question  "<text>" [--tag X]
  *   reflect   <id> --outcome shipped|partial|failed|abandoned --worth N [--note "..."]
@@ -127,6 +136,18 @@ function num(v, dflt) {
   return dflt; // boolean true (valueless flag), empty string, undefined, etc.
 }
 
+// Resolve a prediction's certainty (0–100, higher = more sure) regardless of
+// schema vintage. New rows store `certainty`; a legacy row may store the old
+// inverted `uncertainty` (0–1, lower = more sure) — convert it so old
+// predictions still score correctly. Falls back to 100 (fully certain, the
+// FourThought default) if neither is a usable number.
+function certaintyOf(row) {
+  if (typeof row.certainty === 'number' && Number.isFinite(row.certainty)) return row.certainty;
+  if (typeof row.uncertainty === 'number' && Number.isFinite(row.uncertainty))
+    return (1 - row.uncertainty) * 100; // 0–1 uncertainty → 0–100 certainty
+  return 100;
+}
+
 // Token spend in a [since, until) window, optionally filtered to a project.
 function tokenSpend(sinceIso, untilIso, projectFilter) {
   const r = usage.scan({
@@ -191,24 +212,28 @@ const TYPE_GLYPH = { prediction: '◆ pred', statement: '▸ stmt', reflection: 
 // ---- commands ------------------------------------------------------------
 function cmdPredict(p, f) {
   const text = p.join(' ').trim();
-  if (!text) return fail('predict needs text: fourthought predict "..." --valence N --uncertainty F');
+  if (!text) return fail('predict needs text: fourthought predict "..." --valence N --certainty C');
   const valence = num(f.valence, null);
-  const uncertainty = num(f.uncertainty, null);
+  // certainty: 0–100, higher = more sure it will happen, default 100. This
+  // matches speakerjohnash's FourThought source (fourthought_BE/popup.html:
+  // `<input id="certainty" min="0" max="100" value="100">`), not the inverted
+  // 0–1 "uncertainty" the first draft used.
+  const certainty = f.certainty === undefined ? 100 : num(f.certainty, null);
   if (valence === null || valence < 1 || valence > 10)
     return fail('--valence must be 1–10 (how much you would value this landing)');
-  if (uncertainty === null || uncertainty < 0 || uncertainty > 1)
-    return fail('--uncertainty must be 0–1 (how unsure you are it will happen)');
+  if (certainty === null || certainty < 0 || certainty > 100)
+    return fail('--certainty must be 0–100 (how sure you are it will happen; higher = more sure)');
   const t = appendThought({
     type: 'prediction',
     text,
     valence,
-    uncertainty,
+    certainty,
     branch: typeof f.branch === 'string' ? f.branch : null,
     costEstimate: f['cost-estimate'] ? num(f['cost-estimate'], null) : null,
     tag: typeof f.tag === 'string' ? f.tag : null,
     resolved: false,
   });
-  console.log(`◆ prediction staked  id=${t.id}  valence=${valence}/10  uncertainty=${uncertainty}`);
+  console.log(`◆ prediction staked  id=${t.id}  valence=${valence}/10  certainty=${certainty}%`);
   console.log(`  "${text}"`);
   if (t.branch) console.log(`  branch: ${t.branch}`);
   console.log(`  reflect later with:  node tools/fourthought.js reflect ${t.id} --outcome shipped --worth N`);
@@ -252,13 +277,17 @@ function cmdReflect(p, f) {
   // ROI math (explicit design choice — see header):
   //   roi             = realized value per million tokens spent
   //   calibrationErr  = worth - predicted valence  (+ = undervalued, − = overvalued)
-  //   outcomeHit      = did it land? (shipped/partial = yes-ish)  vs predicted uncertainty
+  //   brier           = squared error of predicted P(land) vs what happened
   const mtok = spend.tokens / 1e6;
   const roi = mtok > 0 ? worth / mtok : null;
   const calibrationErr = worth - row.valence;
   const landed = outcome === 'shipped' ? 1 : outcome === 'partial' ? 0.5 : 0;
-  // Brier-style: predicted P(land) = 1 - uncertainty; penalty = (P - landed)^2
-  const brier = Math.pow(1 - row.uncertainty - landed, 2);
+  // certainty is 0–100 (higher = more sure), per the FourThought source.
+  // pLand = certainty/100. Back-compat: a legacy row may carry `uncertainty`
+  // (0–1, inverted); convert it so old reflections still score correctly.
+  const certainty = certaintyOf(row);
+  const pLand = certainty / 100;
+  const brier = Math.pow(pLand - landed, 2); // 0 = perfect, 1 = maximally wrong
 
   const refl = appendThought({
     type: 'reflection',
@@ -282,7 +311,7 @@ function cmdReflect(p, f) {
       calibrationError: calibrationErr,
       brier: Number(brier.toFixed(3)),
       predictedValence: row.valence,
-      predictedUncertainty: row.uncertainty,
+      predictedCertainty: certainty,
     },
   });
 
@@ -324,7 +353,7 @@ function cmdList(p, f) {
     const glyph = TYPE_GLYPH[r.type] || r.type;
     const date = (r.ts || '').slice(0, 10);
     let meta = '';
-    if (r.type === 'prediction') meta = ` v=${r.valence} u=${r.uncertainty}`;
+    if (r.type === 'prediction') meta = ` v=${r.valence} c=${certaintyOf(r)}%`;
     if (r.type === 'reflection') meta = ` ${r.outcome} worth=${r.worth} roi=${r.derived ? r.derived.roiPerMtok : '?'}`;
     const tag = r.tag ? `  #${r.tag}` : '';
     console.log(`  ${pad(r.id, 9)} ${glyph} ${date}${meta}${tag}`);
@@ -502,7 +531,7 @@ function fail(msg) {
 function usageText() {
   console.log(`fourthought — a FourThought ROI ledger for Claude Code work
 
-  predict   "<text>" --valence N(1-10) --uncertainty F(0-1) [--branch B] [--cost-estimate T] [--tag X]
+  predict   "<text>" --valence N(1-10) --certainty C(0-100, default 100) [--branch B] [--cost-estimate T] [--tag X]
   statement "<text>" [--tag X]
   question  "<text>" [--tag X]
   reflect   <id> --outcome shipped|partial|failed|abandoned --worth N(0-10) [--note "..."]

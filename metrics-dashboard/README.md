@@ -147,6 +147,17 @@ data — no refetch. (Graves have no per-user owner column, so the Graves card i
 always raw; grave-photos counts do honor the toggle.) The owner-account list
 lives in the `me` CTE of migration 030 — keep it in sync with `queries/dashboard.sql`.
 
+## Sections (v2)
+
+Beyond the headline cards, the dashboard now shows (all behind the same bearer gate):
+- **Trends · last 30 days** — daily line charts (scans/day, signups/day, new public stories/day), hand-drawn inline SVG, no dependency. Scans respect the exclude-mine toggle.
+- **Funnel** — the step funnel plus OCR-confidence split, abandonment rate + which step people bail at, and pipeline errors by stage.
+- **Loading time · last 30 days** — scan duration avg/p50/p90/max, cached vs full pipeline.
+- **Engagement** — sign-in provider split, scans-per-user buckets, marker-style popularity, tributes.
+- **Money in** — extended with purchases-by-pack, scans-before-first-purchase, and avg free-scan cost per non-buyer.
+
+Powered by **migration 034** (`034_admin_metrics_v2.sql`) — a superset of the 030 RPC plus a new `admin_daily_series(p_days)` for the trend charts. ⚠️ **Run migration 034 in the Supabase SQL editor** (after 030; `CREATE OR REPLACE`, safe to re-run) or the new sections stay empty/degraded.
+
 ## Notes on the numbers
 
 - **Est. revenue ($)** is reconstructed from credits sold via the price table

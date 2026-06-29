@@ -894,9 +894,10 @@ async function handleAdminMetrics(request, url, env, origin) {
 
   // Fan out: every source resolves to its own {status, ...} object. allSettled
   // means a thrown source becomes status:'error', not a 500 for the whole page.
-  const [summary, funnel, revenuecat, gcloud] = await Promise.all([
+  const [summary, funnel, series, revenuecat, gcloud] = await Promise.all([
     adminSupabaseSummary(env).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
     adminSupabaseFunnel(env, sinceIso).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
+    adminDailySeries(env, 30).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
     adminRevenueCat(env).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
     adminGoogleCloud(env).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
   ]);
@@ -914,8 +915,9 @@ async function handleAdminMetrics(request, url, env, origin) {
     ok: true,
     generated_at: new Date().toISOString(),
     window_hours: windowHours,
-    summary,        // product/usage/money-in/conversion/reports (Supabase RPC)
-    funnel,         // analytics_events tally over the window (Supabase REST)
+    summary,        // product/usage/money-in/conversion/reports/tributes/loading (Supabase RPC)
+    funnel,         // analytics_events tally over the window (Supabase REST) + OCR/errors/abandon
+    series,         // daily trend buckets, last 30d (admin_daily_series RPC)
     revenuecat,     // purchases/revenue (RevenueCat API) or degraded
     google_cloud: gcloud, // spend vs budget (BigQuery export) or degraded
     tavily,         // derived estimate + deep-link
@@ -950,6 +952,24 @@ async function adminSupabaseSummary(env) {
   return { status: 'live', ...data };
 }
 
+// Daily time-series for the trend charts (migration 034 admin_daily_series).
+// Returns { status, days: [{day, scans, scans_real, signups, new_public_stories}] }.
+async function adminDailySeries(env, days) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+    return { status: 'degraded', reason: 'Supabase service key not configured on the Worker' };
+  }
+  const res = await adminSb(env, 'rpc/admin_daily_series', {
+    method: 'POST',
+    body: JSON.stringify({ p_days: days }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`admin_daily_series ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  return { status: 'live', days: Array.isArray(data) ? data : [] };
+}
+
 // Funnel: pull analytics_events over the window and tally client-side (small
 // volume; same approach as tools/metrics-digest/digest.mjs). Capped at 50k rows.
 async function adminSupabaseFunnel(env, sinceIso) {
@@ -959,7 +979,9 @@ async function adminSupabaseFunnel(env, sinceIso) {
   // order=DESC so that if the window exceeds the 50k cap we keep the NEWEST
   // 50k events and drop the stale tail — the opposite would hide today's spike,
   // the one thing a "what's happening now" dashboard must never miss.
-  const q = `analytics_events?select=event,user_id&created_at=gte.${encodeURIComponent(sinceIso)}&order=created_at.desc&limit=50000`;
+  // props is now selected too so we can break OCR confidence / errors / abandon
+  // step out of the rows we already fetch (no extra query).
+  const q = `analytics_events?select=event,user_id,props&created_at=gte.${encodeURIComponent(sinceIso)}&order=created_at.desc&limit=50000`;
   const res = await adminSb(env, q, { method: 'GET' });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
@@ -968,12 +990,33 @@ async function adminSupabaseFunnel(env, sinceIso) {
   const rows = await res.json();
   const tally = {};
   let guestStarts = 0;
+  const ocrConfidence = {};   // high/medium/low/(none) → count
+  const errorsByStage = {};   // "stage/reason" → count
+  const abandonByStep = {};   // stepIndex label → count
+  const STEP_LABELS = ['verify', 'OCR', 'research', 'biography', 'finishing'];
   for (const r of rows) {
     tally[r.event] = (tally[r.event] || 0) + 1;
     if (r.event === 'scan_started' && !r.user_id) guestStarts++;
+    const p = r.props || {};
+    if (r.event === 'ocr_done') {
+      const c = p.confidence || '(none)';
+      ocrConfidence[c] = (ocrConfidence[c] || 0) + 1;
+    } else if (r.event === 'pipeline_error') {
+      // The catch-all emitter carries `message` (raw err) not `reason`; fall back
+      // to it so errors aren't all collapsed into `pipeline/?`. The client now
+      // also sends a coarse `reason` to keep this map low-cardinality.
+      const reason = p.reason || p.message || '?';
+      const k = `${p.stage || '?'}/${reason}`;
+      errorsByStage[k] = (errorsByStage[k] || 0) + 1;
+    } else if (r.event === 'scan_abandoned') {
+      const idx = Number(p.stepIndex);
+      const label = (Number.isInteger(idx) && STEP_LABELS[idx]) ? `${idx} ${STEP_LABELS[idx]}` : '?';
+      abandonByStep[label] = (abandonByStep[label] || 0) + 1;
+    }
   }
   const ev = (n) => tally[n] || 0;
   const started = ev('scan_started');
+  const abandoned = ev('scan_abandoned');
   return {
     status: 'live',
     truncated: rows.length >= 50000, // honest flag: tally is partial past 50k rows
@@ -988,9 +1031,13 @@ async function adminSupabaseFunnel(env, sinceIso) {
       paywall_shown: ev('paywall_shown'),
       scan_limit_hit: ev('scan_limit_hit'),
       purchase_completed: ev('purchase_completed'),
-      scan_abandoned: ev('scan_abandoned'),
+      scan_abandoned: abandoned,
       pipeline_error: ev('pipeline_error'),
     },
+    ocr_confidence: ocrConfidence,
+    errors_by_stage: errorsByStage,
+    abandoned_by_step: abandonByStep,
+    abandon_pct: started > 0 ? Math.round((abandoned / started) * 1000) / 10 : 0,
     guest_starts: guestStarts,
     signed_in_starts: started - guestStarts,
     total_events: rows.length,

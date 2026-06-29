@@ -1270,7 +1270,14 @@ export default function CameraScreen({ navigation, route }) {
     } catch (err) {
       setLoading(false);
       pipelineActiveRef.current = false; // resolved into the error screen, not abandoned
-      logEvent(EVENTS.PIPELINE_ERROR, { stage: 'pipeline', message: err?.message, dur_ms: Date.now() - pipelineStartRef.current });
+      // Classify into a COARSE reason (bounded cardinality) so the admin
+      // dashboard's "errors by stage" can group them; keep the raw message too.
+      const _em = String(err?.message || '');
+      const reason = /timeout|timed out/i.test(_em) ? 'timeout'
+        : /network|fetch|connection|offline/i.test(_em) ? 'network'
+        : /gemini|overload|503|429/i.test(_em) ? 'gemini'
+        : 'unknown';
+      logEvent(EVENTS.PIPELINE_ERROR, { stage: 'pipeline', reason, message: err?.message, dur_ms: Date.now() - pipelineStartRef.current });
       console.warn('Pipeline error:', String(err), 'message:', err?.message, 'stack:', err?.stack);
       // No scan refund needed: the scan is only RECORDED by commitScan() AFTER the bio
       // succeeds, so a failure here (before commit) never recorded one — it already

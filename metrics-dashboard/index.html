@@ -111,6 +111,25 @@
   .funnel .row.warn .n { color: var(--rust); }
   .bar { height: 6px; background: rgba(201,168,76,0.5); border-radius: 3px; margin-top: 3px; }
 
+  /* sub-heading inside a section (above a bar list) */
+  .subhead {
+    color: var(--ashDim, #8a7d6c); font-size: 0.72rem; text-transform: uppercase;
+    letter-spacing: 0.06em; margin: 16px 0 8px;
+  }
+  /* trend line charts */
+  .trend-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  .trend { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .trend-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .trend-title { color: var(--aged); font-size: 0.85rem; }
+  .trend-total { color: var(--gold); font-family: 'Playfair Display', serif; font-size: 1.1rem; }
+  .spark { width: 100%; height: 56px; display: block; }
+  /* horizontal bar rows for distributions */
+  .barrow { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+  .barrow-label { flex: 0 0 42%; color: var(--aged); font-size: 0.84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .barrow-track { flex: 1; height: 8px; background: rgba(201,168,76,0.10); border-radius: 4px; overflow: hidden; }
+  .barrow-fill { height: 100%; background: rgba(201,168,76,0.55); border-radius: 4px; }
+  .barrow-val { flex: 0 0 auto; min-width: 36px; text-align: right; color: var(--parchment); font-size: 0.84rem; font-family: 'Playfair Display', serif; }
+
   .quiet { text-align: center; color: var(--stone); font-style: italic; padding: 30px 0; }
   .err { color: #e8a18f; font-size: 0.85rem; margin-top: 4px; }
   #gate { max-width: 420px; margin: 60px auto; text-align: center; }
@@ -191,6 +210,9 @@
   function num(n) { return (typeof n === 'number') ? n.toLocaleString('en-US') : '—'; }
   // Typed money formatter — '$1,234' for a finite number, '—' otherwise (never $NaN).
   function money(n) { return (typeof n === 'number' && isFinite(n)) ? '$' + n.toLocaleString('en-US') : '—'; }
+  // Numeric/decimal formatter that COERCES first — PostgREST can serialize numeric
+  // as a string; Number() recovers it, NaN/Infinity → '—' (never raw NaN).
+  function numf(n) { n = Number(n); return isFinite(n) ? n.toLocaleString('en-US') : '—'; }
   function pct(n, d) { return d > 0 ? Math.round((n / d) * 100) : 0; }
   // pick(obj, 'field') → the `_real` value when the toggle is on (and it exists),
   // else the raw value. Centralizes the owner-exclusion choice for every card.
@@ -220,6 +242,61 @@
     return '<div class="section-title">' + esc(title) + (statusPill || '') + '</div>' + inner;
   }
 
+  // ── inline-SVG charts (no dependency) ───────────────────────────
+  // Small trend line + faint area fill + last-point dot. `values` is an array of
+  // numbers (oldest→newest). Scales to the viewBox; flat/empty series degrade to
+  // a baseline. Numbers only — no user strings reach the SVG, so no escaping risk.
+  function lineChart(values, opts) {
+    opts = opts || {};
+    var W = 280, H = 56, pad = 3;
+    var n = values.length;
+    if (n === 0) return '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none"></svg>';
+    var max = Math.max.apply(null, values);
+    var min = Math.min(0, Math.min.apply(null, values)); // anchor the baseline at 0
+    var range = (max - min) || 1;
+    var stepX = n > 1 ? (W - pad * 2) / (n - 1) : 0;
+    var y = function (v) { return H - pad - ((v - min) / range) * (H - pad * 2); };
+    var pts = values.map(function (v, i) { return (pad + i * stepX).toFixed(1) + ',' + y(v).toFixed(1); });
+    var line = pts.join(' ');
+    var area = (pad).toFixed(1) + ',' + (H - pad) + ' ' + line + ' ' + (pad + (n - 1) * stepX).toFixed(1) + ',' + (H - pad);
+    var lastX = (pad + (n - 1) * stepX).toFixed(1), lastY = y(values[n - 1]).toFixed(1);
+    var stroke = (opts.color || '#c9a84c');
+    return '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+      '<polygon points="' + area + '" fill="' + stroke + '" opacity="0.10" />' +
+      '<polyline points="' + line + '" fill="none" stroke="' + stroke + '" stroke-width="1.5" vector-effect="non-scaling-stroke" />' +
+      '<circle cx="' + lastX + '" cy="' + lastY + '" r="2.4" fill="' + stroke + '" />' +
+      '</svg>';
+  }
+  // One labelled horizontal bar (for distributions). label is escaped; width is
+  // a % of max. value shown at the end.
+  function barRow(label, value, max) {
+    var pct = (max > 0) ? Math.min(100, Math.round((value / max) * 100)) : 0;
+    return '<div class="barrow">' +
+      '<div class="barrow-label">' + esc(label) + '</div>' +
+      '<div class="barrow-track"><div class="barrow-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="barrow-val">' + esc(num(value)) + '</div>' +
+      '</div>';
+  }
+  // Render a {key: count} object as a sorted bar list (desc by value). `order`
+  // optionally fixes the key order instead of sorting by value.
+  function barList(obj, order) {
+    obj = obj || {};
+    var keys = order || Object.keys(obj).sort(function (a, b) { return (obj[b] || 0) - (obj[a] || 0); });
+    keys = keys.filter(function (k) { return k in obj; });
+    if (keys.length === 0) return '<div class="note">none in this window</div>';
+    var max = Math.max.apply(null, keys.map(function (k) { return Number(obj[k]) || 0; }));
+    return keys.map(function (k) { return barRow(k, Number(obj[k]) || 0, max); }).join('');
+  }
+  // A trend card: title + 30d total + the line chart. `field` picks total vs _real.
+  function trendCard(title, days, field) {
+    var vals = (days || []).map(function (d) { return Number(d[field]) || 0; });
+    var total = vals.reduce(function (a, b) { return a + b; }, 0);
+    return '<div class="trend">' +
+      '<div class="trend-head"><span class="trend-title">' + esc(title) + '</span>' +
+      '<span class="trend-total">' + esc(num(total)) + ' / 30d</span></div>' +
+      lineChart(vals) + '</div>';
+  }
+
   function render(data) {
     var meta = document.getElementById('meta');
     var gen = data.generated_at ? new Date(data.generated_at).toLocaleString() : '';
@@ -229,6 +306,20 @@
     var html = '';
     var s = data.summary || {};
     var liveSummary = s.status === 'live';
+
+    // ── TRENDS (daily, last 30d) ──
+    var ser = data.series || {};
+    if (ser.status === 'live' && Array.isArray(ser.days) && ser.days.length > 0) {
+      html += section('Trends · last 30 days', pill('live'),
+        '<div class="trend-grid">' +
+        trendCard('Scans / day', ser.days, excludeMine ? 'scans_real' : 'scans') +
+        trendCard('Signups / day', ser.days, 'signups') +
+        trendCard('New public stories / day', ser.days, 'new_public_stories') +
+        '</div>');
+    } else if (ser.status && ser.status !== 'live') {
+      html += section('Trends · last 30 days', pill(ser.status),
+        '<div class="err">' + esc(ser.reason || ser.error || 'unavailable') + '</div>');
+    }
 
     // ── PRODUCT ── (pick() applies the owner-exclusion toggle per field)
     if (liveSummary) {
@@ -264,6 +355,26 @@
         card('Conversion', esc(pick(cv, 'pct') != null ? pick(cv, 'pct') : 0) + '%',
           esc(num(pick(cv, 'scanner_buyers'))) + ' of ' + esc(num(pick(cv, 'scanners'))) + ' scanners') +
         '</div>');
+
+      // Pack breakdown (buys per pack) + conversion timing (scans-before-first-buy).
+      var packs = pick(mi, 'pack_breakdown') || {};
+      var packBuys = {};
+      Object.keys(packs).forEach(function (pid) { packBuys[pid] = (packs[pid] && packs[pid].buys) || 0; });
+      if (Object.keys(packBuys).length > 0 && Object.keys(packBuys).some(function (k) { return packBuys[k] > 0; })) {
+        html += '<div class="subhead">Purchases by pack</div>' + barList(packBuys);
+      }
+      var ct = mi.conversion_timing || {};
+      if (Object.keys(ct).length > 0) {
+        // order numerically by scans-before-purchase
+        var ctOrder = Object.keys(ct).sort(function (a, b) { return Number(a) - Number(b); });
+        var ctMax = Math.max.apply(null, ctOrder.map(function (x) { return Number(ct[x]) || 0; }));
+        html += '<div class="subhead">Scans before first purchase</div>' +
+          ctOrder.map(function (k) { return barRow(k + ' scan' + (k === '1' ? '' : 's'), Number(ct[k]) || 0, ctMax); }).join('');
+      }
+      if (mi.free_scan_avg != null) {
+        html += '<div class="note" style="margin-top:8px">Avg free scans per non-buyer: ' +
+          esc(numf(mi.free_scan_avg)) + ' (≈ ' + esc(money(Math.round(Number(mi.free_scan_avg) * 0.08 * 100) / 100)) + ' cost/free user)</div>';
+      }
     }
 
     // ── RUNWAY (money out) ──
@@ -304,7 +415,22 @@
         html += section('Funnel', pill('live'),
           '<div class="funnel"><div class="quiet">▁ Quiet — no product events in this window.</div></div>');
       } else {
-        html += section('Funnel', pill('live'), funnelHtml(c, f));
+        var funnelExtra = '';
+        // OCR confidence distribution
+        if (f.ocr_confidence && Object.keys(f.ocr_confidence).length > 0) {
+          funnelExtra += '<div class="subhead">OCR confidence</div>' +
+            barList(f.ocr_confidence, ['high', 'medium', 'low', '(none)']);
+        }
+        // Abandonment: rate + where people bail
+        if ((c.scan_abandoned || 0) > 0) {
+          funnelExtra += '<div class="subhead">Abandoned mid-scan · ' + esc(f.abandon_pct != null ? f.abandon_pct : 0) + '% of starts</div>' +
+            barList(f.abandoned_by_step);
+        }
+        // Pipeline errors by stage/reason
+        if (f.errors_by_stage && Object.keys(f.errors_by_stage).length > 0) {
+          funnelExtra += '<div class="subhead">Pipeline errors by stage</div>' + barList(f.errors_by_stage);
+        }
+        html += section('Funnel', pill('live'), funnelHtml(c, f) + funnelExtra);
       }
     } else {
       html += section('Funnel', pill(f.status), '<div class="err">' + esc(f.reason || f.error || 'unavailable') + '</div>');
@@ -319,6 +445,47 @@
         card('Content reports', num(pick(rp, 'total')), esc(num(pick(rp, 'on_public'))) + ' on public stories') +
         card('Urgent reports', num(urgent), 'privacy/offensive on public', urgent > 0) +
         '</div>');
+    }
+
+    // ── LOADING (scan duration, 30d) ──
+    if (liveSummary && s.loading && Object.keys(s.loading).length > 0) {
+      var ld = s.loading;
+      var loadCards = '<div class="grid">';
+      // full pipeline first, then cache hits
+      ['full', 'cache_hit'].forEach(function (k) {
+        var l = ld[k];
+        if (!l) return;
+        var label = k === 'full' ? 'Full pipeline' : 'Cache hit';
+        loadCards += card(label + ' (avg)', esc(numf(l.avg_s)) + 's',
+          'p50 ' + esc(numf(l.median_s)) + 's · p90 ' + esc(numf(l.p90_s)) + 's · max ' + esc(numf(l.max_s)) + 's · n=' + esc(num(l.n)));
+      });
+      loadCards += '</div>';
+      html += section('Loading time · last 30 days', pill('live'), loadCards);
+    }
+
+    // ── ENGAGEMENT ──
+    if (liveSummary) {
+      var us2 = s.users || {}, sc2 = s.scans || {}, gr2 = s.graves || {}, tr = s.tributes || {};
+      var eng = '';
+      if (us2.by_provider && Object.keys(us2.by_provider).length > 0) {
+        eng += '<div class="subhead">Sign-in provider</div>' + barList(us2.by_provider);
+      }
+      if (sc2.per_user_buckets && Object.keys(sc2.per_user_buckets).length > 0) {
+        eng += '<div class="subhead">Scans per user (real users)</div>' +
+          barList(sc2.per_user_buckets, ['1', '2', '3 (free cap)', '4-9', '10+']);
+      }
+      if (gr2.marker_breakdown && Object.keys(gr2.marker_breakdown).length > 0) {
+        eng += '<div class="subhead">Marker styles</div>' + barList(gr2.marker_breakdown);
+      }
+      if ((tr.total || 0) > 0) {
+        eng += '<div class="subhead">Tributes</div>' +
+          '<div class="grid">' +
+          card('Candles', num(tr.candles)) +
+          card('Flowers', num(tr.flowers)) +
+          card('Graves w/ tributes', num(tr.graves_with_tributes)) +
+          '</div>';
+      }
+      if (eng) html += section('Engagement', pill('live'), eng);
     }
 
     document.getElementById('content').innerHTML = html;

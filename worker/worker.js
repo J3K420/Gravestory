@@ -96,6 +96,14 @@ export default {
 
     // ── CORS preflight ────────────────────────────────────────────
     if (request.method === 'OPTIONS') {
+      // The admin dashboard is run as a local file (Origin: null) or from an
+      // arbitrary host, so its preflight reflects the request origin rather than
+      // the public allowlist. Safe because /admin/metrics is gated by the
+      // ADMIN_KEY bearer token, NOT by CORS — a cross-origin page still cannot
+      // read it without the secret. See adminCorsHeaders + handleAdminMetrics.
+      if (url.pathname === '/admin/metrics') {
+        return new Response(null, { status: 204, headers: adminCorsHeaders(origin) });
+      }
       return new Response(null, {
         status: 204,
         headers: corsHeaders(origin, allowed),
@@ -112,7 +120,7 @@ export default {
     // block, exactly like the RevenueCat webhook: the public CLIENT_KEY is in
     // client source, so gating admin metrics behind it would be no gate at all.
     if (url.pathname === '/admin/metrics') {
-      return await handleAdminMetrics(request, url, env, origin, allowed);
+      return await handleAdminMetrics(request, url, env, origin);
     }
 
     // ── Auth: shared CLIENT_KEY + (for browsers) Origin allowlist ──
@@ -861,16 +869,19 @@ async function handleUpload(request, env, origin, allowed) {
 //
 // The service-role key (SUPABASE_SERVICE_KEY) stays entirely server-side; the
 // browser only ever receives the aggregated JSON below.
-async function handleAdminMetrics(request, url, env, origin, allowed) {
+// Note: this route uses adminJson/adminCorsHeaders (origin-reflecting), NOT the
+// allowlist-based json()/corsHeaders() the public routes use — the dashboard
+// runs as a local file (Origin: null) and is gated by the bearer token instead.
+async function handleAdminMetrics(request, url, env, origin) {
   if (request.method !== 'GET') {
-    return json({ error: 'Method not allowed' }, 405, origin, allowed);
+    return adminJson({ error: 'Method not allowed' }, 405, origin);
   }
 
   // Auth — Bearer ADMIN_KEY, constant-time, fail-closed (same shape as the
   // RevenueCat webhook secret check above).
   const authHeader = request.headers.get('Authorization') || '';
   if (!env.ADMIN_KEY || !timingSafeEqualStr(authHeader, `Bearer ${env.ADMIN_KEY}`)) {
-    return json({ error: 'Unauthorized' }, 401, origin, allowed);
+    return adminJson({ error: 'Unauthorized' }, 401, origin);
   }
 
   // Funnel window: ?hours=N (default 720 = 30d). Clamped to a sane range so a
@@ -908,7 +919,7 @@ async function handleAdminMetrics(request, url, env, origin, allowed) {
     revenuecat,     // purchases/revenue (RevenueCat API) or degraded
     google_cloud: gcloud, // spend vs budget (BigQuery export) or degraded
     tavily,         // derived estimate + deep-link
-  }, 200, origin, allowed);
+  }, 200, origin);
 }
 
 // Supabase service-role fetch helper (mirrors the sb() pattern in
@@ -1422,6 +1433,36 @@ function json(obj, status, origin, allowed) {
     headers: {
       'Content-Type': 'application/json',
       ...corsHeaders(origin, allowed),
+    },
+  });
+}
+
+// CORS headers for the admin metrics route ONLY. Reflects the request origin
+// (or '*' when the page is a local file → Origin: null/empty), so the dashboard
+// can run from a file:// path or any host. This is NOT a security downgrade:
+// /admin/metrics is protected by the ADMIN_KEY bearer token, and the browser's
+// same-origin policy never let a cross-origin page READ a response it isn't
+// authorized for — without the secret, an attacker site gets 401 regardless of
+// what ACAO says. Kept entirely separate from corsHeaders() so the public
+// CLIENT_KEY routes keep their strict origin allowlist.
+function adminCorsHeaders(origin) {
+  return {
+    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin',
+  };
+}
+
+// JSON response for the admin route — same as json() but with the origin-
+// reflecting admin CORS headers instead of the allowlist-based ones.
+function adminJson(obj, status, origin) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...adminCorsHeaders(origin),
     },
   });
 }

@@ -615,13 +615,17 @@ export default function ResultScreen({ navigation, route }) {
             if (saved.grave_id) {
               (async () => {
                 try {
-                  await supabase.from('grave_photos').upsert({
+                  // The Supabase client RESOLVES (doesn't throw) on RLS/constraint
+                  // errors — they come back in `error`, so we must inspect it or a
+                  // failed contribution is invisible (matches api-tributes/sync).
+                  const { error } = await supabase.from('grave_photos').upsert({
                     grave_id: saved.grave_id,
                     user_id: sessionUser.id,
                     image_url: imageUrl,
                   }, { onConflict: 'grave_id,user_id' });
+                  if (error) console.warn('grave_photos upsert failed (non-fatal):', error.message);
                 } catch (e) {
-                  console.warn('grave_photos upsert failed (non-fatal):', e.message);
+                  console.warn('grave_photos upsert threw (non-fatal):', e?.message || e);
                 }
               })();
             }

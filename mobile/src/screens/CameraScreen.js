@@ -23,7 +23,6 @@ import { generateBiography } from '../lib/biography';
 import { forwardGeocode, reverseGeocode, reverseGeocodeCemetery } from '../lib/api-nominatim';
 import { checkScanLimit } from '../lib/scan-limit';
 import { beginScan, endScan, commitScan } from '../lib/scan-token';
-import { getLibraryAssetGps } from '../lib/media-gps';
 import { loadStories, saveStories } from '../lib/storage';
 import { savePendingPhoto, readPendingPhoto, deletePendingPhoto } from '../lib/pending';
 import { logEvent, EVENTS } from '../lib/analytics';
@@ -358,15 +357,12 @@ export default function CameraScreen({ navigation, route }) {
     // first time; later scans see the resolved status and no-op.
     requestNotificationPermission();
 
-    // exif: true so we can read GPS coords before compression strips them.
-    //
-    // IMPORTANT — do NOT set legacy: true on Android. The modern system Photo
-    // Picker (the default) returns a MediaStore-backed asset WITH an assetId,
-    // which getLibraryAssetGps needs to recover the OS-redacted GPS EXIF via
-    // expo-media-library. legacy: true routes through ACTION_GET_CONTENT (the
-    // file browser), and per the SDK 54 docs an Android asset picked "by
-    // directly browsing the file system" has a NULL assetId — so GPS recovery
-    // is impossible. (Earlier code had this inverted, which broke EXIF mapping.)
+    // exif: true so we can read GPS coords before compression strips them. On iOS
+    // (and the web app) the picker hands back unredacted EXIF, so library picks can
+    // still carry their original GPS; on Android the OS redacts it (see the GPS note
+    // below). We leave legacy unset so the modern system Photo Picker is used — it
+    // needs no broad media permission, which is the whole point of dropping
+    // expo-media-library for Play Store compliance.
     const opts = { mediaTypes: ['images'], quality: 0.85, base64: false, exif: true };
 
     if (fromCamera) {
@@ -423,17 +419,18 @@ export default function CameraScreen({ navigation, route }) {
       // Pull GPS from the photo's own EXIF before ImageManipulator strips it.
       // Only fall back to device GPS for camera shots — for library photos the device
       // is not physically at the grave, so device location would be wrong.
+      //
+      // NOTE: On Android the OS redacts GPS tags from any photo read through the
+      // system picker, so asset.exif has no location for library picks there. We
+      // used to recover it via expo-media-library's getAssetInfoAsync, but that
+      // required READ_MEDIA_IMAGES, which Google Play disallows for our "infrequent"
+      // photo use. So an Android library pick now yields no EXIF GPS — the pin
+      // resolves downstream from Wikidata burial coords (famous graves) or by
+      // geocoding the AI-derived burial location. If the bio also has no location
+      // string (an obscure stone with no sources), the story has no map pin at all —
+      // an accepted gap for that narrow cohort. Camera shots are unaffected: they
+      // fall back to live device GPS below.
       let gps = extractExifGps(asset.exif);
-
-      // Android redacts GPS tags from picker-read EXIF (asset.exif never has them).
-      // For library picks, recover the location via expo-media-library, which can
-      // read the unredacted original. No-op on iOS / camera shots / missing assetId.
-      // A miss here is non-fatal (getLibraryAssetGps logs the reason); the user can
-      // correct the pin on the map.
-      if (!gps && !fromCamera) {
-        const media = await getLibraryAssetGps(asset.assetId);
-        if (media.gps) gps = media.gps;
-      }
 
       const needsDeviceGps = !gps && fromCamera;
 
@@ -450,11 +447,11 @@ export default function CameraScreen({ navigation, route }) {
         gps = deviceGps;
       }
 
-      // A library pick with no recoverable GPS is expected for cloud-only photos,
-      // screenshots, and denied photo-location permission — degrade silently and let
-      // the user correct the pin on the map. (The legacy:true/assetId root cause that
-      // once broke this for ALL library photos was fixed; getLibraryAssetGps still
-      // logs the failure reason to the console, but it's no longer surfaced as an Alert.)
+      // A library pick with no GPS is expected — on Android the OS redacts EXIF
+      // location from picker reads, and elsewhere many photos (screenshots, cloud
+      // copies, edited images) simply carry none. Degrade silently and let the
+      // pin resolve downstream (Wikidata burial coords / geocode) or let the user
+      // correct it on the map.
       if (offline) {
         // Offline path navigates to Result (or alerts on failure and stays here);
         // clear the loading screen we showed at confirmation so the Camera screen
@@ -2079,8 +2076,8 @@ function IlluminatedLedger({ stepIndex }) {
 function extractExifGps(exif) {
   // Guard against a MISSING component, not a falsy-zero one: latitude 0 (equator)
   // or longitude 0 (prime meridian) is a valid coordinate, so `!value` would wrongly
-  // discard a real fix. Mirror media-gps.js: require both present and reject only the
-  // exact (0,0) null-island fix some cameras write when no GPS lock was acquired.
+  // discard a real fix. Require both present and reject only the exact (0,0)
+  // null-island fix some cameras write when no GPS lock was acquired.
   if (exif?.GPSLatitude == null || exif?.GPSLongitude == null) return null;
   const lat = exif.GPSLatitudeRef === 'S' ? -Math.abs(exif.GPSLatitude) : Math.abs(exif.GPSLatitude);
   const lng = exif.GPSLongitudeRef === 'W' ? -Math.abs(exif.GPSLongitude) : Math.abs(exif.GPSLongitude);

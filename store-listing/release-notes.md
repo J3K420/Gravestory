@@ -7,6 +7,33 @@ their own line. Max 500 characters per language.
 
 ---
 
+## versionCode 16 — Play permissions compliance (no user-facing feature)
+
+vc16 drops `expo-media-library` (removes the READ_MEDIA_IMAGES request) and
+strips the unused RECORD_AUDIO permission so the manifest matches the Data
+safety declaration. There is no new feature to announce — the only behavior
+change is that on Android, photos picked from the gallery no longer auto-pin
+from their GPS (camera shots and famous-grave coords are unaffected). Keep the
+notes generic; don't claim a feature the diff doesn't add.
+
+Recommended (honest + slightly specific about the permission tidy-up):
+
+```
+<en-US>
+Performance, privacy, and stability improvements. This update streamlines the permissions GraveStory requests so the app only asks for what it needs.
+</en-US>
+```
+
+Minimal / generic:
+
+```
+<en-US>
+Bug fixes and performance improvements.
+</en-US>
+```
+
+---
+
 ## versionCode 14 — GEDCOM export + backgrounded scans + notification
 
 vc14 supersedes the never-uploaded vc13, so it carries BOTH the S69

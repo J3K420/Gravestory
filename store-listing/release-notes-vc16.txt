@@ -1,0 +1,3 @@
+<en-US>
+Performance, privacy, and stability improvements. This update streamlines the permissions GraveStory requests so the app only asks for what it needs.
+</en-US>

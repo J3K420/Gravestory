@@ -135,6 +135,8 @@ export default function ResultScreen({ navigation, route }) {
   const [tributeLoading, setTributeLoading] = useState(false);
   const [gravePhotos, setGravePhotos]   = useState([]);
   const [livePortraits, setLivePortraits] = useState([]);
+  const [extraPhotosOpen, setExtraPhotosOpen] = useState(false); // global bio: "+N more photos of this grave" strip
+  const [photoViewer, setPhotoViewer]   = useState(null); // full-size uri tapped from the strip
   const [symbolModal, setSymbolModal]   = useState(null); // { name, text }
   const [mentionsModal, setMentionsModal] = useState(false); // "Also found in…" sheet
   const [markerModal, setMarkerModal]   = useState(false);
@@ -495,16 +497,23 @@ export default function ResultScreen({ navigation, route }) {
   // to a data URI so the gravestone still appears in the carousel immediately.
   const localGraveUri = story.image_url
     || (story._base64 ? `data:image/jpeg;base64,${story._base64}` : null);
+  // On a GLOBAL bio the grave can have several community uploads. We lead the
+  // carousel with only the FIRST stone photo so the portraits sit right beside
+  // it (not buried behind every extra upload); the rest go in extraGravePhotos,
+  // surfaced by a tap-to-expand strip below the carousel. Non-global bios are
+  // unchanged (a single own-photo grave slot, or the sample's bundled asset).
   const graveSlots = (story._isGlobal && gravePhotos.length > 0)
-    ? gravePhotos.map((uri, i) => ({
-        uri,
-        label: gravePhotos.length > 1 ? `Photo ${i + 1} of ${gravePhotos.length}` : 'Gravestone',
-      }))
+    ? [{ uri: gravePhotos[0], label: 'Gravestone' }]
     // The sample story bundles its gravestone photo as a local asset (a require()'d
     // module, not a URI) so the example leads with a real stone like a true scan.
     : (story._graveImageAsset
         ? [{ asset: story._graveImageAsset, label: 'Gravestone' }]
         : (localGraveUri ? [{ uri: localGraveUri, label: 'Gravestone' }] : []));
+
+  // The other community uploads of this same stone (global bios only).
+  const extraGravePhotos = (story._isGlobal && gravePhotos.length > 1)
+    ? gravePhotos.slice(1)
+    : [];
 
   const portraitUris = normalizePortraits(portraits).length > 0
     ? normalizePortraits(portraits)
@@ -1121,6 +1130,43 @@ export default function ResultScreen({ navigation, route }) {
           </View>
         )}
 
+        {/* Other community uploads of this same stone (global bios). The carousel
+            leads with the first photo + portraits; these extras live behind a
+            tap-to-expand strip so the portraits aren't buried. */}
+        {extraGravePhotos.length > 0 && (
+          <View style={styles.moreShotsWrap}>
+            <TouchableOpacity
+              style={styles.moreShotsToggle}
+              onPress={() => setExtraPhotosOpen(o => !o)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.moreShotsToggleText}>
+                {extraPhotosOpen
+                  ? 'Hide other photos of this grave'
+                  : `+${extraGravePhotos.length} more photo${extraGravePhotos.length > 1 ? 's' : ''} of this grave`}
+              </Text>
+              <Text style={styles.moreShotsChevron}>{extraPhotosOpen ? '⌃' : '›'}</Text>
+            </TouchableOpacity>
+            {extraPhotosOpen && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.moreShotsStrip}
+              >
+                {extraGravePhotos.map((uri, i) => (
+                  <TouchableOpacity
+                    key={`${uri}-${i}`}
+                    onPress={() => setPhotoViewer(uri)}
+                    activeOpacity={0.85}
+                  >
+                    <Image source={imgSource(uri)} style={styles.moreShotThumb} resizeMode="cover" />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        )}
+
         {/* Example banner — makes it unmistakable this is a demo, not a real scan */}
         {isSample && (
           <View style={styles.sampleBanner}>
@@ -1418,6 +1464,21 @@ export default function ResultScreen({ navigation, route }) {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Full-size viewer for a tapped community photo (global bio strip). */}
+      <Modal
+        visible={!!photoViewer}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPhotoViewer(null)}
+      >
+        <Pressable style={styles.photoViewerOverlay} onPress={() => setPhotoViewer(null)}>
+          {!!photoViewer && (
+            <Image source={imgSource(photoViewer)} style={styles.photoViewerImage} resizeMode="contain" />
+          )}
+          <Text style={styles.photoViewerHint}>Tap to close</Text>
+        </Pressable>
+      </Modal>
 
       {/* Marker style picker */}
       <Modal
@@ -1730,6 +1791,31 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.line },
   dotActive: { backgroundColor: colors.flame },
+
+  // "+N more photos of this grave" toggle + thumbnail strip (global bios).
+  moreShotsWrap: { marginTop: -10, marginBottom: 22 },
+  moreShotsToggle: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  moreShotsToggleText: { color: colors.flame, fontFamily: fonts.body, fontSize: 13, letterSpacing: 0.3 },
+  moreShotsChevron: { color: colors.flame, fontFamily: fonts.body, fontSize: 16, marginLeft: 8 },
+  moreShotsStrip: { gap: 8, paddingTop: 4, paddingBottom: 2 },
+  moreShotThumb: {
+    width: 96, height: 96, borderRadius: radius.sm,
+    backgroundColor: colors.stone2, borderWidth: 1, borderColor: colors.line,
+  },
+
+  // Full-size community-photo viewer.
+  photoViewerOverlay: {
+    flex: 1, backgroundColor: 'rgba(10,8,6,0.94)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  photoViewerImage: { width: SCREEN_W, height: '80%' },
+  photoViewerHint: {
+    position: 'absolute', bottom: 40, color: colors.ashDim,
+    fontFamily: fonts.bodyItalic, fontSize: 13,
+  },
 
   sampleBanner: {
     backgroundColor: 'rgba(242,182,92,0.1)',

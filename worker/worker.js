@@ -997,12 +997,18 @@ async function adminSupabaseFunnel(env, sinceIso) {
   };
 }
 
-// RevenueCat — authoritative purchases/revenue. Uses a read-only SECRET API key
-// (REVENUECAT_SECRET_KEY). No key configured ⇒ degraded (DB credit numbers from
-// the summary still cover the essentials). NOTE: RevenueCat's REST surface for a
-// raw "total revenue" number is limited; we expose what the key can fetch and
-// otherwise fall back to the in-DB credits ledger. Kept minimal + non-fatal so a
-// RevenueCat API change can't break the dashboard.
+// RevenueCat — authoritative MRR / revenue / active subs via the v2
+// overview-metrics endpoint: GET /v2/projects/{id}/metrics/overview.
+//   env.REVENUECAT_SECRET_KEY  — a v2 SECRET key (sk_...) with the
+//                                charts_metrics:overview:read permission.
+//   env.REVENUECAT_PROJECT_ID  — the project id (from the dashboard URL, or
+//                                GET /v2/projects). Optional: if absent we look
+//                                it up via the projects list with the same key.
+// Defensive: RC's docs are ambiguous about whether a secret key (vs an OAuth
+// atk_ token) may hold the charts_metrics scope. So we TRY the secret key and,
+// if RC rejects it (401/403), return `degraded` carrying RC's own error text
+// rather than crashing — the in-DB credits ledger still drives Money-in either
+// way. Any non-2xx or shape surprise degrades, never throws past this function.
 async function adminRevenueCat(env) {
   if (!env.REVENUECAT_SECRET_KEY) {
     return {
@@ -1011,31 +1017,220 @@ async function adminRevenueCat(env) {
       dashboard_url: 'https://app.revenuecat.com/',
     };
   }
-  // RevenueCat v2 projects/overview metrics require a project id; without one we
-  // can't blindly call it. Surface the link + mark live-capable so the owner can
-  // wire the project id later. (Cross-check vs revenuecat_events stays in the UI.)
+  const headers = {
+    'Authorization': `Bearer ${env.REVENUECAT_SECRET_KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  // Resolve the project id (explicit env wins; else take the first project).
+  let projectId = env.REVENUECAT_PROJECT_ID || '';
+  if (!projectId) {
+    const pRes = await fetch('https://api.revenuecat.com/v2/projects', { headers });
+    if (!pRes.ok) {
+      const detail = await pRes.text().catch(() => '');
+      return {
+        status: 'degraded',
+        reason: `RevenueCat /projects ${pRes.status}: ${detail.slice(0, 160)}`,
+        dashboard_url: 'https://app.revenuecat.com/',
+      };
+    }
+    const pData = await pRes.json().catch(() => null);
+    projectId = pData && Array.isArray(pData.items) && pData.items[0] && pData.items[0].id;
+    if (!projectId) {
+      return {
+        status: 'degraded',
+        reason: 'RevenueCat key valid but no projects returned — set REVENUECAT_PROJECT_ID.',
+        dashboard_url: 'https://app.revenuecat.com/',
+      };
+    }
+  }
+
+  const mRes = await fetch(
+    `https://api.revenuecat.com/v2/projects/${encodeURIComponent(projectId)}/metrics/overview?currency=USD`,
+    { headers }
+  );
+  if (!mRes.ok) {
+    const detail = await mRes.text().catch(() => '');
+    // 401/403 most likely = the secret key lacks charts_metrics scope (may need
+    // an OAuth atk_ token). Surface it plainly instead of failing the dashboard.
+    return {
+      status: 'degraded',
+      reason: `RevenueCat metrics ${mRes.status}: ${detail.slice(0, 200)}`,
+      dashboard_url: `https://app.revenuecat.com/projects/${encodeURIComponent(projectId)}`,
+    };
+  }
+  const data = await mRes.json().catch(() => null);
+  const metrics = data && Array.isArray(data.metrics) ? data.metrics : [];
+  // Flatten [{id, value}] into {id: number|null}. Coerce value to a number so a
+  // string ("123") renders with separators and a surprise object degrades to
+  // null instead of crashing the dashboard's toLocaleString.
+  const byId = {};
+  for (const m of metrics) {
+    if (!m || m.id == null) continue;
+    const n = Number(m.value);
+    byId[m.id] = Number.isFinite(n) ? n : null;
+  }
+  // Present-but-empty overview = key/scope/project issue, not a real $0 account.
+  // Degrade (don't show a green "live" pill next to dashes).
+  if (Object.keys(byId).length === 0) {
+    return {
+      status: 'degraded',
+      reason: 'RevenueCat returned no metrics — check the key scope (charts_metrics:overview:read) and project id.',
+      dashboard_url: `https://app.revenuecat.com/projects/${encodeURIComponent(projectId)}`,
+    };
+  }
   return {
-    status: 'degraded',
-    reason: 'RevenueCat key present but project id not configured — see setup notes.',
-    dashboard_url: 'https://app.revenuecat.com/',
+    status: 'live',
+    currency: (data && data.currency) || 'USD',
+    mrr: byId.mrr ?? null,
+    active_subscriptions: byId.active_subscriptions ?? null,
+    active_trials: byId.active_trials ?? null,
+    revenue_last_28_days: byId.revenue_last_28_days ?? null,
+    new_customers_last_28_days: byId.new_customers_last_28_days ?? null,
+    active_users_last_28_days: byId.active_users_last_28_days ?? null,
+    dashboard_url: `https://app.revenuecat.com/projects/${encodeURIComponent(projectId)}`,
   };
 }
 
-// Google Cloud spend — LIVE only if a BigQuery billing export + service account
-// are configured (GCP_* env). Until then: degraded, showing the configured
-// monthly budget threshold + a manually-pasted last-known spend so the card is
-// never blank. Written to light up automatically once the creds exist.
+// Google Cloud spend — LIVE month-to-date cost via the BigQuery billing export.
+// Requires a one-time setup: enable Cloud Billing → BigQuery export, then a
+// service account with BigQuery Job User + Data Viewer. Env:
+//   env.GCP_SA_EMAIL        — service-account email
+//   env.GCP_SA_PRIVATE_KEY  — its private key (PEM, \n-escaped is fine)
+//   env.GCP_PROJECT_ID      — project that runs the query / holds the dataset
+//   env.GCP_BILLING_TABLE   — fully-qualified export table:
+//                             `proj.dataset.gcp_billing_export_v1_XXXXXX_XXXXXX_XXXXXX`
+// Falls back to budget + manually-pasted GCLOUD_LAST_SPEND when the SA isn't
+// configured, so the card is never blank. Any failure degrades, never throws.
 async function adminGoogleCloud(env) {
-  const budget = env.GCLOUD_MONTHLY_BUDGET ? Number(env.GCLOUD_MONTHLY_BUDGET) : null;
-  const lastKnown = env.GCLOUD_LAST_SPEND ? Number(env.GCLOUD_LAST_SPEND) : null;
-  // No BigQuery export wired yet → degraded with whatever the owner pasted.
-  return {
-    status: 'degraded',
-    reason: 'Live spend needs Cloud Billing → BigQuery export. Showing budget + last-pasted spend.',
-    monthly_budget_usd: budget,
-    last_known_spend_usd: lastKnown,
-    dashboard_url: 'https://console.cloud.google.com/billing',
+  // Number.isFinite guard so a typo'd secret becomes null, not NaN.
+  const toNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+  const budget = env.GCLOUD_MONTHLY_BUDGET ? toNum(env.GCLOUD_MONTHLY_BUDGET) : null;
+  const lastKnown = env.GCLOUD_LAST_SPEND ? toNum(env.GCLOUD_LAST_SPEND) : null;
+
+  const haveSa = env.GCP_SA_EMAIL && env.GCP_SA_PRIVATE_KEY && env.GCP_PROJECT_ID && env.GCP_BILLING_TABLE;
+  if (!haveSa) {
+    return {
+      status: 'degraded',
+      reason: 'Live spend needs Cloud Billing → BigQuery export + a service account. Showing budget + last-pasted spend.',
+      monthly_budget_usd: budget,
+      last_known_spend_usd: lastKnown,
+      dashboard_url: 'https://console.cloud.google.com/billing',
+    };
+  }
+
+  try {
+    const token = await gcpAccessToken(env);
+    // MTD = sum(cost) + sum(credit amounts) for the current invoice month.
+    // Backticks in the FQN are required by BigQuery; the table name comes from
+    // our own trusted env, not user input, so no injection surface.
+    const sql =
+      'SELECT SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS mtd, ' +
+      'ANY_VALUE(currency) AS currency ' +
+      'FROM `' + env.GCP_BILLING_TABLE + '` ' +
+      "WHERE invoice.month = FORMAT_DATE('%Y%m', CURRENT_DATE())";
+    const qRes = await fetch(
+      `https://bigquery.googleapis.com/bigquery/v2/projects/${encodeURIComponent(env.GCP_PROJECT_ID)}/queries`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: sql, useLegacySql: false, timeoutMs: 20000 }),
+      }
+    );
+    if (!qRes.ok) {
+      const detail = await qRes.text().catch(() => '');
+      return {
+        status: 'degraded',
+        reason: `BigQuery ${qRes.status}: ${detail.slice(0, 200)}`,
+        monthly_budget_usd: budget, last_known_spend_usd: lastKnown,
+        dashboard_url: 'https://console.cloud.google.com/billing',
+      };
+    }
+    const data = await qRes.json().catch(() => null);
+    // BigQuery returns rows as { f: [{ v: <string> }, ...] }; col 0 = mtd, 1 = currency.
+    const row = data && Array.isArray(data.rows) && data.rows[0];
+    const mtdRaw = row && row.f && row.f[0] && row.f[0].v;
+    const currency = (row && row.f && row.f[1] && row.f[1].v) || 'USD';
+    const mtdNum = Number(mtdRaw);
+    const mtd = (mtdRaw != null && Number.isFinite(mtdNum)) ? Math.round(mtdNum * 100) / 100 : null;
+    return {
+      status: 'live',
+      month_to_date_usd: mtd,
+      currency,
+      monthly_budget_usd: budget,
+      dashboard_url: 'https://console.cloud.google.com/billing',
+    };
+  } catch (e) {
+    return {
+      status: 'degraded',
+      reason: `Google Cloud live query failed: ${String(e && e.message || e).slice(0, 160)}`,
+      monthly_budget_usd: budget, last_known_spend_usd: lastKnown,
+      dashboard_url: 'https://console.cloud.google.com/billing',
+    };
+  }
+}
+
+// Mint a short-lived GCP OAuth access token from a service account, via the
+// signed-JWT (jwt-bearer) grant. Signs an RS256 JWT with the SA private key
+// using WebCrypto (available in Workers), then exchanges it at the token
+// endpoint for an access_token scoped to BigQuery (read).
+async function gcpAccessToken(env) {
+  const now = Math.floor(Date.now() / 1000);
+  const claim = {
+    iss: env.GCP_SA_EMAIL,
+    scope: 'https://www.googleapis.com/auth/bigquery.readonly',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
   };
+  const enc = (obj) => b64url(new TextEncoder().encode(JSON.stringify(obj)));
+  const signingInput = `${enc({ alg: 'RS256', typ: 'JWT' })}.${enc(claim)}`;
+
+  const key = await importGcpPrivateKey(env.GCP_SA_PRIVATE_KEY);
+  const sig = await crypto.subtle.sign(
+    { name: 'RSASSA-PKCS1-v1_5' },
+    key,
+    new TextEncoder().encode(signingInput)
+  );
+  const jwt = `${signingInput}.${b64url(new Uint8Array(sig))}`;
+
+  const tRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${encodeURIComponent(jwt)}`,
+  });
+  if (!tRes.ok) {
+    const detail = await tRes.text().catch(() => '');
+    throw new Error(`token exchange ${tRes.status}: ${detail.slice(0, 160)}`);
+  }
+  const tData = await tRes.json();
+  if (!tData.access_token) throw new Error('no access_token from Google');
+  return tData.access_token;
+}
+
+// Import a service-account PEM private key (PKCS#8) for RS256 signing.
+// Tolerates \n-escaped newlines (how it lands when pasted into a Worker secret).
+async function importGcpPrivateKey(pem) {
+  const clean = String(pem)
+    .replace(/\\n/g, '\n')
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\s+/g, '');
+  const der = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
+  return crypto.subtle.importKey(
+    'pkcs8',
+    der.buffer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+}
+
+// base64url without padding (for JWT segments + signature).
+function b64url(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 // Tavily — DERIVED (no usage API). Estimate from lifetime scan count using the

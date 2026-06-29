@@ -74,27 +74,59 @@ steps 1–3.
 These default to **degraded** (the card shows a fallback + a deep-link button)
 and turn **live** automatically once configured.
 
-### Google Cloud spend
-Two levels:
-- **Cheap (no setup):** set two Worker vars so the card shows your budget and a
-  number you paste in periodically:
-  ```bash
-  wrangler secret put GCLOUD_MONTHLY_BUDGET   # e.g. 50
-  wrangler secret put GCLOUD_LAST_SPEND       # e.g. 6.40  (update when you check)
-  ```
-- **Live:** enable Cloud Billing → BigQuery export in the GCP console, add a
-  service-account, and extend `adminGoogleCloud()` to query the export dataset.
-  (Stubbed; the handler is shaped to drop the live query in.)
+### Google Cloud spend (live month-to-date)
 
-### RevenueCat
-The in-DB credits ledger already gives you purchases / credits sold / est.
-revenue, so this is a *cross-check*, not essential. To wire it:
+**Cheap (no setup)** — set a budget + a number you paste when you glance at the
+console; the card shows `$X / budget $Y`:
 ```bash
-wrangler secret put REVENUECAT_SECRET_KEY    # a READ-ONLY RevenueCat secret key
+wrangler secret put GCLOUD_MONTHLY_BUDGET   # e.g. 50
+wrangler secret put GCLOUD_LAST_SPEND       # e.g. 6.40  (update when you check)
 ```
-Then extend `adminRevenueCat()` with your RevenueCat project id. (Stubbed
-to `degraded` until then — RevenueCat's REST surface for a raw revenue total is
-limited, so the DB ledger remains the primary money-in source.)
+
+**Live (auto, via BigQuery billing export)** — one-time GCP setup, then the card
+shows real month-to-date spend with no manual updates:
+1. **Enable the export:** GCP console → Billing → **Billing export** → enable
+   **Standard usage cost** export to a BigQuery dataset. (Takes a few hours to
+   start populating; up to ~5 days to backfill the current month.)
+2. **Create a service account** with roles **BigQuery Job User** (on the project
+   that runs the query) + **BigQuery Data Viewer** (on the billing dataset).
+   Create a **JSON key** for it.
+3. **Find the export table name** in BigQuery — it looks like
+   `your-project.billing_dataset.gcp_billing_export_v1_XXXXXX_XXXXXX_XXXXXX`.
+4. **Set the Worker secrets** (paste the matching values from the JSON key):
+   ```bash
+   wrangler secret put GCP_SA_EMAIL        # client_email from the JSON
+   wrangler secret put GCP_SA_PRIVATE_KEY  # private_key from the JSON (the whole
+                                           # -----BEGIN...END----- block; \n-escaped is fine)
+   wrangler secret put GCP_PROJECT_ID      # project that runs the query
+   wrangler secret put GCP_BILLING_TABLE   # the full table name from step 3
+   wrangler deploy
+   ```
+The Worker mints a short-lived OAuth token from the service account (RS256 JWT)
+and runs a `SUM(cost)+credits` query for the current invoice month. If anything
+is missing/misconfigured, the card degrades to the budget + last-pasted number
+instead of breaking.
+
+### RevenueCat (live MRR / revenue)
+The in-DB credits ledger already drives Money-in, so this is the authoritative
+*cross-check* (MRR, 28-day revenue, active subs). To wire it:
+1. RevenueCat dashboard → **Project settings → API keys** → create a **v2 Secret
+   key** and grant it the **`charts_metrics:overview:read`** permission (the
+   overview-metrics endpoint needs that scope).
+2. Grab your **project id** (in the dashboard URL, or the Worker will auto-find
+   it via `GET /v2/projects` using the same key).
+3. Set the secrets:
+   ```bash
+   wrangler secret put REVENUECAT_SECRET_KEY   # the v2 secret key (sk_...)
+   wrangler secret put REVENUECAT_PROJECT_ID   # optional — auto-discovered if omitted
+   wrangler deploy
+   ```
+⚠️ RevenueCat's docs are ambiguous about whether a *secret* key can hold the
+`charts_metrics` scope or whether that endpoint requires an **OAuth** token. The
+Worker tries the secret key and, if RevenueCat rejects it, the card shows the
+exact API error (e.g. a 403 scope message) instead of breaking — so you'll know
+immediately whether you need the OAuth path. Either way the DB ledger keeps
+Money-in populated.
 
 ### Tavily
 **No usage API exists.** The card shows an **estimate** from your lifetime scan

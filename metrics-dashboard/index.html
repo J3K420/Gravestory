@@ -189,6 +189,8 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
   function num(n) { return (typeof n === 'number') ? n.toLocaleString('en-US') : '—'; }
+  // Typed money formatter — '$1,234' for a finite number, '—' otherwise (never $NaN).
+  function money(n) { return (typeof n === 'number' && isFinite(n)) ? '$' + n.toLocaleString('en-US') : '—'; }
   function pct(n, d) { return d > 0 ? Math.round((n / d) * 100) : 0; }
   // pick(obj, 'field') → the `_real` value when the toggle is on (and it exists),
   // else the raw value. Centralizes the owner-exclusion choice for every card.
@@ -257,7 +259,7 @@
         '<div class="grid">' +
         card('Purchases', num(pick(mi, 'purchase_count')), esc(num(mi.refund_count)) + ' refunds') +
         card('Credits sold', num(pick(mi, 'credits_sold_gross')), esc(num(mi.credits_outstanding)) + ' still unused') +
-        card('Est. revenue', '$' + esc(rev.usd.toLocaleString('en-US')), revLabel) +
+        card('Est. revenue', esc(money(rev.usd)), revLabel) +
         card('Paying users', num(pick(mi, 'paying_users'))) +
         card('Conversion', esc(pick(cv, 'pct') != null ? pick(cv, 'pct') : 0) + '%',
           esc(num(pick(cv, 'scanner_buyers'))) + ' of ' + esc(num(pick(cv, 'scanners'))) + ' scanners') +
@@ -268,19 +270,28 @@
     var tv = data.tavily || {}, gc = data.google_cloud || {}, rc = data.revenuecat || {};
     var runway = '<div class="grid">';
     runway += card('Tavily est. cost ' + pill(tv.status),
-      tv.est_cost_usd != null ? '$' + esc(tv.est_cost_usd.toLocaleString('en-US')) : '—',
+      esc(money(tv.est_cost_usd)),
       (tv.est_credits_used != null ? esc(num(tv.est_credits_used)) + ' credits · ' : '') +
       '<a href="' + esc(safeUrl(tv.dashboard_url || 'https://app.tavily.com/')) + '" target="_blank" rel="noopener">Open Tavily ↗</a>');
+    // Google Cloud: live month-to-date spend when configured, else last-pasted.
+    var gcSpend = gc.month_to_date_usd != null ? gc.month_to_date_usd
+                : (gc.last_known_spend_usd != null ? gc.last_known_spend_usd : null);
+    var gcDetail = (gc.month_to_date_usd != null ? 'month-to-date' : (gc.last_known_spend_usd != null ? 'last pasted' : ''));
     runway += card('Google Cloud ' + pill(gc.status),
-      gc.last_known_spend_usd != null ? '$' + esc(gc.last_known_spend_usd.toLocaleString('en-US')) : '—',
-      (gc.monthly_budget_usd != null ? 'budget $' + esc(gc.monthly_budget_usd.toLocaleString('en-US')) + ' · ' : '') +
+      esc(money(gcSpend)),
+      (gcDetail ? gcDetail + ' · ' : '') +
+      (gc.monthly_budget_usd != null ? 'budget ' + esc(money(gc.monthly_budget_usd)) + ' · ' : '') +
       '<a href="' + esc(safeUrl(gc.dashboard_url || 'https://console.cloud.google.com/billing')) + '" target="_blank" rel="noopener">Open billing ↗</a>');
-    // RevenueCat — degraded fallback (DB ledger drives Money-in); keep the
-    // authoritative revenue source one tap away. Lives in Runway (always
-    // rendered), not Money-in (gated on liveSummary).
+    // RevenueCat: live MRR + 28-day revenue when configured; else degraded link.
+    // The DB ledger drives Money-in regardless; this is the authoritative cross-check.
+    var rcValue = rc.mrr != null ? esc(money(rc.mrr)) + ' MRR' : '—';
+    var rcDetail = (rc.status === 'live')
+      ? ((rc.revenue_last_28_days != null ? esc(money(rc.revenue_last_28_days)) + ' / 28d · ' : '') +
+         (rc.active_subscriptions != null ? esc(num(rc.active_subscriptions)) + ' subs · ' : ''))
+      : '';
     runway += card('RevenueCat ' + pill(rc.status),
-      '—',
-      '<a href="' + esc(safeUrl(rc.dashboard_url || 'https://app.revenuecat.com/')) + '" target="_blank" rel="noopener">Open RevenueCat ↗</a>');
+      rcValue,
+      rcDetail + '<a href="' + esc(safeUrl(rc.dashboard_url || 'https://app.revenuecat.com/')) + '" target="_blank" rel="noopener">Open RevenueCat ↗</a>');
     runway += '</div>';
     if (tv.note) runway += '<div class="note" style="margin-top:8px">' + esc(tv.note) + '</div>';
     html += section('Runway (money out)', '', runway);

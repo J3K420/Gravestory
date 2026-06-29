@@ -47,6 +47,10 @@ function LogoHalo({ size = 300 }) {
 
 export default function HomeScreen({ navigation }) {
   const [user, setUser] = useState(null);
+  // Whether the initial auth check has resolved. Starts false so the "sign in
+  // for 3 free scans" invite never FLASHES for a returning signed-in user during
+  // the async getSession() (same anti-flash discipline as showTip below).
+  const [authChecked, setAuthChecked] = useState(false);
   // First-run tip card: shown once until dismissed. Starts false so it never
   // flashes for returning users before the async flag check resolves.
   const [showTip, setShowTip] = useState(false);
@@ -68,6 +72,7 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      setAuthChecked(true);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       const newUser = session?.user ?? null;
@@ -150,6 +155,23 @@ export default function HomeScreen({ navigation }) {
               </TouchableOpacity>
             </View>
           </View>
+        )}
+
+        {/* Sign-in invite — only for signed-out visitors. Guests get 0 scans
+            (SCAN_LIMIT_FREE_GUEST); signing in unlocks 3 free (SCAN_LIMIT_FREE_USER),
+            so this offer is accurate and is the first thing a new user should act on.
+            Disappears the moment `user` is set. Tap → Auth screen. */}
+        {authChecked && !user && (
+          <TouchableOpacity
+            style={styles.signinInvite}
+            onPress={() => navigation.navigate('Auth')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.signinInviteTitle}>Sign in to get 3 free scans</Text>
+            <Text style={styles.signinInviteSub}>
+              Create a free account to start uncovering the lives behind the stones ›
+            </Text>
+          </TouchableOpacity>
         )}
 
         {/* Primary scan CTA */}
@@ -241,6 +263,24 @@ const styles = StyleSheet.create({
   },
   scanBtnText: {
     color: colors.onFlame, fontSize: 16, letterSpacing: 1.2, fontFamily: fonts.sansBold,
+  },
+
+  // Sign-in invite — gold-accented card sitting just above the scan CTA. Same
+  // left-border idiom as the first-run tip card, but persistent for signed-out
+  // users and tappable as a whole (routes to Auth).
+  signinInvite: {
+    width: '100%', marginBottom: 16,
+    backgroundColor: colors.stone2,
+    borderWidth: 1, borderColor: colors.flame,
+    borderRadius: radius.md, padding: 16,
+  },
+  signinInviteTitle: {
+    color: colors.flame, fontFamily: fonts.title, fontSize: 17,
+    letterSpacing: 0.3, marginBottom: 4,
+  },
+  signinInviteSub: {
+    color: colors.parchment, fontFamily: fonts.body, fontSize: 13,
+    lineHeight: 19, opacity: 0.9,
   },
 
   tipCard: {

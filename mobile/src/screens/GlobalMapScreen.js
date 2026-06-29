@@ -17,19 +17,28 @@ import { GraveMarkerSvg } from '../components/GraveMarkers';
 
 const DEFAULT_REGION = { latitude: 30, longitude: -20, latitudeDelta: 110, longitudeDelta: 130 };
 
-// Renders a grave's first-wins chosen marker on the global map (the same 20
-// gold glyphs as the cemetery map). Not draggable. tracksViewChanges starts
-// true so the SVG is captured, then flips false on a TIMER (not onLayout): on a
-// slow device onLayout fires before the SVG has painted, so the old flip
-// snapshotted a blank marker and the pin stayed invisible until an app restart
-// (the intermittent "pins gone on reopen" bug). A short delay lets the native
-// side rasterize the painted SVG; cleared on unmount. The key (in the map below)
-// includes marker_style so a re-staked grave re-snapshots.
+// Renders a grave's first-wins chosen marker on the global map (the same 20 gold
+// glyphs as the cemetery map). Not draggable.
+//
+// tracksViewChanges starts true so the SVG is captured, then flips false after a
+// COMMITTED FRAME (double requestAnimationFrame), not on onLayout/a fixed timer.
+// Why this differs from the cemetery map (which keeps it true for life): the
+// global map renders up to 500 pins at once, and holding tracksViewChanges true
+// across all of them continuously re-rasterizes every marker — real CPU cost on a
+// weak device. But flipping false too early (onLayout, or a blind timer) on a slow
+// device snapshots a BLANK marker and latches invisible until restart (the "pins
+// gone on reopen" bug). The double-rAF waits for one fully committed frame — far
+// cheaper than holding true, and reliably after the SVG paints in practice — then
+// flips false once. Cancelled on unmount. The key (below) includes marker_style so
+// a re-staked grave remounts and re-snapshots.
 function GlobalGraveMarker({ story, onPress }) {
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
   useEffect(() => {
-    const t = setTimeout(() => setTracksViewChanges(false), 800);
-    return () => clearTimeout(t);
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setTracksViewChanges(false));
+    });
+    return () => { cancelAnimationFrame(raf1); if (raf2) cancelAnimationFrame(raf2); };
   }, []);
   // A grave anyone has corrected is exact — no "?" badge regardless of the flag.
   const lowConf = story._lowConfidence && !story.userCorrected;

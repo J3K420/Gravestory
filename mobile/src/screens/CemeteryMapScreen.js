@@ -17,28 +17,26 @@ import { useRefresh } from '../lib/use-refresh';
 import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
 
-// Wrapper that owns tracksViewChanges: starts true so the SVG is captured, then
-// flips false so later map updates don't re-snapshot every frame.
+// Wrapper that owns tracksViewChanges.
 //
-// CRITICAL — flip false on a TIMER, not on onLayout. onLayout fires when the
-// React view has a layout box, but NOT when the SVG has actually painted into it.
-// On a slow device the old onLayout flip snapshotted a still-BLANK marker and,
-// because the flag never goes back to true, the pin stayed invisible until a
-// remount (app restart) — the intermittent "pins gone on reopen" bug, worst on
-// cheap/slow Androids where the paint lands after layout. A short delay gives the
-// native side time to rasterize the painted SVG. Cleared on unmount.
-// (Re-snapshots on marker_style / userCorrected change — the key forces a remount.)
+// We keep it TRUE for the marker's whole lifetime. The old code flipped it false
+// (originally onLayout, then on a timer) to save per-frame rasterizing — but
+// onLayout/timer fire before the SVG has reliably PAINTED on a slow device, so
+// the native side snapshotted a blank marker and, because the flag latched false
+// forever, the pin stayed invisible until an app restart (the intermittent "pins
+// gone on reopen" bug, worst on cheap Androids). Any fixed delay is a guess that
+// a slower device can still lose. The cemetery map only has a handful-to-low-tens
+// of pins and each is a tiny static gold glyph, so continuous re-rasterizing is
+// negligible — and keeping it true makes a blank snapshot IMPOSSIBLE (the native
+// view always reflects the painted SVG). This is react-native-maps' own guidance
+// for content that must always render. (The 500-pin GLOBAL map can't afford this,
+// so it uses a cheap rAF-confirmed single snapshot instead.)
 function GraveMarker({ story, onPress, onDragEnd }) {
-  const [tracksViewChanges, setTracksViewChanges] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setTracksViewChanges(false), 800);
-    return () => clearTimeout(t);
-  }, []);
   return (
     <Marker
       coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}
       draggable
-      tracksViewChanges={tracksViewChanges}
+      tracksViewChanges={true}
       onDragEnd={onDragEnd}
       onPress={onPress}
     >

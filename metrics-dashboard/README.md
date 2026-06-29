@@ -104,6 +104,17 @@ cannot embed (iframe) the Tavily dashboard, so a deep-link is correct.
 
 ---
 
+## "Exclude my accounts" toggle
+
+The dashboard defaults to showing **real-user** numbers — the 3 owner accounts
+(`j3k420`, `jamesedmonds26`, `edmondsj46`) are excluded from scans, signups,
+stories, money-in, conversion, and content reports. Toggle the **"Exclude my
+accounts"** button in the controls bar to flip every card between real-user and
+all-accounts (including yours). The toggle re-renders instantly from the cached
+data — no refetch. (Graves have no per-user owner column, so the Graves card is
+always raw; grave-photos counts do honor the toggle.) The owner-account list
+lives in the `me` CTE of migration 030 — keep it in sync with `queries/dashboard.sql`.
+
 ## Notes on the numbers
 
 - **Est. revenue ($)** is reconstructed from credits sold via the price table

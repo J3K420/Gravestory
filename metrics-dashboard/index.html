@@ -148,6 +148,7 @@
         <button data-hours="168">7 days</button>
         <button data-hours="720">30 days</button>
       </div>
+      <button id="excludeMine" class="active" title="Exclude the 3 owner accounts (j3k420 / jamesedmonds26 / edmondsj46)">Exclude my accounts</button>
       <button id="refresh">↻ Refresh</button>
       <button id="lock">Lock</button>
     </div>
@@ -161,6 +162,10 @@
   var PROXY_BASE = 'https://gravestory-proxy.james-gravestory.workers.dev';
   var KEY_STORE = 'gs_admin_key';
   var windowHours = 24;
+  // When true (default), every metric shows the real-user figure with the 3
+  // owner accounts excluded — the `_real` twin the RPC emits. When false, raw.
+  var excludeMine = true;
+  var lastData = null; // cache the last fetch so the toggle re-renders without refetching
 
   // ── auth key handling ──────────────────────────────────────────
   // Accept the key from the URL hash (#<key>) so a bookmark carries it, then
@@ -185,6 +190,13 @@
   }
   function num(n) { return (typeof n === 'number') ? n.toLocaleString('en-US') : '—'; }
   function pct(n, d) { return d > 0 ? Math.round((n / d) * 100) : 0; }
+  // pick(obj, 'field') → the `_real` value when the toggle is on (and it exists),
+  // else the raw value. Centralizes the owner-exclusion choice for every card.
+  function pick(obj, field) {
+    obj = obj || {};
+    if (excludeMine && (field + '_real') in obj) return obj[field + '_real'];
+    return obj[field];
+  }
   // Only http(s) URLs may go into an href — esc() escapes quotes but would NOT
   // stop a javascript:/data: scheme. The dashboard_url values are worker-emitted
   // today, but scheme-guarding closes the gap before any live URL wiring lands.
@@ -209,42 +221,46 @@
   function render(data) {
     var meta = document.getElementById('meta');
     var gen = data.generated_at ? new Date(data.generated_at).toLocaleString() : '';
-    meta.textContent = 'Updated ' + gen + ' · window ' + data.window_hours + 'h';
+    meta.textContent = 'Updated ' + gen + ' · window ' + data.window_hours + 'h · '
+      + (excludeMine ? 'real users (my 3 accounts excluded)' : 'all accounts incl. mine');
 
     var html = '';
     var s = data.summary || {};
     var liveSummary = s.status === 'live';
 
-    // ── PRODUCT ──
+    // ── PRODUCT ── (pick() applies the owner-exclusion toggle per field)
     if (liveSummary) {
       var sc = s.scans || {}, us = s.users || {}, st = s.stories || {}, gr = s.graves || {};
       html += section('Product', pill('live'),
         '<div class="grid">' +
-        card('Scans today', num(sc.today)) +
-        card('Scans 7d', num(sc.last_7d)) +
-        card('Scans lifetime', num(sc.lifetime), esc(num(sc.distinct_scanners)) + ' scanners') +
-        card('Signups', num(us.total), '+' + esc(num(us.signups_7d)) + ' in 7d · ' + esc(num(us.total_real)) + ' real') +
-        card('Public stories', num(st.public), esc(num(st.new_7d)) + ' new in 7d') +
-        card('Graves', num(gr.total), esc(num(gr.public)) + ' on map · ' + esc(num(gr.photos)) + ' photos') +
+        card('Scans today', num(pick(sc, 'today'))) +
+        card('Scans 7d', num(pick(sc, 'last_7d'))) +
+        card('Scans lifetime', num(pick(sc, 'lifetime')), esc(num(pick(sc, 'distinct_scanners'))) + ' scanners') +
+        card('Signups', num(pick(us, 'total')), '+' + esc(num(pick(us, 'signups_7d'))) + ' in 7d') +
+        card('Public stories', num(pick(st, 'public')), esc(num(pick(st, 'new_7d'))) + ' new in 7d') +
+        // graves has no per-user owner column, so it never excludes — labeled raw.
+        card('Graves', num(gr.total), esc(num(gr.public)) + ' on map · ' + esc(num(pick(gr, 'photos'))) + ' photos') +
         '</div>');
     } else {
       html += section('Product', pill(s.status),
         '<div class="err">' + esc(s.reason || s.error || 'unavailable') + '</div>');
     }
 
-    // ── MONEY IN ──
+    // ── MONEY IN ── (pick() applies the owner-exclusion toggle per field)
     if (liveSummary) {
       var mi = s.money_in || {}, cv = s.conversion || {};
-      // Reconstruct $ revenue from credits via the price table (no $ column in DB).
-      var rev = estimateRevenue(mi.pack_breakdown, mi.credits_sold_gross);
+      // Reconstruct $ revenue from credits via the price table (no $ column in DB),
+      // using the picked (toggle-aware) packs + gross so revenue tracks the toggle.
+      var rev = estimateRevenue(pick(mi, 'pack_breakdown'), pick(mi, 'credits_sold_gross'));
       var revLabel = rev.blended ? 'blended est. ($0.30/credit — pack ids not recorded)' : 'reconstructed from packs';
       html += section('Money in', pill('live'),
         '<div class="grid">' +
-        card('Purchases', num(mi.purchase_count), esc(num(mi.refund_count)) + ' refunds') +
-        card('Credits sold', num(mi.credits_sold_gross), esc(num(mi.credits_outstanding)) + ' still unused') +
+        card('Purchases', num(pick(mi, 'purchase_count')), esc(num(mi.refund_count)) + ' refunds') +
+        card('Credits sold', num(pick(mi, 'credits_sold_gross')), esc(num(mi.credits_outstanding)) + ' still unused') +
         card('Est. revenue', '$' + esc(rev.usd.toLocaleString('en-US')), revLabel) +
-        card('Paying users', num(mi.paying_users)) +
-        card('Conversion', esc(cv.pct != null ? cv.pct : 0) + '%', esc(num(cv.scanner_buyers)) + ' of ' + esc(num(cv.scanners)) + ' scanners') +
+        card('Paying users', num(pick(mi, 'paying_users'))) +
+        card('Conversion', esc(pick(cv, 'pct') != null ? pick(cv, 'pct') : 0) + '%',
+          esc(num(pick(cv, 'scanner_buyers'))) + ' of ' + esc(num(pick(cv, 'scanners'))) + ' scanners') +
         '</div>');
     }
 
@@ -283,13 +299,13 @@
       html += section('Funnel', pill(f.status), '<div class="err">' + esc(f.reason || f.error || 'unavailable') + '</div>');
     }
 
-    // ── HEALTH ──
+    // ── HEALTH ── (pick() applies the owner-exclusion toggle per field)
     if (liveSummary) {
       var rp = s.reports || {};
-      var urgent = rp.urgent || 0;
+      var urgent = pick(rp, 'urgent') || 0;
       html += section('Health', pill('live'),
         '<div class="grid">' +
-        card('Content reports', num(rp.total), esc(num(rp.on_public)) + ' on public stories') +
+        card('Content reports', num(pick(rp, 'total')), esc(num(pick(rp, 'on_public'))) + ' on public stories') +
         card('Urgent reports', num(urgent), 'privacy/offensive on public', urgent > 0) +
         '</div>');
     }
@@ -359,6 +375,7 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     }).then(function (data) {
+      lastData = data;   // cache so the exclude-mine toggle re-renders without a refetch
       render(data);
     }).catch(function (e) {
       if (String(e.message) === '401') return;
@@ -389,6 +406,13 @@
   document.getElementById('refresh').addEventListener('click', load);
   document.getElementById('lock').addEventListener('click', function () {
     sessionStorage.removeItem(KEY_STORE); showGate('Locked.');
+  });
+  // Exclude-my-accounts toggle: flips every card between raw and `_real` values.
+  // Re-renders from the cached fetch — no network round-trip needed.
+  document.getElementById('excludeMine').addEventListener('click', function () {
+    excludeMine = !excludeMine;
+    this.classList.toggle('active', excludeMine);
+    if (lastData) render(lastData);
   });
   Array.prototype.forEach.call(document.querySelectorAll('.windowsel button'), function (b) {
     b.addEventListener('click', function () {

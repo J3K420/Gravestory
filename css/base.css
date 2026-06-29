@@ -33,3 +33,9 @@
   /* SCREENS */
   .screen { display: none; min-height: 100vh; }
   .screen.active { display: flex; flex-direction: column; }
+
+  /* Scrollbar (relocated from install-banner.css during the landing-page
+     conversion — install-banner.css was deleted with the PWA install prompt) */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--ink); }
+  ::-webkit-scrollbar-thumb { background: var(--stone); }

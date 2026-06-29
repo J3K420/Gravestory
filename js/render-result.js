@@ -1,4 +1,14 @@
-// render-result.js — Render the result screen (story + cite + visibility controls) (extracted Stage 4)
+// render-result.js — Render the read-only public bio screen (extracted Stage 4).
+//
+// LANDING-PAGE CONVERSION (web → app-store pointer): this file was stripped to a
+// READ-ONLY renderer. The web app no longer scans or saves stories; the only way
+// a bio reaches this screen is viewGlobalStory() (js/map-global.js) opening a
+// PUBLIC story from the community global map. All owner/write features —
+// Save/Share/GEDCOM buttons, the public/private visibility toggle, the marker-
+// style picker, and tribute (candle/flower) counts — were removed along with the
+// scan pipeline. The "Report a problem" link survives (defamation takedown path
+// on the now-indexable public surface). render-result.js references ZERO
+// deleted-pipeline symbols after this strip.
 
 // ── RENDER RESULT ────────────────────────────────────────────────
 function renderResult(story) {
@@ -49,14 +59,6 @@ function renderResult(story) {
   // Body
   const body = document.getElementById('result-body');
   body.innerHTML = '';
-
-  // Example banner — first thing in the body for the read-only sample story.
-  if (story._isSample) {
-    const banner = document.createElement('div');
-    banner.className = 'sample-banner';
-    banner.textContent = '✦ Example story — this is what GraveStory creates from a single photo';
-    body.appendChild(banner);
-  }
 
   // Location tag — show ? indicator when location is approximate/uncertain
   if (story.location) {
@@ -132,10 +134,11 @@ function renderResult(story) {
   // AI-honesty caption — a small, persistent note beneath every generated
   // biography. Honest-research register (not a scary warning): sets the
   // expectation that the story is AI-assembled from public sources, may err,
-  // and is not an authoritative record. Suppressed only for the read-only
-  // sample (which carries its own "Example story" banner). The first-ever
-  // view also gets the one-time explainer modal (showAiDisclaimerOnce below).
-  if (!story._isSample && (story.biography || '').trim()) {
+  // and is not an authoritative record. The "Report a problem" link is the
+  // takedown path for a wrong/defaming public bio (a relative who finds a bad
+  // bio can flag it without an account). The first-ever view also gets the
+  // one-time explainer modal (showAiDisclaimerOnce below).
+  if ((story.biography || '').trim()) {
     const aiNote = document.createElement('div');
     aiNote.className = 'ai-disclaimer-note';
     aiNote.innerHTML = `✦ AI-generated story — researched from public records. It may contain errors and is not an official record. <button type="button" class="ai-report-link" id="ai-report-link">Report a problem</button>`;
@@ -177,11 +180,10 @@ function renderResult(story) {
   renderSymbolSection(story);
 
   // Mentions — a tappable "Also found in…" chip opening a sheet of name-safe
-  // one-line hyperlinks to the research sources for this person. Shows on the
-  // owner's story, the sample, and public/global stories alike (outbound links).
+  // one-line hyperlinks to the research sources for this person.
   renderMentionsSection(story);
 
-  // Show map button if GPS or text location available
+  // Show map button if GPS or text location available (back to the global map).
   const mapBtn = document.getElementById('result-map-btn');
   if (mapBtn) {
     if (story.gps || story.location) {
@@ -189,38 +191,6 @@ function renderResult(story) {
     } else {
       mapBtn.classList.remove('visible');
     }
-  }
-
-  // The canned first-run example is read-only: no save / sharing / tributes /
-  // marker, and a banner makes clear it's a demo, not a real scan.
-  const isSample = !!story._isSample;
-
-  // Set save button based on whether this story is already saved
-  const saveBtn = document.getElementById('save-btn');
-  const alreadySaved = story.timestamp && savedStories.some(s => s.timestamp === story.timestamp);
-  if (isSample) {
-    saveBtn.style.display = 'none';
-  } else {
-    saveBtn.style.display = '';
-    if (alreadySaved) {
-      saveBtn.textContent = '✓ Saved';
-      saveBtn.className = 'action-btn action-save saved';
-    } else {
-      saveBtn.textContent = '💾 Save';
-      saveBtn.className = 'action-btn action-save';
-    }
-  }
-
-  // GEDCOM export is owner-only: hide it for the read-only sample and for global
-  // (other people's) stories. Shown for the user's own scanned/saved stories.
-  const exportBtn = document.getElementById('export-btn');
-  if (exportBtn) exportBtn.style.display = (isSample || story._isGlobal) ? 'none' : '';
-
-  // Public/private toggle, tributes, marker picker — all suppressed for the sample.
-  if (!isSample) {
-    renderVisibilityControls(story, alreadySaved);
-    renderTributeSection(story);
-    renderMarkerSection(story, alreadySaved);
   }
 }
 
@@ -268,11 +238,11 @@ function showAiDisclaimerOnce() {
 }
 
 // ── REPORT A PROBLEM (bottom sheet) ──────────────────────────────
-// Lets any viewer (guest or signed-in) flag a generated biography. Reason
-// chips + an optional note → submitContentReport (js/api-reports.js) writes to
-// the content_reports table. Open to everyone by design: a relative who finds
-// a wrong public bio should be able to report it without an account. Satisfies
-// Google Play's in-app AI-content reporting requirement.
+// Lets any viewer flag a generated biography. Reason chips + an optional note →
+// submitContentReport (js/api-reports.js) writes to the content_reports table.
+// Open to everyone by design: a relative who finds a wrong public bio should be
+// able to report it without an account. This is the defamation/takedown path on
+// the public, indexable community surface.
 function openReportSheet(story) {
   const existing = document.getElementById('report-sheet-overlay');
   if (existing) existing.remove();
@@ -364,14 +334,14 @@ function openReportSheet(story) {
 // bottom-sheet with its conventional meaning. Unknown symbols render as plain,
 // non-tappable chips. Mirrors the mobile ResultScreen symbol chips.
 //
-// Meaning lookup goes through lookupSymbolMeaning() (biography.js, on window via
+// Meaning lookup goes through lookupSymbolMeaning() (js/symbols.js, on window via
 // the classic-script convention). Per CLAUDE.md we never embed data in onclick:
 // each tappable chip stores its meaning in a module-level map keyed by an id and
 // a named handler (openSymbolSheet) reads from it.
 let _symbolSheetLookup = {};
 
 function renderSymbolSection(story) {
-  // Remove any prior render (re-render on save/toggle re-runs renderResult).
+  // Remove any prior render (re-render re-runs renderResult).
   const existing = document.getElementById('symbol-section');
   if (existing) existing.remove();
   _symbolSheetLookup = {};
@@ -441,9 +411,9 @@ function closeSymbolSheet() {
 // A single "Also found in…" chip that opens a bottom-sheet list of name-safe
 // one-line hyperlinks to this person's research sources (Tavily web / FindAGrave
 // / Chronicling America / Internet Archive / Wikipedia). The sentence text is
-// the link label, authored by resolveMentions under the living-name rule, so it
-// is safe to show on public/global stories too. Mirrors the symbol-chip pattern:
-// the list is stored in a module-level lookup, never embedded in onclick.
+// the link label, authored under the living-name rule, so it is safe to show on
+// public/global stories. Mirrors the symbol-chip pattern: the list is stored in
+// a module-level lookup, never embedded in onclick.
 let _mentionSheetLookup = [];
 
 function renderMentionsSection(story) {
@@ -507,413 +477,6 @@ function openMentionSheet() {
 function closeMentionSheet() {
   const existing = document.getElementById('mention-sheet-overlay');
   if (existing) existing.remove();
-}
-
-// Marker-style picker — lets the user choose this grave's pin: their personal
-// cemetery-map pin AND, for the first public scanner, the grave's permanent
-// global-map marker (first-wins). Mirrors the mobile ResultScreen "Marker" chip.
-// Shown for the signed-in user's own non-global story with a location — saved OR
-// unsaved (the grave is created during the pipeline, so a pre-save pick can stake
-// it immediately). Global bios are hidden (no editable pin).
-function renderMarkerSection(story, alreadySaved) {
-  const existing = document.getElementById('marker-section');
-  if (existing) existing.remove();
-
-  if (!currentUser || story._isGlobal) return;
-  if (!story.gps && !story.location) return;
-
-  // Operate on the saved row when one exists (it has the id for cloud update);
-  // otherwise operate on the in-memory story so a pre-save pick carries into
-  // saveStory() AND stakes the already-created grave's global pin immediately.
-  const target = savedStories.find(s => s.timestamp === story.timestamp) || story;
-
-  const body = document.getElementById('result-body');
-  if (!body) return;
-
-  const currentStyle = target.marker_style || DEFAULT_MARKER;
-  // Before save the marker's headline meaning is the community global map
-  // (first-wins); after save it's also the user's own Cemetery-map pin.
-  const hint = alreadySaved
-    ? 'Map pin style — first to share a grave publicly picks its community-map stone'
-    : 'Your map pin — first to share a grave publicly picks its community-map stone';
-  const wrap = document.createElement('div');
-  wrap.id = 'marker-section';
-  wrap.className = 'result-section';
-  wrap.style.cssText = 'border-top:1px solid rgba(201,168,76,0.2);padding-top:1rem;margin-top:1rem;';
-  wrap.innerHTML = `
-    <div style="font-family:'Crimson Pro',serif;color:var(--stone);font-size:0.8rem;font-style:italic;margin-bottom:0.5rem;letter-spacing:0.05em;text-transform:uppercase;">${escapeHtml(hint)}</div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-      <div style="display:flex;align-items:center;gap:0.75rem;">
-        <div style="width:40px;height:40px;line-height:0;">${graveMarkerSvg(currentStyle, 40)}</div>
-        <div style="font-family:'Playfair Display',serif;color:var(--ink);font-size:0.95rem;">${escapeHtml(getMarker(currentStyle).label)}</div>
-      </div>
-      <button id="marker-pick-btn" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.5);color:var(--ink);font-family:'Crimson Pro',serif;font-size:0.85rem;padding:0.5rem 0.9rem;cursor:pointer;border-radius:3px;white-space:nowrap;">
-        Change pin
-      </button>
-    </div>
-  `;
-  body.appendChild(wrap);
-
-  document.getElementById('marker-pick-btn').onclick = () => openMarkerPicker(target, alreadySaved);
-}
-
-// Slide-up modal grid of all 20 marker styles. Picking one persists immediately
-// (local + cloud when saved) and stakes the grave's global-map pin, then
-// re-renders the result screen so the new pin shows.
-function openMarkerPicker(savedRow, alreadySaved) {
-  const existing = document.getElementById('marker-picker-overlay');
-  if (existing) existing.remove();
-
-  const currentStyle = savedRow.marker_style || DEFAULT_MARKER;
-  // Open on the pack that holds the current selection, so the active pin is visible.
-  let activePack = (getMarker(currentStyle).pack) || MARKER_PACKS[0].id;
-  const overlay = document.createElement('div');
-  overlay.id = 'marker-picker-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,8,5,0.7);z-index:1000;display:flex;align-items:flex-end;justify-content:center;';
-
-  const cellHtml = m => {
-    const active = m.id === currentStyle;
-    return `
-      <button class="marker-pick-cell" data-style="${m.id}" style="
-        background:${active ? 'rgba(201,168,76,0.18)' : 'rgba(255,255,255,0.03)'};
-        border:1px solid ${active ? 'rgba(201,168,76,0.8)' : 'rgba(201,168,76,0.2)'};
-        border-radius:6px;padding:0.5rem 0.25rem;cursor:pointer;display:flex;
-        flex-direction:column;align-items:center;gap:0.3rem;">
-        <div style="width:44px;height:44px;line-height:0;">${graveMarkerSvg(m.id, 44)}</div>
-        <span style="font-family:'Crimson Pro',serif;color:var(--cream,#e8d4a0);font-size:0.7rem;text-align:center;line-height:1.1;">${escapeHtml(m.label)}</span>
-      </button>
-    `;
-  };
-
-  const tabsHtml = () => MARKER_PACKS.map(p => {
-    const on = p.id === activePack;
-    return `<button class="marker-pack-tab" data-pack="${p.id}" style="
-      background:${on ? 'rgba(201,168,76,0.2)' : 'transparent'};
-      border:1px solid ${on ? 'rgba(201,168,76,0.7)' : 'rgba(201,168,76,0.25)'};
-      color:${on ? 'var(--gold,#c9a84c)' : 'var(--cream,#e8d4a0)'};
-      font-family:'Crimson Pro',serif;font-size:0.82rem;line-height:1.4;padding:0.4rem 0.9rem;
-      border-radius:999px;cursor:pointer;white-space:nowrap;flex:0 0 auto;">${escapeHtml(p.label)}</button>`;
-  }).join('');
-
-  overlay.innerHTML = `
-    <div style="background:#1a1410;border-top-left-radius:16px;border-top-right-radius:16px;border-top:1px solid rgba(201,168,76,0.3);width:100%;max-width:520px;max-height:80vh;overflow-y:auto;padding:1.2rem 1rem 1.6rem;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.9rem;">
-        <div style="font-family:'Playfair Display',serif;color:var(--gold,#c9a84c);font-size:1.05rem;">Choose a map pin</div>
-        <button id="marker-picker-close" style="background:none;border:none;color:var(--cream,#e8d4a0);font-size:1.4rem;cursor:pointer;line-height:1;padding:0 0.25rem;">×</button>
-      </div>
-      <div id="marker-pack-tabs" style="display:flex;gap:0.5rem;overflow-x:auto;margin-bottom:1rem;padding:0.15rem 0 0.45rem;">${tabsHtml()}</div>
-      <div id="marker-pick-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:0.6rem;"></div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  const gridEl = overlay.querySelector('#marker-pick-grid');
-  const tabsEl = overlay.querySelector('#marker-pack-tabs');
-
-  function renderGrid() {
-    gridEl.innerHTML = MARKER_STYLES.filter(m => m.pack === activePack).map(cellHtml).join('');
-    gridEl.querySelectorAll('.marker-pick-cell').forEach(bindCell);
-  }
-  function renderTabs() {
-    tabsEl.innerHTML = tabsHtml();
-    tabsEl.querySelectorAll('.marker-pack-tab').forEach(tab => {
-      tab.onclick = () => { activePack = tab.getAttribute('data-pack'); renderTabs(); renderGrid(); };
-    });
-  }
-
-  const close = () => overlay.remove();
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
-  document.getElementById('marker-picker-close').onclick = close;
-
-  function bindCell(cell) {
-    cell.onclick = async () => {
-      const styleId = cell.getAttribute('data-style');
-      savedRow.marker_style = styleId;
-      if (currentStory && currentStory.timestamp === savedRow.timestamp) {
-        currentStory.marker_style = styleId;
-      }
-      close();
-      // Self-heal a missing grave link: if findOrCreateGrave failed during the
-      // pipeline (non-fatal) the story has no grave_id, so a pick would never
-      // stake. Create-and-stake in one shot and backfill grave_id.
-      if (!savedRow.grave_id && currentUser && savedRow.gps && savedRow.name) {
-        const gid = await findOrCreateGrave(savedRow.name, savedRow.gps.lat, savedRow.gps.lng, !!savedRow.is_public, styleId);
-        if (gid) {
-          savedRow.grave_id = gid;
-          if (currentStory && currentStory.timestamp === savedRow.timestamp) currentStory.grave_id = gid;
-        }
-      }
-      // UNSAVED story: do NOT write a cloud row here. The in-memory
-      // currentStory.marker_style mutation above is carried into saveStory(),
-      // which owns the single INSERT. Calling persistSave here would (a) mint a
-      // cloud row before the user taps Save — a pick-then-leave still left the
-      // story in the cloud — and (b) NOT add savedRow to savedStories, so the
-      // later saveStory() (its double-save guard keys on savedStories
-      // membership) INSERTs a SECOND row → duplicate in Remembered Stories.
-      // (H6, web counterpart of the mobile handlePickMarker fix.) The grave is
-      // already staked via findOrCreateGrave above/at pipeline time, so the
-      // global pin still lands immediately.
-      if (alreadySaved) {
-        // Persist the marker to the cloud stories row so it survives a device
-        // switch / reinstall. persistUpdate when we have an id, else persistSave
-        // to MINT one for a saved-but-not-yet-cloud-synced story.
-        if (savedRow.id) await persistUpdate(savedRow);
-        else if (currentUser) await persistSave(savedRow);
-      }
-      // Stake this grave's permanent global-map pin (first-wins, NULL-guarded
-      // server-side). The grave already exists from the pipeline, so this
-      // works even before the story row is saved. No-ops without a grave_id.
-      if (savedRow.grave_id) setGraveMarker(savedRow.grave_id, styleId);
-      // Re-render so the marker section reflects the new choice
-      renderResult(currentStory || savedRow);
-    };
-  }
-
-  renderTabs();
-  renderGrid();
-}
-
-function renderVisibilityControls(story, alreadySaved) {
-  // Clear any previous controls
-  const existing = document.getElementById('visibility-controls');
-  if (existing) existing.remove();
-
-  if (!currentUser || !alreadySaved) return;
-  // Find the saved row so toggles operate on the canonical object (has id)
-  const savedRow = savedStories.find(s => s.timestamp === story.timestamp);
-  if (!savedRow) return;
-
-  const body = document.getElementById('result-body');
-  if (!body) return;
-
-  const wrap = document.createElement('div');
-  wrap.id = 'visibility-controls';
-  wrap.className = 'result-section';
-  wrap.style.borderTop = '1px solid rgba(201,168,76,0.2)';
-  wrap.style.paddingTop = '1rem';
-  wrap.style.marginTop = '1rem';
-
-  const isPublic = !!savedRow.is_public;
-  wrap.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
-      <div>
-        <div style="font-family:'Playfair Display',serif;color:var(--ink);font-size:0.95rem;">
-          ${isPublic ? '🌍 Shared publicly' : '🔒 Private'}
-        </div>
-        <div style="font-family:'Crimson Pro',serif;color:var(--stone);font-size:0.8rem;font-style:italic;margin-top:0.2rem;">
-          ${isPublic ? 'Visible on the global cemetery map.' : 'Only visible to you.'}
-        </div>
-      </div>
-      <button id="visibility-toggle-btn" style="background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.5);color:var(--ink);font-family:'Crimson Pro',serif;font-size:0.85rem;padding:0.5rem 0.9rem;cursor:pointer;border-radius:3px;white-space:nowrap;">
-        ${isPublic ? 'Make private' : 'Share publicly'}
-      </button>
-    </div>
-  `;
-  body.appendChild(wrap);
-
-  document.getElementById('visibility-toggle-btn').onclick = async () => {
-    const goingPublic = !savedRow.is_public;
-    // First time a user shares ANY story publicly, make them read+accept a
-    // one-time notice that public stories are visible to everyone and may name
-    // others. Acknowledged once, then never again (flag gs_share_notice_seen).
-    // Making a story private again never gates.
-    if (goingPublic && !_hasSeenShareNotice()) {
-      showShareNoticeOnce(() => _applyVisibilityToggle(savedRow));
-      return;
-    }
-    _applyVisibilityToggle(savedRow);
-  };
-}
-
-// Performs the actual public/private flip + persist + re-render. Split out so the
-// first-share consent gate can call it after the user accepts the notice.
-async function _applyVisibilityToggle(savedRow) {
-  const btn = document.getElementById('visibility-toggle-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
-  savedRow.is_public = !savedRow.is_public;
-  // Mirror in currentStory so the UI re-render after toggle is consistent
-  if (currentStory && currentStory.timestamp === savedRow.timestamp) {
-    currentStory.is_public = savedRow.is_public;
-  }
-  if (savedRow.is_public) {
-    logEvent(ANALYTICS_EVENTS.MADE_PUBLIC, {});
-    // Before a story reaches the public global map, strip the names of any
-    // LIVING relatives from the bio prose (privacy/defamation guard). Done
-    // once and cached on the row; the redacted copy is what the global RPC
-    // serves. Non-blocking-safe: on any failure redactLivingNamesForPublic
-    // returns the original, so sharing never breaks.
-    if (!savedRow.public_biography && savedRow.biography &&
-        typeof redactLivingNamesForPublic === 'function') {
-      if (btn) btn.textContent = 'Preparing…';
-      try {
-        const subjects = Array.isArray(savedRow.subjects) ? savedRow.subjects
-          : (Array.isArray(savedRow.graveData?.subjects) ? savedRow.graveData.subjects : []);
-        // INCREMENT 2: deterministically strip app-originated relative names BEFORE
-        // the fail-open redactor. Desync guard: flag set but names absent (legacy/
-        // reloaded row) -> safe placeholder, never the raw bio.
-        const _orig = Array.isArray(savedRow.originatedRelatives) ? savedRow.originatedRelatives : [];
-        if (savedRow.has_originated_relatives && !_orig.length) {
-          savedRow.public_biography = 'This public biography is being prepared.';
-          // Desync fail-safe: flag set but names gone — blank EVERY raw-served
-          // public column, not just the bio (mentions/sources also go to the RPC).
-          savedRow.mentions = [];
-          savedRow.sources = [];
-          savedRow.source_urls = [];
-        } else {
-          const _stripped = (typeof stripOriginatedNamesForPublic === 'function')
-            ? stripOriginatedNamesForPublic(savedRow.biography, _orig, subjects)
-            : savedRow.biography;
-          savedRow.public_biography = await redactLivingNamesForPublic(_stripped, subjects);
-          // `sources` is served RAW by the public RPC — strip originated names
-          // from the citation descriptions too (the model can author a name into
-          // a description, and bioSnippet can feed one in). Shared column: the
-          // owner sees the name in the bio prose, so dropping it here is fine.
-          if (_orig.length && typeof stripOriginatedNamesFromSources === 'function') {
-            savedRow.sources = stripOriginatedNamesFromSources(savedRow.sources, _orig, subjects);
-            savedRow.source_urls = stripOriginatedNamesFromSources(savedRow.source_urls, _orig, subjects);
-          }
-          // Mentions public floor (see save-actions.js): (1) drop a mention naming
-          // a living non-originated relative the model failed to generalize, then
-          // (2) strip any app-originated relative name.
-          if (typeof filterMentionsForPublic === 'function') {
-            savedRow.mentions = filterMentionsForPublic(savedRow.mentions, subjects);
-          }
-          if (_orig.length && typeof stripOriginatedNamesFromMentions === 'function') {
-            savedRow.mentions = stripOriginatedNamesFromMentions(savedRow.mentions, _orig, subjects);
-          }
-        }
-        if (currentStory && currentStory.timestamp === savedRow.timestamp) {
-          currentStory.public_biography = savedRow.public_biography;
-          if (Array.isArray(savedRow.mentions)) currentStory.mentions = savedRow.mentions;
-        }
-      } catch (e) {
-        console.warn('public_biography redaction skipped (non-fatal):', e?.message || e);
-      }
-    }
-  }
-  await persistUpdate(savedRow);
-  renderVisibilityControls(currentStory || savedRow, true);
-}
-
-// ── FIRST-SHARE PUBLIC NOTICE (one-time) ─────────────────────────
-// Shown the first time a user shares any story to the public community map.
-// Informed-consent moment at the action that creates the exposure: public
-// stories are visible to everyone and may name other people. Reuses the
-// symbol bottom-sheet shell. onAccept runs the share; cancel aborts it.
-const SHARE_NOTICE_SEEN_KEY = 'gs_share_notice_seen';
-
-function _hasSeenShareNotice() {
-  try { return localStorage.getItem(SHARE_NOTICE_SEEN_KEY) === 'true'; } catch (e) { return false; }
-}
-
-function showShareNoticeOnce(onAccept) {
-  const existing = document.getElementById('share-notice-overlay');
-  if (existing) existing.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'share-notice-overlay';
-  overlay.className = 'symbol-sheet-overlay';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-  overlay.innerHTML = `
-    <div class="symbol-sheet" role="dialog" aria-modal="true">
-      <div class="symbol-sheet-handle"></div>
-      <div class="symbol-sheet-name">Sharing publicly</div>
-      <div class="symbol-sheet-text">
-        Public stories appear on the community map for anyone to see, including the
-        biography, photo, name, dates, and approximate location — and they may name
-        other people. Only share stories you're comfortable making public, and please
-        don't share private details about living people. You can make a story private
-        again at any time.
-      </div>
-      <div class="report-actions" style="margin-top:1.2rem;">
-        <button type="button" class="report-cancel" id="share-notice-cancel">Cancel</button>
-        <button type="button" class="report-submit" id="share-notice-accept">Share publicly</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  document.getElementById('share-notice-cancel').onclick = () => overlay.remove();
-  document.getElementById('share-notice-accept').onclick = () => {
-    try { localStorage.setItem(SHARE_NOTICE_SEEN_KEY, 'true'); } catch (e) {}
-    overlay.remove();
-    if (typeof onAccept === 'function') onAccept();
-  };
-}
-
-function renderTributeSection(story) {
-  const existing = document.getElementById('tribute-section');
-  if (existing) existing.remove();
-
-  if (!story.grave_id) return;
-
-  const body = document.getElementById('result-body');
-  if (!body) return;
-
-  const wrap = document.createElement('div');
-  wrap.id = 'tribute-section';
-  wrap.className = 'result-section';
-  wrap.style.cssText = 'border-top:1px solid rgba(201,168,76,0.2);padding-top:1rem;margin-top:1rem;';
-  wrap.innerHTML = `
-    <div style="font-family:'Crimson Pro',serif;color:var(--stone);font-size:0.8rem;font-style:italic;margin-bottom:0.5rem;letter-spacing:0.05em;text-transform:uppercase;">Tributes at this grave</div>
-    <div id="tribute-counts" style="font-family:'Playfair Display',serif;color:var(--ink);font-size:0.95rem;margin-bottom:0.75rem;">Loading…</div>
-    <div id="tribute-buttons"></div>
-  `;
-  body.appendChild(wrap);
-
-  // Load counts async, then wire buttons
-  getTributes(story.grave_id).then(tributes => {
-    const countsEl = document.getElementById('tribute-counts');
-    if (!countsEl) return;
-    countsEl.textContent = `${tributes.candles} ${tributes.candles === 1 ? 'candle' : 'candles'} · ${tributes.flowers} ${tributes.flowers === 1 ? 'flower' : 'flowers'}`;
-
-    // Tribute buttons only for camera-sourced, non-global stories when signed in
-    const showButtons = currentUser && story.source === 'camera' && !story._isGlobal;
-    if (!showButtons) return;
-
-    const btnsEl = document.getElementById('tribute-buttons');
-    if (!btnsEl) return;
-
-    const btnStyle = (active) => `
-      background:${active ? 'rgba(201,168,76,0.12)' : 'none'};
-      border:1px solid ${active ? 'rgba(201,168,76,0.7)' : 'rgba(201,168,76,0.3)'};
-      color:${active ? 'var(--gold)' : 'var(--stone)'};
-      font-family:'Crimson Pro',serif;font-size:0.85rem;
-      padding:0.45rem 1rem;cursor:pointer;border-radius:3px;margin-right:0.5rem;
-    `.trim();
-
-    const renderButtons = (t) => {
-      btnsEl.innerHTML = `
-        <button id="tribute-candle-btn" style="${btnStyle(t.userTribute === 'candle')}">
-          ${t.userTribute === 'candle' ? '✓ Candle left' : 'Leave a candle'}
-        </button>
-        <button id="tribute-flower-btn" style="${btnStyle(t.userTribute === 'flower')}">
-          ${t.userTribute === 'flower' ? '✓ Flower left' : 'Leave a flower'}
-        </button>
-      `;
-
-      const makeTributeHandler = (type) => async () => {
-        const newType = t.userTribute === type ? null : type;
-        const candleBtn = document.getElementById('tribute-candle-btn');
-        const flowerBtn = document.getElementById('tribute-flower-btn');
-        if (candleBtn) candleBtn.disabled = true;
-        if (flowerBtn) flowerBtn.disabled = true;
-        await setTribute(story.grave_id, newType);
-        // Log only when a tribute is added (not toggled off), so the count tracks
-        // engagement, not removals. logEvent is a global from js/analytics.js.
-        if (newType && typeof logEvent === 'function') logEvent(ANALYTICS_EVENTS.TRIBUTE_LEFT, { type: newType });
-        const fresh = await getTributes(story.grave_id);
-        const cEl = document.getElementById('tribute-counts');
-        if (cEl) cEl.textContent = `${fresh.candles} ${fresh.candles === 1 ? 'candle' : 'candles'} · ${fresh.flowers} ${fresh.flowers === 1 ? 'flower' : 'flowers'}`;
-        renderButtons(fresh);
-      };
-
-      document.getElementById('tribute-candle-btn').onclick = makeTributeHandler('candle');
-      document.getElementById('tribute-flower-btn').onclick = makeTributeHandler('flower');
-    };
-
-    renderButtons(tributes);
-  });
 }
 
 // Load all community photos of a grave and replace the image container with a

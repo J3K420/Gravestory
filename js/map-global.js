@@ -7,15 +7,18 @@
 // the current user's saved stories) -- different Leaflet instance,
 // different data source, different markers.
 //
+// LANDING-PAGE CONVERSION (web → app-store pointer): with no sign-in on web,
+// the guest-gate (guardGuestAction/closeGuestGate) and the cemetery-map sidebar
+// helper (viewStoryFromMap) were removed. Bio reading was already ungated — the
+// popup "Read bio" / "Go to bio" buttons render directly. Every visitor now gets
+// the full 500-row map limit (the community map is the SEO surface).
+//
 // MODULE SURFACE (top-level fn declarations auto-attach to window):
 //   openGlobalMap()           - showScreen + lazy init
 //   fetchGlobalStories()      - Supabase fetch + 5-min sessionStorage cache
 //   initGlobalMap()           - build Leaflet map + place markers
-//   buildGlobalPopup(story)   - popup HTML with guest-gated actions
-//   viewGlobalStory(storyId)  - fetch one story by id, render, navigate
-//   guardGuestAction(action)  - run action if signed in, else open gate modal
-//   closeGuestGate()          - hide gate modal
-//   viewStoryFromMap(index)   - jump to a SAVED story by index (cemetery-map sidebar)
+//   buildGlobalPopup(story)   - read-only popup HTML (Read bio / Go to bio)
+//   viewGlobalStory(storyId)  - render one public story read-only, navigate
 //
 // MODULE-LOCAL STATE (let-bound; intentionally NOT on window):
 //   globalLeafletMap          - the L.map instance (or null)
@@ -26,29 +29,17 @@
 //   GLOBAL_MAP_CACHE_TTL_MS   - 5 minutes
 //
 // EXTERNAL DEPENDENCIES (resolved via window at call time):
-//   showScreen()              - inline override in index.html
+//   showScreen()              - js/util-dom.js
 //   supabaseClient            - js/auth.js (module-local but window-visible)
-//   currentUser               - js/auth.js
+//   currentUser               - js/auth.js (always null on web now)
 //   currentStory              - inline state var in index.html
 //   renderResult()            - js/render-result.js
-//   savedStories              - inline state var in index.html (read by viewStoryFromMap)
+//   graveMarkerSvg()          - js/grave-markers.js (pin glyphs)
 //   Leaflet (L)               - CDN-loaded global
 //
 // CROSS-BOUNDARY CALLS INTO THIS MODULE:
-//   openGlobalMap     - 1 HTML onclick (home-screen "Global Map" button)
-//   closeGuestGate    - 2 HTML onclick (guest-gate modal buttons)
-//   guardGuestAction  - called from constructed popup onclick strings
+//   openGlobalMap     - 1 HTML onclick (home-screen "Global Map" link)
 //   viewGlobalStory   - called from constructed popup onclick strings
-//   viewStoryFromMap  - called from js/map-cemetery.js buildPopupBio's
-//                       constructed onclick string, AND from cemetery-map
-//                       sidebar list onclick (resolves via window).
-//
-// SOURCE PROVENANCE: extracted in Stage 12 from index.html lines
-// 1043–1244 (the global-map block). viewStoryFromMap travelled with
-// the block because the original code placed it physically inside the
-// global-map region; semantically it is a saved-story navigator that
-// the cemetery-map module also depends on. Promotion to a shared
-// story-nav module is deferred as a future cleanup.
 // ===================================================================
 
 // ── GLOBAL MAP ───────────────────────────────────────────────────
@@ -82,7 +73,10 @@ async function fetchGlobalStories() {
     }
   } catch (e) { /* ignore cache errors */ }
 
-  const limit = currentUser ? 500 : 50;
+  // Landing-page conversion: no sign-in on web anymore, so the old guest cap
+  // (50) is gone — every visitor gets the full limit. The community map is now
+  // the SEO surface, so we want as many public bios indexed/visible as possible.
+  const limit = 500;
   try {
     const { data, error } = await supabaseClient.rpc('global_public_stories', { p_limit: limit });
     if (error) throw error;
@@ -168,11 +162,7 @@ async function initGlobalMap() {
     ? 'no shared stories yet'
     : `${withGps.length} ${withGps.length === 1 ? 'story' : 'stories'}`;
 
-  if (!currentUser) {
-    statusEl.textContent = 'Guest view — limited to 50 most recent. Sign in to see up to 500.';
-  } else {
-    statusEl.textContent = '';
-  }
+  statusEl.textContent = '';
 
   // Initialize map at world view by default
   globalLeafletMap = L.map('global-leaflet-map').setView([20, 0], 2);
@@ -263,24 +253,6 @@ function viewGlobalStory(storyId) {
   const story = window._globalStoryLookup && window._globalStoryLookup[storyId];
   if (!story) { console.warn('Global story not in lookup:', storyId); return; }
   currentStory = story;
-  renderResult(currentStory);
-  showScreen('result');
-}
-
-function guardGuestAction(action) {
-  if (!currentUser) {
-    document.getElementById('guest-gate-modal').classList.remove('hidden');
-    return;
-  }
-  try { action(); } catch (e) { console.warn('Guest-gated action threw:', e); }
-}
-
-function closeGuestGate() {
-  document.getElementById('guest-gate-modal').classList.add('hidden');
-}
-
-function viewStoryFromMap(index) {
-  currentStory = savedStories[index];
   renderResult(currentStory);
   showScreen('result');
 }

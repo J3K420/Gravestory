@@ -43,8 +43,16 @@ The owner is taking the web app from a co-equal product surface to a **thin land
 
 ## Web file structure
 
+> ⚠️ **STALE since the 2026-06-29 landing-page conversion** (see Current status). Most files
+> below were DELETED — the web app is now homepage + global map + read-only bio only. Surviving
+> web JS: `config.js`, `util-json.js`, `util-html.js`, `util-dom.js`, `auth.js` (read-only Supabase
+> client, no sign-in), `symbols.js` (new — symbol table/lookup extracted from the deleted
+> `biography.js`), `grave-markers.js`, `render-result.js` (stripped to read-only), `map-global.js`,
+> `analytics.js`, `api-reports.js`. Surviving CSS: `base.css`, `home.css`, `result.css`, `maps.css`.
+> The tree below is kept only as history of the pre-conversion pipeline.
+
 ```
-index.html               — SPA shell: all screen markup, shared state, pipeline orchestration
+index.html               — landing page: homepage + global map + read-only bio (was: SPA shell)
 sw.js                    — Service worker (bump CACHE on every web change)
 css/                     — One file per screen: base, home, camera, loading, result, maps, modals, install-banner
 js/
@@ -68,7 +76,7 @@ js/
   api-tributes.js        — getTributes/setTribute (candle/flower per grave)
   save-actions.js        — saveStory, shareStory, exportCemeteryData
   render-result.js       — Result screen renderer + renderTributeSection + marker-style picker
-  grave-markers.js       — 20 SVG map-pin styles (per-grave marker_style, My-Cemetery map only)
+  grave-markers.js       — 20 SVG map-pin styles (per-grave marker_style; graveMarkerSvg also draws the GLOBAL-map pins — survives the landing-page conversion)
   home-screen.js         — Remembered Stories list: sort bar (Recent/Name/Cemetery), collapsible groups, actions keyed by timestamp
   map-cemetery.js        — Per-user Leaflet map: drag-to-correct, OSM boundary, _cemeteryStoryCache
   map-global.js          — Community map: guest gate, dedup by grave_id then ~20 m cell
@@ -230,8 +238,9 @@ mobile/
 
 ## Current status (2026-06)
 
-- Phase 9 complete; web + mobile at feature parity. Play Store Closed Testing underway: versionCode 5 (GPS-EXIF native fix) uploaded and in review; recruiting ~12 testers for the 14-day requirement.
-- Remaining: store-listing screenshots (`store-listing/`), Play review completion, production rollout. iOS needs a $99/yr Apple Developer account (not purchased).
+- **LIVE on the Google Play Store** (Android, vc16 — first public production release). Production access approved; managed publishing off.
+- **Web is now a landing page** (executed 2026-06-29): the web app was stripped to a thin app-store pointer. It serves a homepage (Google Play button + greyed "iOS — coming soon" + a link to the community global map + footer legal links), the **community global map**, and a **read-only public-bio view** (tap a pin → popup → read-only bio, kept as the SEO surface). The entire scan/research/auth-write pipeline was DELETED from web (`js/` lost ~28 files); surviving web JS is config/util-json/util-html/util-dom/auth(read-only client)/symbols/grave-markers/render-result(read-only)/map-global/analytics/api-reports. Worker + Supabase untouched (mobile depends on them); web does Supabase READS only (`global_public_stories` RPC, `grave_photos`, plus anon `content_reports`/`analytics_events` inserts). No sign-in on web; every visitor gets the full 500-row map. sw v67.
+- iOS: still needs a $99/yr Apple Developer account (not purchased); the homepage iOS button is a reserved disabled slot, ready to swap for a live link.
 
 ## Known limitations
 

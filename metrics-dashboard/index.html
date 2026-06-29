@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>GraveStory — Admin Metrics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
+<style>
+  /* Dark-gothic theme — tokens mirror css/base.css so it feels like GraveStory. */
+  :root {
+    --ink: #1a1410;
+    --panel: #221b14;
+    --card: #2a2017;
+    --line: #3a2e22;
+    --parchment: #f5f0e8;
+    --aged: #e8dfc8;
+    --stone: #8a7e6e;
+    --moss: #6f8a5a;
+    --rust: #b5503a;
+    --gold: #c9a84c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--parchment);
+    font-family: 'Crimson Pro', serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 18px 64px; }
+
+  header { text-align: center; padding: 18px 0 10px; }
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--gold);
+    margin: 0;
+    font-size: 1.9rem;
+  }
+  header .sub { color: var(--stone); font-style: italic; margin-top: 4px; }
+  .divider {
+    height: 1px; margin: 16px auto; max-width: 480px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+
+  /* Controls */
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; margin-bottom: 8px; }
+  .controls .windowsel { display: flex; gap: 4px; }
+  button, .btn {
+    font-family: 'Crimson Pro', serif;
+    font-size: 0.95rem;
+    background: rgba(201,168,76,0.08);
+    color: var(--aged);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    text-decoration: none;
+    display: inline-block;
+  }
+  button:hover, .btn:hover { border-color: var(--gold); }
+  button.active { border-color: var(--gold); background: rgba(201,168,76,0.18); color: var(--gold); }
+  .meta { text-align: center; color: var(--stone); font-size: 0.85rem; margin: 6px 0 22px; }
+
+  /* Sections + cards */
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    color: var(--gold);
+    font-size: 1.05rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 26px 0 12px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 6px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 12px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .card .label { color: var(--stone); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .card .value { font-family: 'Playfair Display', serif; font-size: 1.7rem; color: var(--parchment); margin-top: 4px; line-height: 1.1; }
+  .card .detail { color: var(--stone); font-size: 0.82rem; margin-top: 4px; font-style: italic; }
+  .card.alert { border-color: var(--rust); }
+  .card.alert .value { color: var(--rust); }
+
+  /* Status pills */
+  .pill {
+    display: inline-block; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 2px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle;
+    font-family: 'Crimson Pro', serif;
+  }
+  .pill.live     { background: rgba(111,138,90,0.22); color: #b7d49a; }
+  .pill.derived  { background: rgba(201,168,76,0.18); color: var(--gold); }
+  .pill.degraded { background: rgba(181,80,58,0.18); color: #e8a18f; }
+  .pill.error    { background: rgba(181,80,58,0.35); color: #ffd2c6; }
+
+  /* Funnel */
+  .funnel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .funnel .row { display: flex; align-items: baseline; gap: 10px; padding: 5px 0; }
+  .funnel .row .step { flex: 0 0 150px; color: var(--aged); }
+  .funnel .row .n { font-family: 'Playfair Display', serif; font-size: 1.15rem; color: var(--parchment); flex: 0 0 60px; text-align: right; }
+  .funnel .row .pct { color: var(--stone); font-size: 0.85rem; }
+  .funnel .row.warn .n { color: var(--rust); }
+  .bar { height: 6px; background: rgba(201,168,76,0.5); border-radius: 3px; margin-top: 3px; }
+
+  .quiet { text-align: center; color: var(--stone); font-style: italic; padding: 30px 0; }
+  .err { color: #e8a18f; font-size: 0.85rem; margin-top: 4px; }
+  #gate { max-width: 420px; margin: 60px auto; text-align: center; }
+  #gate input {
+    width: 100%; padding: 10px 12px; margin: 12px 0; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--parchment);
+    font-family: 'Crimson Pro', serif; font-size: 1rem;
+  }
+  .note { color: var(--stone); font-size: 0.82rem; font-style: italic; }
+  a { color: var(--gold); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>GraveStory</h1>
+    <div class="sub">admin metrics</div>
+  </header>
+  <div class="divider"></div>
+
+  <!-- Auth gate -->
+  <div id="gate">
+    <p class="note">Enter the admin key to load the dashboard. It is stored only for this browser session and sent as a bearer token to the Worker.</p>
+    <input id="keyInput" type="password" placeholder="ADMIN_KEY" autocomplete="off" />
+    <button id="keyBtn">Unlock</button>
+    <p id="gateErr" class="err"></p>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dash" class="hidden">
+    <div class="controls">
+      <div class="windowsel" role="group" aria-label="Time window">
+        <button data-hours="24" class="active">Today</button>
+        <button data-hours="168">7 days</button>
+        <button data-hours="720">30 days</button>
+      </div>
+      <button id="refresh">↻ Refresh</button>
+      <button id="lock">Lock</button>
+    </div>
+    <div class="meta" id="meta"></div>
+    <div id="content"></div>
+  </div>
+</div>
+
+<script>
+  // Point at the deployed Worker (same base as js/config.js PROXY_BASE).
+  var PROXY_BASE = 'https://gravestory-proxy.james-gravestory.workers.dev';
+  var KEY_STORE = 'gs_admin_key';
+  var windowHours = 24;
+
+  // ── auth key handling ──────────────────────────────────────────
+  // Accept the key from the URL hash (#<key>) so a bookmark carries it, then
+  // immediately strip it from the address bar. Otherwise from sessionStorage,
+  // otherwise prompt. Kept out of query strings (those leak into server logs).
+  function readKeyFromHash() {
+    if (location.hash && location.hash.length > 1) {
+      var k = decodeURIComponent(location.hash.slice(1));
+      sessionStorage.setItem(KEY_STORE, k);
+      history.replaceState(null, '', location.pathname + location.search);
+      return k;
+    }
+    return sessionStorage.getItem(KEY_STORE) || '';
+  }
+  function getKey() { return sessionStorage.getItem(KEY_STORE) || ''; }
+
+  // ── escaping (any server string into innerHTML goes through this) ──
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function num(n) { return (typeof n === 'number') ? n.toLocaleString('en-US') : '—'; }
+  function pct(n, d) { return d > 0 ? Math.round((n / d) * 100) : 0; }
+  // Only http(s) URLs may go into an href — esc() escapes quotes but would NOT
+  // stop a javascript:/data: scheme. The dashboard_url values are worker-emitted
+  // today, but scheme-guarding closes the gap before any live URL wiring lands.
+  function safeUrl(u) { u = String(u == null ? '' : u); return /^https?:\/\//i.test(u) ? u : '#'; }
+
+  // ── render helpers ──────────────────────────────────────────────
+  function pill(status) {
+    var s = String(status || 'error');
+    return '<span class="pill ' + esc(s) + '">' + esc(s) + '</span>';
+  }
+  function card(label, value, detail, alert) {
+    return '<div class="card' + (alert ? ' alert' : '') + '">' +
+      '<div class="label">' + esc(label) + '</div>' +
+      '<div class="value">' + value + '</div>' +
+      (detail ? '<div class="detail">' + detail + '</div>' : '') +
+      '</div>';
+  }
+  function section(title, statusPill, inner) {
+    return '<div class="section-title">' + esc(title) + (statusPill || '') + '</div>' + inner;
+  }
+
+  function render(data) {
+    var meta = document.getElementById('meta');
+    var gen = data.generated_at ? new Date(data.generated_at).toLocaleString() : '';
+    meta.textContent = 'Updated ' + gen + ' · window ' + data.window_hours + 'h';
+
+    var html = '';
+    var s = data.summary || {};
+    var liveSummary = s.status === 'live';
+
+    // ── PRODUCT ──
+    if (liveSummary) {
+      var sc = s.scans || {}, us = s.users || {}, st = s.stories || {}, gr = s.graves || {};
+      html += section('Product', pill('live'),
+        '<div class="grid">' +
+        card('Scans today', num(sc.today)) +
+        card('Scans 7d', num(sc.last_7d)) +
+        card('Scans lifetime', num(sc.lifetime), esc(num(sc.distinct_scanners)) + ' scanners') +
+        card('Signups', num(us.total), '+' + esc(num(us.signups_7d)) + ' in 7d · ' + esc(num(us.total_real)) + ' real') +
+        card('Public stories', num(st.public), esc(num(st.new_7d)) + ' new in 7d') +
+        card('Graves', num(gr.total), esc(num(gr.public)) + ' on map · ' + esc(num(gr.photos)) + ' photos') +
+        '</div>');
+    } else {
+      html += section('Product', pill(s.status),
+        '<div class="err">' + esc(s.reason || s.error || 'unavailable') + '</div>');
+    }
+
+    // ── MONEY IN ──
+    if (liveSummary) {
+      var mi = s.money_in || {}, cv = s.conversion || {};
+      // Reconstruct $ revenue from credits via the price table (no $ column in DB).
+      var rev = estimateRevenue(mi.pack_breakdown, mi.credits_sold_gross);
+      var revLabel = rev.blended ? 'blended est. ($0.30/credit — pack ids not recorded)' : 'reconstructed from packs';
+      html += section('Money in', pill('live'),
+        '<div class="grid">' +
+        card('Purchases', num(mi.purchase_count), esc(num(mi.refund_count)) + ' refunds') +
+        card('Credits sold', num(mi.credits_sold_gross), esc(num(mi.credits_outstanding)) + ' still unused') +
+        card('Est. revenue', '$' + esc(rev.usd.toLocaleString('en-US')), revLabel) +
+        card('Paying users', num(mi.paying_users)) +
+        card('Conversion', esc(cv.pct != null ? cv.pct : 0) + '%', esc(num(cv.scanner_buyers)) + ' of ' + esc(num(cv.scanners)) + ' scanners') +
+        '</div>');
+    }
+
+    // ── RUNWAY (money out) ──
+    var tv = data.tavily || {}, gc = data.google_cloud || {}, rc = data.revenuecat || {};
+    var runway = '<div class="grid">';
+    runway += card('Tavily est. cost ' + pill(tv.status),
+      tv.est_cost_usd != null ? '$' + esc(tv.est_cost_usd.toLocaleString('en-US')) : '—',
+      (tv.est_credits_used != null ? esc(num(tv.est_credits_used)) + ' credits · ' : '') +
+      '<a href="' + esc(safeUrl(tv.dashboard_url || 'https://app.tavily.com/')) + '" target="_blank" rel="noopener">Open Tavily ↗</a>');
+    runway += card('Google Cloud ' + pill(gc.status),
+      gc.last_known_spend_usd != null ? '$' + esc(gc.last_known_spend_usd.toLocaleString('en-US')) : '—',
+      (gc.monthly_budget_usd != null ? 'budget $' + esc(gc.monthly_budget_usd.toLocaleString('en-US')) + ' · ' : '') +
+      '<a href="' + esc(safeUrl(gc.dashboard_url || 'https://console.cloud.google.com/billing')) + '" target="_blank" rel="noopener">Open billing ↗</a>');
+    // RevenueCat — degraded fallback (DB ledger drives Money-in); keep the
+    // authoritative revenue source one tap away. Lives in Runway (always
+    // rendered), not Money-in (gated on liveSummary).
+    runway += card('RevenueCat ' + pill(rc.status),
+      '—',
+      '<a href="' + esc(safeUrl(rc.dashboard_url || 'https://app.revenuecat.com/')) + '" target="_blank" rel="noopener">Open RevenueCat ↗</a>');
+    runway += '</div>';
+    if (tv.note) runway += '<div class="note" style="margin-top:8px">' + esc(tv.note) + '</div>';
+    html += section('Runway (money out)', '', runway);
+
+    // ── FUNNEL ──
+    var f = data.funnel || {};
+    if (f.status === 'live') {
+      var c = f.counts || {};
+      if ((f.total_events || 0) === 0) {
+        html += section('Funnel', pill('live'),
+          '<div class="funnel"><div class="quiet">▁ Quiet — no product events in this window.</div></div>');
+      } else {
+        html += section('Funnel', pill('live'), funnelHtml(c, f));
+      }
+    } else {
+      html += section('Funnel', pill(f.status), '<div class="err">' + esc(f.reason || f.error || 'unavailable') + '</div>');
+    }
+
+    // ── HEALTH ──
+    if (liveSummary) {
+      var rp = s.reports || {};
+      var urgent = rp.urgent || 0;
+      html += section('Health', pill('live'),
+        '<div class="grid">' +
+        card('Content reports', num(rp.total), esc(num(rp.on_public)) + ' on public stories') +
+        card('Urgent reports', num(urgent), 'privacy/offensive on public', urgent > 0) +
+        '</div>');
+    }
+
+    document.getElementById('content').innerHTML = html;
+  }
+
+  function funnelHtml(c, f) {
+    var started = c.scan_started || 0;
+    var steps = [
+      ['scan started', c.scan_started, started],
+      ['→ ocr done', c.ocr_done, started],
+      ['→ bio shown', c.bio_shown, started],
+      ['→ saved', c.story_saved, c.bio_shown],
+      ['→ made public', c.made_public, c.story_saved],
+    ];
+    var h = '<div class="funnel">';
+    steps.forEach(function (row) {
+      var n = row[1] || 0, denom = row[2] || 0;
+      var p = pct(n, denom);
+      h += '<div class="row">' +
+        '<div class="step">' + esc(row[0]) + '</div>' +
+        '<div class="n">' + num(n) + '</div>' +
+        '<div class="pct">' + (denom ? p + '%' : '') +
+        (denom ? '<div class="bar" style="width:' + Math.min(p, 100) + '%"></div>' : '') +
+        '</div></div>';
+    });
+    if (c.bio_cache_hit) h += '<div class="row"><div class="step">bio cache hits</div><div class="n">' + num(c.bio_cache_hit) + '</div><div class="pct">skipped research</div></div>';
+    if (c.scan_limit_hit) h += '<div class="row warn"><div class="step">⚠ scan-limit hits</div><div class="n">' + num(c.scan_limit_hit) + '</div><div class="pct">paywall wall</div></div>';
+    h += '<div class="row"><div class="step">paywall shown</div><div class="n">' + num(c.paywall_shown) + '</div><div class="pct">→ ' + num(c.purchase_completed) + ' purchases</div></div>';
+    if (c.pipeline_error) h += '<div class="row warn"><div class="step">✗ pipeline errors</div><div class="n">' + num(c.pipeline_error) + '</div><div class="pct"></div></div>';
+    h += '<div class="row"><div class="step">guests / signed-in</div><div class="n"></div><div class="pct">' + num(f.guest_starts) + ' / ' + num(f.signed_in_starts) + ' scans started</div></div>';
+    if (f.truncated) h += '<div class="note" style="margin-top:8px">⚠ event volume hit the 50k cap — funnel counts are partial.</div>';
+    h += '</div>';
+    return h;
+  }
+
+  // Map credits → $ using the live price table (5/$1.99, 20/$5.99, 60/$12.99,
+  // 150/$24.99). pack_breakdown keys are product ids; if they are all "(unknown)"
+  // (the live grant path inserts NULL product_id), fall back to a blended rate.
+  function estimateRevenue(packBreakdown, grossCredits) {
+    var PRICE = { gravestory_5_scans: 1.99, gravestory_20_scans: 5.99, gravestory_60_scans: 12.99, gravestory_150_scans: 24.99 };
+    var total = 0, mapped = false;
+    if (packBreakdown && typeof packBreakdown === 'object') {
+      Object.keys(packBreakdown).forEach(function (pid) {
+        var pv = packBreakdown[pid];
+        if (PRICE[pid] != null && pv) { total += PRICE[pid] * (pv.buys || 0); mapped = true; }
+      });
+    }
+    if (mapped) return { usd: Math.round(total), blended: false };
+    // Blended fallback when product ids weren't recorded (the live grant path
+    // inserts NULL product_id): price the credits at the $5.99/20 mid-pack rate
+    // (~$0.30/credit) as a rough proxy. Explicitly an estimate — labeled as such.
+    return { usd: Math.round((grossCredits || 0) * 0.30), blended: true };
+  }
+
+  // ── fetch ───────────────────────────────────────────────────────
+  function load() {
+    var key = getKey();
+    if (!key) { showGate(); return; }
+    var content = document.getElementById('content');
+    content.innerHTML = '<div class="quiet">Loading…</div>';
+    fetch(PROXY_BASE + '/admin/metrics?hours=' + windowHours, {
+      headers: { 'Authorization': 'Bearer ' + key },
+    }).then(function (r) {
+      if (r.status === 401) { sessionStorage.removeItem(KEY_STORE); showGate('Key rejected.'); throw new Error('401'); }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (data) {
+      render(data);
+    }).catch(function (e) {
+      if (String(e.message) === '401') return;
+      content.innerHTML = '<div class="err">Failed to load: ' + esc(e.message) + '</div>';
+    });
+  }
+
+  function showGate(msg) {
+    document.getElementById('dash').classList.add('hidden');
+    document.getElementById('gate').classList.remove('hidden');
+    document.getElementById('gateErr').textContent = msg || '';
+  }
+  function showDash() {
+    document.getElementById('gate').classList.add('hidden');
+    document.getElementById('dash').classList.remove('hidden');
+  }
+
+  // ── wire up ─────────────────────────────────────────────────────
+  document.getElementById('keyBtn').addEventListener('click', function () {
+    var k = document.getElementById('keyInput').value.trim();
+    if (!k) return;
+    sessionStorage.setItem(KEY_STORE, k);
+    showDash(); load();
+  });
+  document.getElementById('keyInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('keyBtn').click();
+  });
+  document.getElementById('refresh').addEventListener('click', load);
+  document.getElementById('lock').addEventListener('click', function () {
+    sessionStorage.removeItem(KEY_STORE); showGate('Locked.');
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.windowsel button'), function (b) {
+    b.addEventListener('click', function () {
+      windowHours = Number(b.getAttribute('data-hours'));
+      Array.prototype.forEach.call(document.querySelectorAll('.windowsel button'), function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      load();
+    });
+  });
+
+  // boot
+  (function () {
+    var k = readKeyFromHash();
+    if (k) { showDash(); load(); } else { showGate(); }
+  })();
+</script>
+</body>
+</html>

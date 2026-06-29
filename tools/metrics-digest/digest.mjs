@@ -105,7 +105,9 @@ async function fetchEvents(sinceIso, untilIso) {
     .from('analytics_events')
     .select('event, props, platform, user_id, created_at')
     .gte('created_at', sinceIso)
-    .order('created_at', { ascending: true })
+    // DESC so the 50k cap drops the OLDEST events, not the newest (a window over
+    // 50k would otherwise hide the most recent activity).
+    .order('created_at', { ascending: false })
     .limit(50000);
   if (untilIso) q = q.lt('created_at', untilIso);
   const { data, error } = await q;
@@ -133,7 +135,9 @@ async function main() {
 
   // Scan + revenue tables (totals + windowed where the schema allows).
   const [scansWindow, scansTotal, publicTotal, storiesWindow] = await Promise.all([
-    count('scan_events', (q) => q.gte('created_at', curStart)).catch(() => null),
+    // scan_events' timestamp column is `scanned_at` (migration 004), NOT
+    // created_at — filtering on created_at silently returned 0/garbage.
+    count('scan_events', (q) => q.gte('scanned_at', curStart)).catch(() => null),
     count('scan_events').catch(() => null),
     count('stories', (q) => q.eq('is_public', true).is('deleted_at', null)).catch(() => null),
     count('stories', (q) => q.gte('created_at', curStart).is('deleted_at', null)).catch(() => null),

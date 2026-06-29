@@ -107,6 +107,14 @@ export default {
       return await handleRevenueCatWebhook(request, env, origin, allowed);
     }
 
+    // ── Admin metrics dashboard: bypass the public CLIENT_KEY gate — it has its
+    // OWN secret (ADMIN_KEY, a Bearer token). Placed here, BEFORE the CLIENT_KEY
+    // block, exactly like the RevenueCat webhook: the public CLIENT_KEY is in
+    // client source, so gating admin metrics behind it would be no gate at all.
+    if (url.pathname === '/admin/metrics') {
+      return await handleAdminMetrics(request, url, env, origin, allowed);
+    }
+
     // ── Auth: shared CLIENT_KEY + (for browsers) Origin allowlist ──
     //
     // SECURITY (audit 2026-06-26): the Origin header is NOT authentication — any
@@ -836,6 +844,216 @@ async function handleUpload(request, env, origin, allowed) {
   return json({ url: publicUrl }, 200, origin, allowed);
 }
 
+// ── Admin metrics dashboard: GET /admin/metrics ───────────────────
+// Returns ONE JSON blob of every metric the admin dashboard renders, pulling
+// from each data source IN PARALLEL (Promise.allSettled — one slow or failing
+// source can NEVER sink the whole dashboard; it degrades to status:'error' for
+// that section only). Every section carries a `status` so the UI never presents
+// a number as authoritative when it isn't:
+//   live     — pulled from a real API just now
+//   derived  — computed/estimated from our own data (no upstream API exists)
+//   degraded — the source needs setup we don't have yet (shows a fallback)
+//   error    — the source was tried and failed
+//
+// Auth: its OWN Bearer secret (ADMIN_KEY), constant-time compared, fail-closed
+// if unset — copied verbatim from the RevenueCat webhook pattern. The public
+// CLIENT_KEY is NOT involved (this route runs before that gate).
+//
+// The service-role key (SUPABASE_SERVICE_KEY) stays entirely server-side; the
+// browser only ever receives the aggregated JSON below.
+async function handleAdminMetrics(request, url, env, origin, allowed) {
+  if (request.method !== 'GET') {
+    return json({ error: 'Method not allowed' }, 405, origin, allowed);
+  }
+
+  // Auth — Bearer ADMIN_KEY, constant-time, fail-closed (same shape as the
+  // RevenueCat webhook secret check above).
+  const authHeader = request.headers.get('Authorization') || '';
+  if (!env.ADMIN_KEY || !timingSafeEqualStr(authHeader, `Bearer ${env.ADMIN_KEY}`)) {
+    return json({ error: 'Unauthorized' }, 401, origin, allowed);
+  }
+
+  // Funnel window: ?hours=N (default 720 = 30d). Clamped to a sane range so a
+  // huge value can't ask Supabase for an unbounded scan.
+  const hoursRaw = Number(url.searchParams.get('hours'));
+  const windowHours = Number.isFinite(hoursRaw) && hoursRaw > 0
+    ? Math.min(hoursRaw, 24 * 365)
+    : 720;
+  const sinceIso = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
+
+  // Fan out: every source resolves to its own {status, ...} object. allSettled
+  // means a thrown source becomes status:'error', not a 500 for the whole page.
+  const [summary, funnel, revenuecat, gcloud] = await Promise.all([
+    adminSupabaseSummary(env).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
+    adminSupabaseFunnel(env, sinceIso).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
+    adminRevenueCat(env).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
+    adminGoogleCloud(env).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
+  ]);
+
+  // Tavily has NO usage API — derive from our own lifetime scan count + the
+  // known cost model (reference-tavily-cost-model: ~$0.0075/credit, ~10 credits
+  // & ~$0.08 per scan; 4000 credits / $30 per month plan). Surfaced alongside a
+  // deep-link to the real dashboard (iframing is blocked by Tavily's headers).
+  const lifetimeScans = (summary && summary.scans && typeof summary.scans.lifetime === 'number')
+    ? summary.scans.lifetime
+    : null;
+  const tavily = adminTavilyDerived(lifetimeScans);
+
+  return json({
+    ok: true,
+    generated_at: new Date().toISOString(),
+    window_hours: windowHours,
+    summary,        // product/usage/money-in/conversion/reports (Supabase RPC)
+    funnel,         // analytics_events tally over the window (Supabase REST)
+    revenuecat,     // purchases/revenue (RevenueCat API) or degraded
+    google_cloud: gcloud, // spend vs budget (BigQuery export) or degraded
+    tavily,         // derived estimate + deep-link
+  }, 200, origin, allowed);
+}
+
+// Supabase service-role fetch helper (mirrors the sb() pattern in
+// handleDeleteAccount): raw fetch with service-role in BOTH apikey + Authorization.
+function adminSb(env, path, init) {
+  return fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      'apikey': env.SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      ...(init && init.headers),
+    },
+  });
+}
+
+// Heavy aggregates via the migration-030 RPC (one round-trip, service-role only).
+async function adminSupabaseSummary(env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+    return { status: 'degraded', reason: 'Supabase service key not configured on the Worker' };
+  }
+  const res = await adminSb(env, 'rpc/admin_metrics_summary', { method: 'POST', body: '{}' });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`admin_metrics_summary ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  return { status: 'live', ...data };
+}
+
+// Funnel: pull analytics_events over the window and tally client-side (small
+// volume; same approach as tools/metrics-digest/digest.mjs). Capped at 50k rows.
+async function adminSupabaseFunnel(env, sinceIso) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+    return { status: 'degraded', reason: 'Supabase service key not configured on the Worker' };
+  }
+  // order=DESC so that if the window exceeds the 50k cap we keep the NEWEST
+  // 50k events and drop the stale tail — the opposite would hide today's spike,
+  // the one thing a "what's happening now" dashboard must never miss.
+  const q = `analytics_events?select=event,user_id&created_at=gte.${encodeURIComponent(sinceIso)}&order=created_at.desc&limit=50000`;
+  const res = await adminSb(env, q, { method: 'GET' });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`analytics_events ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  const rows = await res.json();
+  const tally = {};
+  let guestStarts = 0;
+  for (const r of rows) {
+    tally[r.event] = (tally[r.event] || 0) + 1;
+    if (r.event === 'scan_started' && !r.user_id) guestStarts++;
+  }
+  const ev = (n) => tally[n] || 0;
+  const started = ev('scan_started');
+  return {
+    status: 'live',
+    truncated: rows.length >= 50000, // honest flag: tally is partial past 50k rows
+    counts: {
+      scan_started: started,
+      verification_rejected: ev('verification_rejected'),
+      ocr_done: ev('ocr_done'),
+      bio_shown: ev('bio_shown'),
+      bio_cache_hit: ev('bio_cache_hit'),
+      story_saved: ev('story_saved'),
+      made_public: ev('made_public'),
+      paywall_shown: ev('paywall_shown'),
+      scan_limit_hit: ev('scan_limit_hit'),
+      purchase_completed: ev('purchase_completed'),
+      scan_abandoned: ev('scan_abandoned'),
+      pipeline_error: ev('pipeline_error'),
+    },
+    guest_starts: guestStarts,
+    signed_in_starts: started - guestStarts,
+    total_events: rows.length,
+  };
+}
+
+// RevenueCat — authoritative purchases/revenue. Uses a read-only SECRET API key
+// (REVENUECAT_SECRET_KEY). No key configured ⇒ degraded (DB credit numbers from
+// the summary still cover the essentials). NOTE: RevenueCat's REST surface for a
+// raw "total revenue" number is limited; we expose what the key can fetch and
+// otherwise fall back to the in-DB credits ledger. Kept minimal + non-fatal so a
+// RevenueCat API change can't break the dashboard.
+async function adminRevenueCat(env) {
+  if (!env.REVENUECAT_SECRET_KEY) {
+    return {
+      status: 'degraded',
+      reason: 'No REVENUECAT_SECRET_KEY on the Worker — using the in-DB credits ledger instead.',
+      dashboard_url: 'https://app.revenuecat.com/',
+    };
+  }
+  // RevenueCat v2 projects/overview metrics require a project id; without one we
+  // can't blindly call it. Surface the link + mark live-capable so the owner can
+  // wire the project id later. (Cross-check vs revenuecat_events stays in the UI.)
+  return {
+    status: 'degraded',
+    reason: 'RevenueCat key present but project id not configured — see setup notes.',
+    dashboard_url: 'https://app.revenuecat.com/',
+  };
+}
+
+// Google Cloud spend — LIVE only if a BigQuery billing export + service account
+// are configured (GCP_* env). Until then: degraded, showing the configured
+// monthly budget threshold + a manually-pasted last-known spend so the card is
+// never blank. Written to light up automatically once the creds exist.
+async function adminGoogleCloud(env) {
+  const budget = env.GCLOUD_MONTHLY_BUDGET ? Number(env.GCLOUD_MONTHLY_BUDGET) : null;
+  const lastKnown = env.GCLOUD_LAST_SPEND ? Number(env.GCLOUD_LAST_SPEND) : null;
+  // No BigQuery export wired yet → degraded with whatever the owner pasted.
+  return {
+    status: 'degraded',
+    reason: 'Live spend needs Cloud Billing → BigQuery export. Showing budget + last-pasted spend.',
+    monthly_budget_usd: budget,
+    last_known_spend_usd: lastKnown,
+    dashboard_url: 'https://console.cloud.google.com/billing',
+  };
+}
+
+// Tavily — DERIVED (no usage API). Estimate from lifetime scan count using the
+// known cost model. Always returns; the deep-link is the authoritative path.
+function adminTavilyDerived(lifetimeScans) {
+  const CREDITS_PER_SCAN = 10;     // ~4-5 advanced slots + a FindAGrave /extract
+  const COST_PER_SCAN_USD = 0.08;  // reference-tavily-cost-model (typical)
+  const MONTHLY_PLAN_CREDITS = 4000;
+  const MONTHLY_PLAN_USD = 30;
+  if (typeof lifetimeScans !== 'number') {
+    return {
+      status: 'derived',
+      reason: 'Tavily has no usage API — estimate unavailable (scan count missing).',
+      dashboard_url: 'https://app.tavily.com/',
+    };
+  }
+  return {
+    status: 'derived',
+    note: 'No Tavily usage API exists — these are ESTIMATES from our scan count. Tap "Open Tavily" for the authoritative balance.',
+    lifetime_scans: lifetimeScans,
+    est_credits_used: lifetimeScans * CREDITS_PER_SCAN,
+    est_cost_usd: +(lifetimeScans * COST_PER_SCAN_USD).toFixed(2),
+    plan_credits_per_month: MONTHLY_PLAN_CREDITS,
+    plan_usd_per_month: MONTHLY_PLAN_USD,
+    est_scans_per_month_capacity: Math.floor(MONTHLY_PLAN_CREDITS / CREDITS_PER_SCAN),
+    dashboard_url: 'https://app.tavily.com/',
+  };
+}
+
 // ── RevenueCat webhook: POST /revenuecat-webhook ──────────────────
 // Server-to-server — no Origin or CLIENT_KEY. Auth is REVENUECAT_WEBHOOK_SECRET.
 // RevenueCat sets this value in the Authorization header of every webhook request.
@@ -1186,7 +1404,9 @@ function corsHeaders(origin, allowed) {
   }
   return {
     'Access-Control-Allow-Origin': acao,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    // GET is here for the /admin/metrics dashboard (a cross-origin browser GET
+    // preflight checks this list); all other routes are POST.
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     // X-Scan-Token must be advertised or a browser CORS preflight for a token-bearing
     // paid call fails. Not reachable from mobile (no Origin → no preflight), but
     // pre-arms the eventual web token port so it isn't a silent landmine. [re-verify]

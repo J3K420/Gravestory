@@ -17,11 +17,23 @@ import { useRefresh } from '../lib/use-refresh';
 import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
 
-// Wrapper that owns tracksViewChanges: starts true so the SVG is captured,
-// flips to false after the first layout so map updates don't re-snapshot.
-// Re-snapshots when the chosen marker style changes (key includes marker_style).
+// Wrapper that owns tracksViewChanges: starts true so the SVG is captured, then
+// flips false so later map updates don't re-snapshot every frame.
+//
+// CRITICAL — flip false on a TIMER, not on onLayout. onLayout fires when the
+// React view has a layout box, but NOT when the SVG has actually painted into it.
+// On a slow device the old onLayout flip snapshotted a still-BLANK marker and,
+// because the flag never goes back to true, the pin stayed invisible until a
+// remount (app restart) — the intermittent "pins gone on reopen" bug, worst on
+// cheap/slow Androids where the paint lands after layout. A short delay gives the
+// native side time to rasterize the painted SVG. Cleared on unmount.
+// (Re-snapshots on marker_style / userCorrected change — the key forces a remount.)
 function GraveMarker({ story, onPress, onDragEnd }) {
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setTracksViewChanges(false), 800);
+    return () => clearTimeout(t);
+  }, []);
   return (
     <Marker
       coordinate={{ latitude: story.gps.lat, longitude: story.gps.lng }}
@@ -30,7 +42,7 @@ function GraveMarker({ story, onPress, onDragEnd }) {
       onDragEnd={onDragEnd}
       onPress={onPress}
     >
-      <View onLayout={() => setTracksViewChanges(false)}>
+      <View>
         {/* Until the user has dragged the pin to the exact grave, it's UNCONFIRMED —
             even a real-GPS camera pin, because consumer GPS is routinely ~10–30 m off
             (worse under tree cover). So the "needs placing" state keys off

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator,
 } from 'react-native';
@@ -19,12 +19,18 @@ const DEFAULT_REGION = { latitude: 30, longitude: -20, latitudeDelta: 110, longi
 
 // Renders a grave's first-wins chosen marker on the global map (the same 20
 // gold glyphs as the cemetery map). Not draggable. tracksViewChanges starts
-// true so the SVG is captured, then flips false after first layout — an
-// unconditional false would snapshot before the SVG paints and the marker
-// would vanish (react-native-maps gotcha). The key (in the map below) includes
-// marker_style so a re-staked grave re-snapshots.
+// true so the SVG is captured, then flips false on a TIMER (not onLayout): on a
+// slow device onLayout fires before the SVG has painted, so the old flip
+// snapshotted a blank marker and the pin stayed invisible until an app restart
+// (the intermittent "pins gone on reopen" bug). A short delay lets the native
+// side rasterize the painted SVG; cleared on unmount. The key (in the map below)
+// includes marker_style so a re-staked grave re-snapshots.
 function GlobalGraveMarker({ story, onPress }) {
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setTracksViewChanges(false), 800);
+    return () => clearTimeout(t);
+  }, []);
   // A grave anyone has corrected is exact — no "?" badge regardless of the flag.
   const lowConf = story._lowConfidence && !story.userCorrected;
   return (
@@ -34,7 +40,6 @@ function GlobalGraveMarker({ story, onPress }) {
       onPress={onPress}
     >
       <View
-        onLayout={() => setTracksViewChanges(false)}
         style={[styles.markerShadow, lowConf && styles.markerLowConf]}
       >
         <GraveMarkerSvg styleId={story.marker_style} size={32} />

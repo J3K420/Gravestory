@@ -608,16 +608,24 @@ export default function ResultScreen({ navigation, route }) {
           if (imageUrl) {
             saved = await cloudUpdateStory({ ...saved, image_url: imageUrl }, sessionUser);
             // Contribute to the grave's community photo pool (non-blocking).
+            // upsert on (grave_id, user_id) — one photo per user per grave
+            // (migration 031). Re-saving the same grave UPDATES your existing
+            // photo to the newest upload instead of piling on duplicate rows
+            // (which made the global-map gallery show the same stone 10×).
             if (saved.grave_id) {
               (async () => {
                 try {
-                  await supabase.from('grave_photos').insert({
+                  // The Supabase client RESOLVES (doesn't throw) on RLS/constraint
+                  // errors — they come back in `error`, so we must inspect it or a
+                  // failed contribution is invisible (matches api-tributes/sync).
+                  const { error } = await supabase.from('grave_photos').upsert({
                     grave_id: saved.grave_id,
                     user_id: sessionUser.id,
                     image_url: imageUrl,
-                  });
+                  }, { onConflict: 'grave_id,user_id' });
+                  if (error) console.warn('grave_photos upsert failed (non-fatal):', error.message);
                 } catch (e) {
-                  console.warn('grave_photos insert failed (non-fatal):', e.message);
+                  console.warn('grave_photos upsert threw (non-fatal):', e?.message || e);
                 }
               })();
             }

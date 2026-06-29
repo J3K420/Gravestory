@@ -910,7 +910,7 @@ async function handleAdminMetrics(request, url, env, origin) {
     : null;
   const tavily = adminTavilyDerived(lifetimeScans);
 
-  return json({
+  return adminJson({
     ok: true,
     generated_at: new Date().toISOString(),
     window_hours: windowHours,

@@ -27,7 +27,7 @@ export default {
     },
     android: {
       package: 'com.gravestory.app',
-      versionCode: 15,
+      versionCode: 16,
       // The RevenueCat (react-native-purchases) and Play Services SDKs add
       // com.google.android.gms.permission.AD_ID to the merged manifest by default.
       // GraveStory does NOT read the advertising ID, so we strip it here to keep the
@@ -67,26 +67,34 @@ export default {
       'expo-font',
       'expo-web-browser',
       [
+        // expo-image-picker is auto-applied by prebuild (it's an autolinked dep) and
+        // by default adds android.permission.RECORD_AUDIO to the merged manifest. We
+        // only ever pick still images (mediaTypes: ['images']) and never record audio,
+        // so we drop the mic permission here to keep the manifest consistent with the
+        // Data safety declaration ("Microphone: not used"). microphonePermission:false
+        // both omits the iOS usage string and blocks RECORD_AUDIO on Android. Same
+        // manifest-hygiene reasoning as the AD_ID blockedPermission above; a sensitive
+        // permission with no matching feature is a Play permissions-policy flag risk.
+        'expo-image-picker',
+        {
+          microphonePermission: false,
+        },
+      ],
+      [
         'expo-location',
         {
           locationWhenInUsePermission:
             'Allow GraveStory to use your location to pin graves on the map.',
         },
       ],
-      [
-        // Android strips GPS EXIF from photos read through the system picker.
-        // expo-media-library's getAssetInfoAsync does the ACCESS_MEDIA_LOCATION +
-        // setRequireOriginal dance natively so library picks can recover the
-        // photo's location. granularPermissions limited to images only —
-        // READ_MEDIA_VIDEO/AUDIO would complicate Play Store review.
-        'expo-media-library',
-        {
-          photosPermission:
-            'Allow GraveStory to read photo location data so gravestone photos can be pinned on the map.',
-          isAccessMediaLocationEnabled: true,
-          granularPermissions: ['photo'],
-        },
-      ],
+      // NOTE: expo-media-library was removed to comply with Google Play's photo &
+      // video permissions policy. It held READ_MEDIA_IMAGES purely to recover the
+      // OS-redacted GPS EXIF from library-picked photos (auto-pin). Our photo use is
+      // "infrequent" under the policy (occasional gravestone pick via the system
+      // photo picker), which is disallowed from holding READ_MEDIA_IMAGES. The system
+      // picker (expo-image-picker, no legacy:true) needs no broad media permission.
+      // Camera shots still auto-pin via device GPS; famous graves via Wikidata burial
+      // coords; ordinary gallery photos fall back to manual pin placement on the map.
       [
         // Local-only notifications: fire a "your story is ready" notification when
         // a scan finishes while the app is backgrounded. No remote push / tokens.

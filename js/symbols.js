@@ -1,0 +1,201 @@
+// symbols.js — Symbol-meaning table + lookup (landing-page conversion).
+//
+// Extracted verbatim from js/biography.js when the scan/research pipeline was
+// deleted for the web → app-store-pointer conversion. The read-only public bio
+// (js/render-result.js renderSymbolSection) is the only surviving consumer:
+// it turns each OCR-detected symbol into a tappable gold chip whose bottom-sheet
+// shows the meaning resolved here. Mobile mirrors this inline in ResultScreen.js
+// (it imports SYMBOL_CONTEXT directly) — keep the table in sync if it ever
+// changes (it is web+mobile byte-identical per CLAUDE.md).
+//
+// LOAD ORDER: must load before js/render-result.js.
+
+// Maps lowercased symbol keywords (as returned by Gemini OCR) to their conventional
+// funerary/fraternal meaning. Injected into the bio prompt so Gemini has grounded
+// context rather than recalling from training alone — especially useful for obscure
+// fraternal emblems where training data is thin.
+const _SYMBOL_CONTEXT = {
+  // ── Military & Veterans ──────────────────────────────────────────────────────
+  'gar':                  'Grand Army of the Republic (GAR) — Union Army veteran emblem, Civil War service 1861–1865. GAR posts were active through 1956. Pension and service records may exist at Fold3 or the National Archives.',
+  'grand army':           'Grand Army of the Republic (GAR) — Union Army veteran emblem, Civil War service 1861–1865. Pension and service records may exist at Fold3 or the National Archives.',
+  'civil war':            'Civil War era (1861–1865) — veteran of either Union or Confederate forces. Service and pension records often survive at the National Archives or Fold3.',
+  'confederate':          'Confederate States Army veteran — served the Confederacy during the Civil War 1861–1865. Southern Cross of Honor or Confederate Veterans\' Association records may exist.',
+  'spanish american':     'Spanish-American War veteran (1898) — served in Cuba, Puerto Rico, or the Philippines. Records at the National Archives.',
+  'world war i':          'World War I veteran (1914–1918, US entry 1917). Draft registration cards survive at Ancestry; service records at the National Archives.',
+  'world war 1':          'World War I veteran (1914–1918, US entry 1917). Draft registration cards survive at Ancestry; service records at the National Archives.',
+  'wwi':                  'World War I veteran (1914–1918, US entry 1917). Draft registration cards survive at Ancestry; service records at the National Archives.',
+  'world war ii':         'World War II veteran (1939–1945, US entry 1941). WWII Army and Navy service records available through the National Personnel Records Center.',
+  'world war 2':          'World War II veteran (1939–1945, US entry 1941). WWII Army and Navy service records available through the National Personnel Records Center.',
+  'wwii':                 'World War II veteran (1939–1945, US entry 1941). WWII Army and Navy service records available through the National Personnel Records Center.',
+  'korean war':           'Korean War veteran (1950–1953). Service records at the National Personnel Records Center.',
+  'vietnam':              'Vietnam War veteran (1955–1975, US combat role 1965–1973). Records at the National Personnel Records Center.',
+  'vfw':                  'Veterans of Foreign Wars (VFW) — membership indicates overseas combat service. VFW posts kept membership records.',
+  'american legion':      'American Legion — veterans\' organisation founded 1919 for WWI veterans; later expanded to all wartime veterans. Local post records may survive.',
+  'navy':                 'United States Navy service. Discharge papers (DD-214 or earlier equivalents) and ship logs may be available through the National Archives.',
+  'marine':               'United States Marine Corps service. Discharge records and unit histories at the National Archives.',
+  'air force':            'United States Air Force (established 1947; prior service under Army Air Forces). Service records at the National Personnel Records Center.',
+  'army':                 'United States Army service. Service records at the National Personnel Records Center.',
+  'infantry':             'Infantry soldier — ground combat branch. Unit records and muster rolls may survive at the National Archives.',
+  'cavalry':              'Cavalry soldier — mounted combat branch. Unit muster rolls may survive at the National Archives.',
+  'coast guard':          'United States Coast Guard service. Records at the National Personnel Records Center.',
+  'merchant marine':      'Merchant Marine — civilian mariners who served supply and transport roles in wartime; not always eligible for veterans\' benefits despite wartime service.',
+
+  // ── Fraternal & Civic Orders ──────────────────────────────────────────────
+  'masonic':              'Freemasonry — square and compass emblem. One of the oldest and most widespread fraternal orders; emphasised moral uprightness, brotherhood, and community service. Local lodge records and Grand Lodge archives often survive.',
+  'freemason':            'Freemasonry — one of the oldest fraternal orders, emphasising moral uprightness and brotherhood. Lodge membership records often survive in Grand Lodge archives.',
+  'square and compass':   'Freemasonry square and compass emblem — indicates lodge membership. Grand Lodge archives may hold membership and obituary records.',
+  'odd fellows':          'Independent Order of Odd Fellows (IOOF) — fraternal organisation founded in the US in 1819, emphasising friendship, love, and truth. Local lodge records and Rebekah Assembly records may survive.',
+  'ioof':                 'Independent Order of Odd Fellows (IOOF) — major 19th-century fraternal order. Lodge records and Rebekah Assembly records may survive.',
+  'rebekah':              'Daughters of Rebekah — women\'s auxiliary of the Odd Fellows (IOOF), founded 1851. Emphasised charity and community service.',
+  'elks':                 'Benevolent and Protective Order of Elks (BPOE) — fraternal organisation founded 1868, originally in New York City. Emphasised charity, justice, brotherly love, and fidelity.',
+  'bpoe':                 'Benevolent and Protective Order of Elks (BPOE) — founded 1868. Major American fraternal order emphasising charity and community.',
+  'knights of columbus':  'Knights of Columbus — Catholic men\'s fraternal organisation, founded 1882 by Father Michael McGivney in New Haven, Connecticut. Emphasised faith, unity, charity, and patriotism.',
+  'eastern star':         'Order of the Eastern Star (OES) — Masonic-affiliated organisation open to women and men, founded in the 1850s. Five-pointed star emblem. Emphasised charitable works.',
+  'oes':                  'Order of the Eastern Star (OES) — Masonic-affiliated fraternal organisation for women and men. Five-pointed star with five biblical heroines represented by each point.',
+  'pythias':              'Knights of Pythias — fraternal organisation founded 1864 in Washington D.C.; first to be chartered by an Act of Congress. Emphasised friendship, charity, and benevolence.',
+  'woodmen':              'Woodmen of the World (WOW) — fraternal benefit society founded 1890. Notable for providing free grave markers (often tree-stump shaped) to members.',
+  'moose':                'Loyal Order of Moose — fraternal and service organisation founded 1888. Known for Mooseheart (child welfare community) and Moosehaven (retirement community).',
+  'eagles':               'Fraternal Order of Eagles — founded 1898 in Seattle. Credited with lobbying for Social Security and Mother\'s Day legislation.',
+  'foresters':            'Independent Order of Foresters — fraternal benefit society providing life insurance and community service since the 1870s.',
+  'redmen':               'Improved Order of Red Men — one of the oldest fraternal organisations in the US, tracing roots to the Sons of Liberty (1765). Adopted Native American ceremonial themes.',
+  'shriners':             'Ancient Arabic Order of the Nobles of the Mystic Shrine (Shriners) — Masonic appendant body, founded 1870. Known for Shriners Hospitals for Children.',
+
+  // ── Religious & Funerary Symbols ─────────────────────────────────────────
+  'anchor':               'Anchor — conventional 19th-century funerary symbol of hope, steadfastness, or Christian faith (Hebrews 6:19: "an anchor for the soul"). Also used to indicate maritime occupations or naval service.',
+  'cross':                'Cross — universal Christian symbol of faith, resurrection, and eternal life. Specific cross styles carry additional meaning: Latin (general Christianity), Celtic (Irish/Scottish heritage), Eastern Orthodox (three crossbars).',
+  'dove':                 'Dove — symbol of peace, the Holy Spirit, purity, and the soul departing in peace. Common on Victorian-era stones, especially for women and children.',
+  'lamb':                 'Lamb — symbol of innocence, gentleness, and purity; most commonly found on children\'s graves. Also the "Lamb of God" in Christian iconography.',
+  'angel':                'Angel — messenger of God; symbolises guardianship, resurrection, and the soul\'s passage to heaven. Weeping angels indicate mourning; trumpeting angels indicate resurrection.',
+  'weeping willow':       'Weeping willow — 18th- and 19th-century symbol of mourning, grief, and sorrow. One of the most common early American funerary symbols.',
+  'urn':                  'Funerary urn — symbol of mourning, mortality, and the vessel of the soul. Often draped with cloth in neoclassical memorial art of the 18th–19th centuries.',
+  'draped urn':           'Draped urn — neoclassical mourning symbol popular 1780–1850; draped cloth symbolises the veil between life and death.',
+  'wreath':               'Wreath — symbol of victory, honour, and eternal life. A laurel wreath indicates achievement or civic distinction; an oak wreath indicates strength.',
+  'laurel':               'Laurel wreath — classical symbol of achievement, honour, and victory. Indicates civic, military, or professional distinction.',
+  'oak':                  'Oak leaf or acorn — symbol of strength, longevity, and endurance. Also associated with civic virtue in neoclassical iconography.',
+  'ivy':                  'Ivy — symbol of immortality, memory, and friendship. Commonly used on Victorian graves to indicate undying remembrance.',
+  'palm':                 'Palm branch — symbol of victory, righteousness, and martyrdom in Christian tradition. Also associated with pilgrimage.',
+  'torch':                'Torch — inverted torch symbolises a life extinguished; upright torch symbolises immortality and the eternal flame of memory.',
+  'inverted torch':       'Inverted torch — life extinguished; common funerary symbol of the 19th century indicating death.',
+  'hourglass':            'Hourglass — symbol of the passage of time and the brevity of life. Often depicted with wings ("time flies") on colonial and early 19th-century stones.',
+  'winged hourglass':     'Winged hourglass — "time flies"; a memento mori symbol popular on 17th–18th-century New England gravestones.',
+  'skull':                'Skull or death\'s head — memento mori ("remember that you will die"); common on colonial American gravestones before 1750, gradually replaced by cherubs and urns.',
+  'skull and crossbones': 'Skull and crossbones — memento mori symbol popular on 17th–18th-century gravestones; mortality reminder, not a pirate symbol in this context.',
+  'cherub':               'Cherub or winged cherub — symbolises the soul of the deceased ascending to heaven; replaced the skull as the dominant motif on New England gravestones after ~1720.',
+  'sun':                  'Rising sun — symbol of resurrection and the promise of eternal life. Setting sun (half-circle below horizon) sometimes indicates death.',
+  'star':                 'Star — may symbolise divine guidance, the soul, or celestial immortality. A six-pointed Star of David indicates Jewish faith.',
+  'star of david':        'Star of David — indicates Jewish faith. Jewish gravestones typically face west and bear Hebrew inscriptions; the stone may include a menorah or hands in priestly blessing.',
+  'menorah':              'Menorah — Jewish symbol; indicates Jewish faith. Seven-branched menorah represents the Temple in Jerusalem.',
+  'hands':                'Clasped hands — commonly symbolise marriage, farewell at death, or the bond between the living and the deceased. Upward-pointing hand indicates the soul\'s ascent to heaven.',
+  'clasped hands':        'Clasped hands — symbolise the union of marriage, a farewell gesture at death, or the fraternal bond of a lodge or order.',
+  'pointing hand':        'Pointing hand (manicule) — upward-pointing hand (index finger) indicates the soul\'s ascent to heaven or divine direction.',
+  'broken column':        'Broken column — life cut short; common Victorian symbol for a life ended prematurely or a head of household who died leaving the family incomplete.',
+  'broken ring':          'Broken ring or chain link — a life broken by death; often used on the graves of young people or those who left families behind.',
+  'book':                 'Open book — the Bible or the Book of Life; indicates Christian faith and the recording of the deceased\'s deeds. Also used for teachers, scholars, or clergy.',
+  'bible':                'Bible — indicates Christian faith; suggests the deceased was devout or involved in church life.',
+  'rose':                 'Rose — symbol of love, beauty, and the Virgin Mary. A full-bloom rose indicates a life fully lived; a rosebud indicates a life cut short (especially for children or young adults).',
+  'rosebud':              'Rosebud — a life cut short before it fully bloomed; common on graves of children, young women, or those who died young.',
+  'thistle':              'Thistle — Scottish national emblem; indicates Scottish heritage or ancestry.',
+  'shamrock':             'Shamrock — Irish national emblem; indicates Irish heritage or ancestry. Also associated with St. Patrick and the Holy Trinity.',
+  'harp':                 'Harp — Irish cultural symbol; indicates Irish heritage. Also associated with King David and celestial music.',
+  'heart':                'Heart — symbol of love, devotion, and the Sacred Heart of Jesus in Catholic tradition.',
+  'ihs':                  'IHS — Christogram derived from the Greek name for Jesus (ΙΗΣΟΥΣ); indicates Christian, often Catholic or High Church Protestant, faith.',
+  'chi rho':              'Chi Rho (☧) — one of the earliest Christian symbols, combining the first two letters of Christ\'s name in Greek. Indicates Christian faith.',
+  'alpha omega':          'Alpha and Omega (Α Ω) — "I am the beginning and the end" (Revelation 1:8); indicates Christian faith and the eternal nature of God.',
+  'fleur de lis':         'Fleur-de-lis — French heraldic symbol associated with the Virgin Mary, French heritage, or the Boy Scouts of America.',
+  'eagle':                'Eagle — American patriotic symbol; also used by fraternal orders. In Christian iconography, the eagle symbolises resurrection and St. John the Evangelist.',
+
+  // ── Plants, Harvest & Nature ─────────────────────────────────────────────
+  'sheaf of wheat':       'Sheaf of wheat — a long life brought to fruition; the divine harvest gathering the soul home. Most often marks someone who lived to old age. Also a Masonic and agricultural emblem.',
+  'wheat':                'Wheat — symbol of a fruitful life and the divine harvest, usually marking a person who reached old age. The body is "gathered in" like ripened grain.',
+  'lily':                 'Lily — purity, innocence, and resurrection; associated with the Virgin Mary and Easter. Common on the graves of women and children.',
+  'calla lily':           'Calla lily — marriage, fidelity, and resurrection; a frequent Victorian funerary flower symbolising beauty and rebirth.',
+  'columbine':            'Columbine — a symbol of the Holy Spirit (its petals likened to seven doves) and of innocence; also a quiet emblem of sorrow.',
+  'lily of the valley':   'Lily of the valley — renewal, humility, and the return of happiness; its early spring bloom made it a symbol of resurrection.',
+  'forget-me-not':        'Forget-me-not — remembrance and enduring love; also a symbol used by some fraternal and memorial orders to mean "never forgotten".',
+  'poppy':                'Poppy — eternal sleep, rest, and consolation; in the 20th century also a symbol of wartime remembrance.',
+  'morning glory':        'Morning glory — the brevity of life and the resurrection; its bloom opens and fades within a single day.',
+  'sunflower':            'Sunflower — devotion and faith, the soul turning toward God as the flower turns toward the sun.',
+  'daisy':                'Daisy — innocence and purity; very commonly found on the graves of children.',
+  'pansy':                'Pansy — remembrance and loving thoughts; the name derives from the French "pensée" (thought).',
+  'fern':                 'Fern — sincerity, humility, and solitude; its sheltering fronds suggested a quiet, sincere life.',
+  'acorn':                'Acorn — strength, potential, and the promise of life; often paired with the oak to signify a life of endurance or one cut short before maturity.',
+  'olive branch':         'Olive branch — peace, reconciliation, and the soul at rest with God.',
+  'grapes':               'Grapes and vine — the blood of Christ and the Eucharist; faith and the connection between God and the faithful (John 15:5, "I am the vine").',
+  'tree of life':         'Tree of life — immortality, the connection between earth and heaven, and the regeneration of the soul.',
+  'tree stump':           'Tree stump or "tree-stump" monument — a life cut short; most famously the rustic markers provided to members of Woodmen of the World. Cut branches may represent deceased family members.',
+  'thorns':               'Crown of thorns — the suffering and sacrifice of Christ; signifies a devout faith and earthly trials endured.',
+
+  // ── Passage, Faith & Eternity ────────────────────────────────────────────
+  'gates of heaven':      'Gates of Heaven (or pearly gates) — the soul\'s passage from earthly life into the kingdom of heaven; entry into eternal reward.',
+  'gates':                'Gates — the threshold between life and death; an open gate signifies the soul\'s passage into heaven.',
+  'pearly gates':         'Pearly gates — the entrance to heaven (Revelation 21:21); the soul welcomed into eternal life.',
+  'ladder':               'Ladder — Jacob\'s ladder; the soul\'s ascent from earth to heaven and the link between the mortal and divine.',
+  'crown':                'Crown — victory over death and the reward of eternal life ("crown of righteousness", 2 Timothy 4:8); a soul that has triumphed in faith.',
+  'crown and cross':      'Crown and cross — the reward of heaven (crown) earned through the trials of earthly faith (cross); "no cross, no crown".',
+  'harp and crown':       'Harp and crown — a soul that has reached its heavenly reward; the harp signifying celestial worship and the crown signifying victory.',
+  'open gate':            'Open gate — the soul\'s passage into heaven, welcomed into eternal life.',
+  'circle':               'Circle or ring — eternity and the unending nature of the soul; a wedding ring may also signify a devoted marriage.',
+  'wheel':                'Wheel — eternity and the cycle of life; a broken wheel can signify a life ended.',
+  'trumpet':              'Trumpet — the call to resurrection on Judgement Day (1 Corinthians 15:52); often held by an angel.',
+  'lily and cross':       'Lily and cross — purity (lily) joined to Christian faith and resurrection (cross), commonly marking a devout woman or child.',
+  'chalice':              'Chalice — the Holy Communion and Christian faith; may indicate clergy or a deeply devout life.',
+  'praying hands':        'Praying hands — devotion, piety, and a soul commending itself to God; a frequent emblem of a faithful Christian life.',
+  'finger pointing up':   'Hand with finger pointing upward — the soul\'s ascent to heaven and the hope of reward above.',
+  'shell':                'Scallop shell — pilgrimage and the journey of life; a symbol of baptism and of St. James, and an emblem of the Christian pilgrim.',
+  'scallop':              'Scallop shell — pilgrimage, baptism, and the journey of the soul; long associated with St. James and the Camino pilgrimage.',
+  'butterfly':            'Butterfly — resurrection and the transformation of the soul; the chrysalis-to-butterfly metamorphosis mirrors death and rebirth. Often marks a child\'s grave.',
+  'phoenix':              'Phoenix — resurrection and immortality; the soul rising renewed from death.',
+
+  // ── Occupations & Trades ─────────────────────────────────────────────────
+  'caduceus':             'Caduceus / rod of Asclepius — the medical profession; marks a physician, surgeon, or healer.',
+  'scales':               'Scales of justice — the legal profession or a life devoted to fairness; marks a judge, lawyer, or magistrate.',
+  'gavel':                'Gavel — the law or a fraternal officer\'s authority; may mark a judge, or a lodge officer (the gavel is also a Masonic working tool).',
+  'plow':                 'Plough — a farmer or a life of honest agricultural labour; also signifies industry and the cultivation of the soul.',
+  'hammer':               'Hammer — a tradesman, blacksmith, or craftsman; in Masonic use, one of the working tools signifying labour and self-improvement.',
+  'rake':                 'Rake and agricultural tools — a farmer or gardener; a life of cultivation and honest work.',
+  'palette':              'Artist\'s palette — a painter or artist; a life devoted to the visual arts.',
+  'musical notes':        'Musical notes or instruments — a musician, composer, or chorister; a life filled with music, and the heavenly choir.',
+  'open book and pen':    'Open book with pen — a writer, scholar, teacher, or clergyman; a life of learning and the recording of deeds.',
+  'locomotive':           'Locomotive or railroad emblem — a railroad worker; the railway was a defining 19th- and early-20th-century occupation.',
+  'wheel of life':        'Wheel — eternity and the turning cycle of life and death.',
+
+  // ── Memorial & Decorative ────────────────────────────────────────────────
+  'draped cloth':         'Drapery or shroud — mourning and the veil between life and death; the cloth that covers the coffin, a common neoclassical mourning motif.',
+  'garland':              'Garland — victory, distinction, and the celebration of a life well lived; a festoon of flowers honouring the deceased.',
+  'flame':                'Eternal flame — the immortality of the soul and undying remembrance; the light of life that endures beyond death.',
+  'lamp':                 'Lamp — knowledge, the light of the spirit, and immortality; an eternal lamp signifies a soul that lives on. Also an emblem of nursing (the lamp of Florence Nightingale).',
+  'lantern':              'Lantern — the light of faith guiding the soul, and the hope of immortality.',
+  'candle':               'Candle — the fragile flame of life and the light of the spirit; an extinguished candle signifies death.',
+  'snake eating tail':    'Ouroboros (a snake eating its own tail) — eternity and the endless cycle of life, death, and renewal.',
+  'all-seeing eye':       'All-seeing eye (Eye of Providence) — the watchful presence of God; also a Masonic emblem of divine oversight.',
+  'crescent':             'Crescent moon — feminine and celestial symbolism, resurrection, and (with a star) a connection to faith; also a fraternal emblem in some orders.',
+  'flag':                 'Flag — patriotic service or national pride; often marks a veteran or a person of civic devotion.',
+};
+
+// ── SYMBOL MEANING LOOKUP (result screen) ────────────────────────
+// Resolve the displayable meaning for a single OCR symbol string, checking the
+// static SYMBOL_CONTEXT table FIRST (fast, trusted, offline) and then the
+// per-story AI-resolved meanings map (filled at scan time for symbols the table
+// missed). Returns the meaning string, or null when the symbol is unknown (chip
+// stays non-tappable). symbolMeanings is the optional story.symbol_meanings map
+// ({ "<symbol string>": "<meaning>" }) keyed by the exact OCR string.
+//
+// Exposed on window via the classic-script top-level function convention so
+// render-result.js can render tappable gold symbol chips. Mobile mirrors this
+// inline in ResultScreen.js (it imports SYMBOL_CONTEXT directly).
+function lookupSymbolMeaning(symbol, symbolMeanings) {
+  if (!symbol || typeof symbol !== 'string') return null;
+  const lower = symbol.toLowerCase();
+  // 1. Static table — substring match against curated keys (same logic as
+  //    _buildSymbolContext, so what the prompt is grounded on is what the chip shows).
+  for (const [key, context] of Object.entries(_SYMBOL_CONTEXT)) {
+    if (lower.includes(key)) return context;
+  }
+  // 2. Per-story AI-resolved meaning — keyed by the trimmed symbol string, the
+  //    same form resolveSymbolMeanings() stored it under (so padded OCR matches).
+  if (symbolMeanings && typeof symbolMeanings === 'object') {
+    const ai = symbolMeanings[symbol.trim()];
+    if (ai && typeof ai === 'string' && ai.trim()) return ai.trim();
+  }
+  return null;
+}

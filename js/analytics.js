@@ -36,6 +36,8 @@ const ANALYTICS_EVENTS = {
   TRIBUTE_LEFT:          'tribute_left',
   STORY_SHARED:          'story_shared',
   RESEARCH_YIELD:        'research_yield',
+  // Landing-page conversion: app-store button clicks (web → install funnel).
+  STORE_CLICK:           'store_click',
 };
 
 function logEvent(event, props) {

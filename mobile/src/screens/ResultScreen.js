@@ -5,6 +5,7 @@ import {
   PanResponder, AppState,
 } from 'react-native';
 import * as Speech from 'expo-speech';
+import * as StoreReview from 'expo-store-review';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
@@ -30,6 +31,19 @@ const SHARE_NOTICE_SEEN_KEY = 'gs_share_notice_seen';
 // "Don't show again" flag for the post-save "place your pin on the map" reminder.
 // Unset = show the reminder after every save; 'true' = the user opted out forever.
 const PIN_REMINDER_DISMISSED_KEY = 'gs_pin_reminder_dismissed';
+
+// In-app review prompt: counts saves and records whether we've already asked, so
+// the native Play review sheet fires exactly once — after the user has saved a
+// couple of GOOD stories (proof of value), never after a thin stone-only bio or
+// on the very first save. Store review is the highest-leverage free ASO signal
+// (reviews drive Play ranking + convert the next visitor), so we protect it: only
+// prompt when the user is actually delighted. Google throttles the sheet anyway
+// (it may silently no-op), which is exactly why we gate to the best moment.
+const SAVE_COUNT_KEY = 'gs_save_count';
+const REVIEW_PROMPTED_KEY = 'gs_review_prompted';
+// Ask on the 2nd+ successful save (the first save is too early — the user hasn't
+// accumulated enough value to have an opinion worth a review).
+const REVIEW_MIN_SAVES = 2;
 
 // Wikimedia's upload.wikimedia.org 403s requests from the default RN/okhttp image
 // loader (it blocks bare/okhttp User-Agents as anti-hotlinking) — so portrait URLs
@@ -665,7 +679,20 @@ export default function ResultScreen({ navigation, route }) {
       // from propagating into the surrounding try's catch and firing a bogus
       // "Save Failed" alert AFTER the save already committed. Don't remove it.
       // Net fail-soft: any read miss/error → reminder shows (the safe default).
-      if ((saved.gps || saved.location) && !aiModal) {
+      // Two post-save nudges compete for this moment: the (repeating) pin reminder
+      // and the (one-shot) Play review prompt. They must NOT stack, and the AI
+      // disclaimer sheet takes precedence over both. Order matters:
+      //   • The review prompt is ONE-SHOT — if we skip it we may never get it back,
+      //     because the pin reminder shows after EVERY located save until the user
+      //     opts out, so a strict "review only when the reminder didn't show" rule
+      //     could defer the review forever. So when the review is eligible THIS
+      //     save, it wins the turn.
+      //   • The pin reminder is a REPEATING nudge — deferring it one save is free
+      //     (its own logic already lands it on the next save). So we show it only
+      //     when the review did NOT fire this turn.
+      const reviewFired = !aiModal && (await maybePromptForReview(saved, sessionUser));
+
+      if (!reviewFired && (saved.gps || saved.location) && !aiModal) {
         const dismissed = await AsyncStorage.getItem(PIN_REMINDER_DISMISSED_KEY).catch(() => null);
         if (dismissed !== 'true') {
           setPinReminderDontShow(false); // reset the checkbox each time it opens
@@ -677,6 +704,57 @@ export default function ResultScreen({ navigation, route }) {
       Alert.alert('Save Failed', 'Could not save this story. Please check your connection and try again.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Fire the native Play in-app review sheet at most once, at the moment of peak
+  // delight (a signed-in user just saved a story that actually has cited sources).
+  // Reviews are the highest-leverage free ASO signal — they drive Play ranking and
+  // convert the next store visitor — so we spend the single prompt carefully:
+  //   • signed-in only — guests can't meaningfully review, and the prompt would fire
+  //     at a confusing moment for someone who hasn't committed to the app.
+  //   • ≥2nd successful save — one save is too early to have earned an opinion.
+  //   • the story has real sources — never ask after a thin stone-only fallback bio
+  //     (that's the weakest output; a review then would tank the rating).
+  //   • one-time flag — never prompt the same install twice, even if Google's own
+  //     throttle would let us. Set the flag on the SUCCESSFUL requestReview() only,
+  //     so a device where the sheet is unavailable can be asked later.
+  // Returns true ONLY if the native review sheet was actually requested this call
+  // (so the caller can suppress the competing pin reminder for this save). Returns
+  // false on every skip path. Everything is wrapped so a failure can NEVER bubble
+  // into handleSave's catch and fire a bogus "Save Failed" alert — the save has
+  // already committed; on any error we return false (caller falls back to the pin
+  // reminder, the safe default).
+  async function maybePromptForReview(saved, sessionUser) {
+    try {
+      if (!sessionUser) return false;
+      // A thin stone-only fallback bio has no citations — don't beg for a review on it.
+      const hasSources = Array.isArray(saved?.sources) && saved.sources.length > 0;
+      if (!hasSources) return false;
+
+      const alreadyPrompted = await AsyncStorage.getItem(REVIEW_PROMPTED_KEY).catch(() => null);
+      if (alreadyPrompted === 'true') return false;
+
+      // Count successful source-backed saves; only ask from the 2nd onward.
+      const prevRaw = await AsyncStorage.getItem(SAVE_COUNT_KEY).catch(() => null);
+      const count = (parseInt(prevRaw, 10) || 0) + 1;
+      await AsyncStorage.setItem(SAVE_COUNT_KEY, String(count)).catch(() => {});
+      if (count < REVIEW_MIN_SAVES) return false;
+
+      // Only attempt the native sheet if the platform actually offers it; otherwise
+      // do nothing (and leave the flag unset, so we can try on a future save).
+      const available = await StoreReview.isAvailableAsync();
+      const hasAction = available && (await StoreReview.hasAction());
+      if (!hasAction) return false;
+
+      await StoreReview.requestReview();
+      // Requested — burn the one-time flag so we never ask this install again.
+      await AsyncStorage.setItem(REVIEW_PROMPTED_KEY, 'true').catch(() => {});
+      return true;
+    } catch (e) {
+      // Fully non-fatal: the save already succeeded. Never surface to the user.
+      console.warn('in-app review prompt skipped (non-fatal):', e?.message || e);
+      return false;
     }
   }
 

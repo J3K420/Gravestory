@@ -65,29 +65,32 @@ Character count: ~1,850 ✓ (well within 4,000 limit)
 
 ---
 
-## Screenshots (feature-focused, with overlay captions baked in — Session 60)
+## Screenshots (LIVE set — updated S82, 2026-06-30)
 
-Source: `tools/marker-preview/store-screens.html` → rendered to 1080×1920 PNGs
-in `store-listing/screenshots/`. Each has a branded gold/parchment caption band
-baked in (the "overlay text" testers asked for). Old raw WhatsApp photos
-archived in `store-listing/screenshots/_old-raw-photos/`.
+These are the actual screenshots on the live Play listing. The owner replaced the
+old caption-banded renders (Session 60) with clean in-app captures — **no baked-in
+caption bands** — so the "AI-written" caption positioning trap is gone. The old
+rendered set (`01-scan.png` … `05-community-map.png`) and the earlier raw WhatsApp
+photos are no longer used; `_old-raw-photos/` remains as history.
 
-Upload order + the caption baked into each:
-1. `01-scan.png` — "Photograph any gravestone — point your camera, that's the whole job"
-2. `02-biography.png` — "A name and two dates become a life story — AI-written, in seconds"
-3. `03-sources.png` — "Every fact backed by a real source — cited, never invented"
-4. `04-cemetery-map.png` — "Every grave you find, on your map — GPS-pinned to the cemetery"
-5. `05-community-map.png` — "Explore stories shared by visitors everywhere"
+Upload order (matches the live listing — folder order):
+1. `01-home.png` — Home / hero: GraveStory logo + "Scan a Gravestone" CTA + My Map / Community Map
+2. `02-remembered-stories.png` — Remembered Stories list, grouped by cemetery (Recent/Name/Cemetery sort)
+3. `03-community-map.png` — Community Map: shared stories pinned across North America
+4. `04-cemetery-map.png` — Cemetery Map: graves you've scanned, GPS-pinned
+5. `05-loading.png` — Loading screen: "Composing this life" (verifying → reading → searching → composing → sealing)
+6. `06-result-elvis.png` — Result / Life Story: portrait + dates + "Listen to this story" + biography prose
+7. `07-marker-picker.png` — Choose A Marker: pick the community-map pin for this grave
 
-(Captions are baked INTO the images, so the optional per-screenshot caption
-field in Play Console can be left blank.)
+These captures carry no text overlay, so the optional per-screenshot caption field
+in Play Console can be filled with a short verified-sources caption if desired (see
+`marketing/gtm-strategy.md` §2 message tracks) — or left blank.
 
-> ⚠️ ASO follow-up (S82): screenshot #2's baked caption still reads "AI-written, in
-> seconds" — that's the exact verified-sources positioning trap the strategy flags
-> (`marketing/gtm-strategy.md` §2). It's baked into the PNG, so fixing it needs a
-> re-render of `02-biography.png` from `tools/marker-preview/store-screens.html`, not
-> just a text edit. Recommended replacement caption: **"A name and two dates become a
-> life story — built from cited records."** Deferred (image re-render, not code).
+> ASO note (S82): the live set leads with the branding hero and places the actual
+> bio payoff (`06-result-elvis.png`) at slot #6. The GTM strategy recommends the
+> photo→story *payoff* as the first-slot ASO asset (it's the highest-leverage frame).
+> Not changed here — screenshot order is the owner's call in Play Console — but worth
+> A/B-considering: move the Life Story result to slot #1 or #2. Low effort, no rebuild.
 
 ---
 

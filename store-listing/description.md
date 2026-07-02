@@ -82,9 +82,10 @@ Upload order (matches the live listing — folder order):
 6. `06-result-elvis.png` — Result / Life Story: portrait + dates + "Listen to this story" + biography prose
 7. `07-marker-picker.png` — Choose A Marker: pick the community-map pin for this grave
 
-These captures carry no text overlay, so the optional per-screenshot caption field
-in Play Console can be filled with a short verified-sources caption if desired (see
-`marketing/gtm-strategy.md` §2 message tracks) — or left blank.
+These captures carry no text overlay. Note: Play Console has NO per-screenshot
+caption field for phone screenshots — you upload bare images. If captions are ever
+wanted, they must be baked into re-rendered screenshots; ready-made verified-sources
+caption strings live in `marketing/play-listing-variants.md` §2.
 
 > ASO note (S82): the live set leads with the branding hero and places the actual
 > bio payoff (`06-result-elvis.png`) at slot #6. The GTM strategy recommends the

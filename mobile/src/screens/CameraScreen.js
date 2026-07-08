@@ -1197,6 +1197,15 @@ export default function CameraScreen({ navigation, route }) {
           ? graveData.relationships : undefined,
         // Née/birth surname.
         maiden_name: graveData.maiden_name || undefined,
+        // NOTE: ancestral_origin (Chinese/immigrant stones) is deliberately NOT
+        // lifted onto the story object — it has no DB column, and unlike the
+        // sibling fields above it has no reader (both consumers read graveData,
+        // which is populated before this object is built), so a lift here would
+        // be a dead, misleading write. Its durable persistence is the biography
+        // TEXT: the bio prompt is instructed to name it, and the stone-only
+        // fallback embeds it, so it round-trips through the `biography` column.
+        // If a queryable homeland is needed later, add a column + map it in
+        // sync.js storyToRow/rowToStory, and lift it here.
         // family_name HAS a column but was never populated (the build step never
         // lifted it out of graveData) — fix it here so it round-trips.
         family_name: bioResult.family_name || graveData.family_name || undefined,

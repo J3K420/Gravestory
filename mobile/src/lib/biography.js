@@ -136,7 +136,13 @@ export const SYMBOL_CONTEXT = {
   'shell':                'Scallop shell — pilgrimage and the journey of life; a symbol of baptism and of St. James, and an emblem of the Christian pilgrim.',
   'scallop':              'Scallop shell — pilgrimage, baptism, and the journey of the soul; long associated with St. James and the Camino pilgrimage.',
   'butterfly':            'Butterfly — resurrection and the transformation of the soul; the chrysalis-to-butterfly metamorphosis mirrors death and rebirth. Often marks a child\'s grave.',
-  'phoenix':              'Phoenix — resurrection and immortality; the soul rising renewed from death.',
+  // The 鳳凰 glyph key MUST precede the bare Western 'phoenix' key below: both
+  // ResultScreen's chip lookup and buildSymbolContext scan in insertion order and
+  // take the FIRST match, so if a CJK phoenix descriptor also contains the word
+  // "phoenix" (a model ignoring the OCR instruction to use "fenghuang"), the glyph
+  // key still wins and the correct Chinese reading is shown. Do not reorder.
+  '(鳳凰)':               'Fenghuang (鳳凰), the Chinese phoenix — virtue, grace, and the feminine principle; commonly paired with the dragon to represent wife and husband. Distinct from the Western resurrection phoenix.',
+  'phoenix':              'Phoenix — in the Western tradition, resurrection and immortality, the soul rising renewed from death. (On an East Asian stone the fenghuang 鳳凰 instead signifies feminine virtue and marks the wife — see the Chinese-phoenix note if the glyph is present.)',
 
   // ── Occupations & Trades ─────────────────────────────────────────────────
   'caduceus':             'Caduceus / rod of Asclepius — the medical profession; marks a physician, surgeon, or healer.',
@@ -162,6 +168,41 @@ export const SYMBOL_CONTEXT = {
   'all-seeing eye':       'All-seeing eye (Eye of Providence) — the watchful presence of God; also a Masonic emblem of divine oversight.',
   'crescent':             'Crescent moon — feminine and celestial symbolism, resurrection, and (with a star) a connection to faith; also a fraternal emblem in some orders.',
   'flag':                 'Flag — patriotic service or national pride; often marks a veteran or a person of civic devotion.',
+
+  // ── East Asian (Chinese / Japanese / Korean) ─────────────────────────────
+  // buildSymbolContext does a bare lowercased-substring match with NO CJK guard,
+  // so a bare English key like 'dragon' or 'crane' would wrongly fire on a Welsh
+  // dragon or an industrial crane and inject a Chinese gloss onto a Western stone
+  // (caught in review). Defence: key every ambiguous entry on the multi-word
+  // descriptor OR the Han glyph the OCR is instructed to emit (api-gemini.js tells
+  // it to append the character, e.g. "dragon (龍)"). Glyph/compound keys cannot
+  // collide with Western free-text. Bare abstract nouns ('fortune','longevity')
+  // and the standalone 'crane'/'peony'/'bamboo' keys were REMOVED — the glyph
+  // form covers the real CJK case, and any symbol the table misses is caught at
+  // scan time by resolveSymbolMeanings (the AI fallback). 'swastika' is glyph-
+  // anchored to 卍 so a decorative Western swastika does NOT get the Buddhist gloss.
+  // Note the Han glyphs are matched because buildSymbolContext lowercases (a no-op
+  // for CJK) but does NOT strip non-ASCII.
+  'fu character':         'Fu (福) — "fortune" or "blessing", the most common Chinese good-luck character; on a grave it invokes blessings and good fortune for the deceased and their descendants.',
+  '(福)':                 'Fu (福) — "fortune/blessing", the most common Chinese good-luck character; invokes blessings for the family line.',
+  'shou character':       'Shou (壽) — "longevity"; honours a long life and the wish for enduring remembrance. Common on the graves of those who reached old age.',
+  '(壽)':                 'Shou (壽) — the Chinese character for "longevity", honouring a long life.',
+  'double happiness':     'Double Happiness (囍) — a marriage emblem; on a shared or spousal grave it signifies a devoted union and enduring conjugal bond.',
+  '(囍)':                 'Double Happiness (囍) — a marriage emblem signifying a devoted union.',
+  'lotus flower':         'Lotus flower — in Buddhist tradition, purity rising untainted from the mud, spiritual awakening, and rebirth; a frequent East Asian funerary emblem for the soul\'s passage.',
+  '(龍)':                 'Dragon (龍) — in Chinese tradition, imperial dignity, strength, and good fortune; on a grave it conveys honour and protection, often paired with the fenghuang (phoenix) for husband and wife.',
+  'chinese dragon':       'Dragon (龍) — Chinese imperial dignity, strength, and good fortune; often paired with the fenghuang (phoenix) for husband (dragon) and wife (phoenix).',
+  'fenghuang':            'Fenghuang (鳳凰), the Chinese phoenix — virtue and grace, the feminine counterpart to the dragon; on a couple\'s stone it marks the wife.',
+  'chinese phoenix':      'Fenghuang (鳳凰), the Chinese phoenix — virtue and grace, the feminine counterpart to the dragon; on a couple\'s stone it marks the wife.',
+  '(卍)':                 'Manji (卍) — an ancient Buddhist emblem of well-being, eternity, and the Dharma; a religious symbol of the Buddha\'s heart, entirely unrelated to the later Nazi hakenkreuz.',
+  'manji':                'Manji (卍) — a Buddhist symbol of eternity, good fortune, and the Dharma; marks Buddhist faith.',
+  'yin yang':             'Yin-yang (☯) — the Taoist balance of complementary forces and the natural cycle of life and death; harmony between opposites.',
+  'joss':                 'Joss / incense offerings — ritual veneration of ancestors; the burning of joss sticks honours the deceased in Chinese custom.',
+  'incense stick':        'Incense sticks — ritual veneration of ancestors in Chinese custom.',
+  // (No bare 'incense burner' key: the pre-existing 'urn' key substring-matches
+  // "b-urn-er" and shadows it, so it would be dead. 'joss'/'incense stick' reach.)
+  'spirit tablet':        'Spirit / ancestral tablet form — Chinese veneration of ancestors; the stone functions as a focus for the family\'s ongoing respect and remembrance.',
+  'ancestral tablet':     'Spirit / ancestral tablet form — Chinese veneration of ancestors; the stone is a focus for the family\'s ongoing remembrance.',
 };
 
 // Build a symbol context block from OCR-detected symbols. Returns a formatted
@@ -390,6 +431,16 @@ export async function generateBiography(graveData, searchResults, wikiData, loca
     const bday = graveData.birth_date ? `, born ${graveData.birth_date}` : '';
     const dday = graveData.death_date ? ` and passed ${graveData.death_date}` : '';
     const insc = graveData.inscription ? ` Their stone bears the words: "${graveData.inscription}".` : '';
+    // Ancestral homeland — on immigrant (esp. Chinese) stones this is the single most
+    // valuable genealogical datum, and it's usually all we have when web research is
+    // empty (the common Chinese-stone path). Surface it even with zero sources.
+    // Guard the type: OCR has no responseSchema, so a drifting model could return a
+    // non-string here — interpolating an array/object would leak "[object Object]"
+    // or a comma-join into the persisted biography text (review CLAIM C).
+    const _ao = graveData.ancestral_origin;
+    const origin = (typeof _ao === 'string' && _ao.trim())
+      ? ` The stone records an ancestral home in ${_ao.trim()}.`
+      : '';
     // FIX 4 — Famous-interment partial: surface a recovered notable interment as an
     // ATTRIBUTIVE, source-cited fact (never an assertion, never via Gemini), but ONLY
     // when an independent Wikipedia article confirmed the person. After the [review M1]
@@ -406,7 +457,7 @@ export async function generateBiography(graveData, searchResults, wikiData, loca
         dates: (graveData.birth_date && graveData.death_date)
           ? `born ${graveData.birth_date} — died ${graveData.death_date}` : '',
         biography:
-          `This stone marks the ${allPeople.length > 1 ? 'lives' : 'life'} of ${who}${bday}${dday}.${insc} ` +
+          `This stone marks the ${allPeople.length > 1 ? 'lives' : 'life'} of ${who}${bday}${dday}.${insc}${origin} ` +
           _bcSrc.sentence +
           ` The stone itself bears only the ${graveData.family_name ? 'surname' : 'name'}, so this is offered as a record-based possibility rather than a confirmed identification.`,
         sources: ['Gravestone inscription (primary source)', _bcSrc.sourceLabel],
@@ -419,7 +470,7 @@ export async function generateBiography(graveData, searchResults, wikiData, loca
       dates: (graveData.birth_date && graveData.death_date)
         ? `born ${graveData.birth_date} — died ${graveData.death_date}` : '',
       biography:
-        `This stone marks the ${allPeople.length > 1 ? 'lives' : 'life'} of ${who}${bday}${dday}.${insc} ` +
+        `This stone marks the ${allPeople.length > 1 ? 'lives' : 'life'} of ${who}${bday}${dday}.${insc}${origin} ` +
         `Beyond what the stone itself records, the available sources do not ` +
         `yield further verifiable details. What endures here ` +
         `is the marker they were given and the words chosen to remember them.`,
@@ -568,6 +619,8 @@ export async function generateBiography(graveData, searchResults, wikiData, loca
 
   const prompt = `You are GraveStory AI, a careful historian writing a respectful life history.
 Accuracy and dignity matter more than length or eloquence. Write only from the gravestone data and the numbered sources below. Do not use facts from memory or general knowledge unless a numbered source supports them. Never fabricate facts, relationships, events, or characterizations. A short, honest biography builds trust; an invented one destroys it.
+
+LANGUAGE: Write the biography in English, even when the gravestone is inscribed in another language (Chinese, Japanese, Spanish, etc.). When the inscription is non-Latin, you may quote the original characters in parentheses after their translation or transliteration — e.g. 'the stone honors him as a late father (顯考)'. If the gravestone data includes a non-empty "ancestral_origin" (common on Chinese immigrant stones — e.g. a village in Taishan, Guangdong), you MUST name that ancestral homeland in the biography — it is often the single most meaningful genealogical fact on the stone, points to where the family came from, and is not preserved anywhere else, so it must appear in the prose. Present any romanized spelling of a name or place as a best reading, not a certainty ("the surname is rendered on US records as…").
 
 GRAVESTONE DATA:
 ${JSON.stringify(graveData, null, 2)}

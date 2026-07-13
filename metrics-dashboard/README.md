@@ -57,8 +57,9 @@ wrangler deploy
 ```
 
 ### 3. Open the dashboard
-Deploy the static page with the rest of the site (it's at
-`/metrics-dashboard/` on GitHub Pages). Open it and either:
+Open the static page locally. It is intentionally excluded from the public
+Cloudflare Pages landing-site bundle; do not add it during a routine website deploy.
+If the owner separately approves publishing it at `/metrics-dashboard/`, open it and either:
 - type the key into the unlock box (stored in `sessionStorage` only), **or**
 - bookmark `https://<your-pages-site>/metrics-dashboard/#<ADMIN_KEY>` — the key
   in the URL hash is read once, saved to the session, then stripped from the

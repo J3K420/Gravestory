@@ -44,7 +44,7 @@ I'd rather show you the seams myself than have you find them, so here is both wh
 
 1. **Scan a well-documented stone first** — a famous grave, or a locally notable one (a town founder, a name from your county history). This is the full effect: the app reads the name, dates, and inscription, searches verified public records in parallel — WikiTree, Wikidata, historic newspapers via Chronicling America (pre-1928), county histories via the Internet Archive, Wikipedia — and writes a life story in about 30 seconds, with every source cited at the bottom so you can check each one. Famous figures also get a portrait, pulled from Wikipedia/Wikidata.
 2. **Then scan a weathered, ordinary stone.** This is where we'd rather be honest than impressive: if the records searches come up empty, you get a short story built only from what the inscription itself says — no padding, no invented detail, no fake depth. Not every stone yields a rich biography, and the app never pretends otherwise.
-3. **Browse the community map without an account:** https://j3k420.github.io/Gravestory/ — public stories shared by other visitors, free to read, no sign-in. (Living relatives' names are redacted before any story becomes public.)
+3. **Browse the community map without an account:** https://gravestory.pages.dev/ — public stories shared by other visitors, free to read, no sign-in. (Living relatives' names are redacted before any story becomes public.)
 4. **Tap a symbol chip** on a story whose stone carries carved symbols (clasped hands, a broken column, a lamb) — each chip opens a plain-language explanation of the symbol's conventional meaning. If your own scans happen to be plain stones, the community map is an easy place to find one.
 5. **Try "Listen to this story"** — the app reads the biography aloud, for standing at the stone rather than staring at a screen.
 6. If genealogy is your beat: stories export to **GEDCOM**, and every story has an **in-app report button**.
@@ -68,8 +68,8 @@ One caveat worth knowing before you write: the stories are compiled from public 
 - **Play listing:** https://play.google.com/store/apps/details?id=com.gravestory.app
 - **Press kit:** attached (PDF) — or ask and I'll paste it inline
 - **Demo video:** [LINK WHEN RECORDED]
-- **Community map (no account needed):** https://j3k420.github.io/Gravestory/
-- **Privacy policy:** https://j3k420.github.io/Gravestory/privacy-policy/
+- **Community map (no account needed):** https://gravestory.pages.dev/
+- **Privacy policy:** https://gravestory.pages.dev/privacy-policy/
 
 ## What we'd love
 

@@ -7,9 +7,9 @@
 
 ## What this is
 
-A mobile-first PWA and React Native app for cemetery visitors. You photograph a gravestone; the app uses Gemini AI to OCR the stone, searches genealogy databases (Tavily, WikiTree, Wikidata, Chronicling America, Wikipedia), and generates a biographical story. Users can save, share, and view stories on per-cemetery maps. Signed-in users can publish to a community global map.
+A mobile app for cemetery visitors plus a thin public web landing/map/bio surface. In the app, you photograph a gravestone; Gemini OCR and genealogy searches generate a biographical story. Users can save, share, map, and optionally publish stories to the community global map.
 
-**Platform:** Web (GitHub Pages static deploy) + Android/iOS (Expo managed workflow, EAS build).
+**Platform:** Web landing/map/bio surface (Cloudflare Pages Direct Upload) + Android/iOS (Expo managed workflow, EAS build).
 
 ---
 
@@ -34,8 +34,8 @@ A mobile-first PWA and React Native app for cemetery visitors. You photograph a 
 ## Repository layout
 
 ```
-index.html          — Web SPA shell: ALL screen markup + core state + pipeline orchestration
-js/                 — Web JS modules (classic scripts, leaf-first load order in index.html)
+index.html          — Web landing page, community global map, and read-only public-bio shell
+js/                 — Surviving read-only web/map/reporting scripts (classic scripts)
 css/                — One CSS file per screen/component
 mobile/             — Expo React Native app (separate codebase, do NOT mix with web)
   src/lib/          — Shared utilities and API clients (ES modules)
@@ -49,20 +49,9 @@ supabase-migrations/— SQL migration files (run manually in Supabase SQL editor
 
 ---
 
-## The web pipeline (`startAnalysis` in `index.html`)
+## Product pipeline boundary
 
-1. `verifyIsGravestone(base64)` — Gemini preflight; throws `{ __verificationRejection: true }` on failure
-2. `reverseGeocode(lat, lng)` — GPS → "City, State" string (runs in parallel with step 1 if GPS available)
-3. `readGravestone(base64, locationHint)` — Gemini OCR → structured JSON
-4. `incrementWebScanCount()` — counts the scan in Supabase (or localStorage for guests)
-5. Parallel: `searchForPerson` + `searchWikiTree` + `queryWikidata` + `searchChroniclingAmerica` + `fetchWikipediaArticleSummary` + `fetchWikipediaPortraits`
-6. `generateBiography(...)` — Gemini narrative (or stone-only fallback if no sources found)
-7. Portrait retry if needed (single-token names)
-8. `forwardGeocode(...)` — refines GPS to cemetery center or grave node
-9. `findOrCreateGrave(...)` — Supabase RPC, deduplicates physical stones by ~20m
-10. Save flow
-
-The mobile pipeline in `CameraScreen.js` mirrors this exactly. **Changes to pipeline logic must be applied to BOTH platforms.**
+The scan, OCR, research, biography, save, and account-write pipeline lives only in `mobile/src/`, orchestrated by `CameraScreen.js`. The former web pipeline was deleted during the landing-page conversion; do not restore it or port mobile pipeline changes to web. Coordinate changes across platforms only when they affect the surviving community global-map or read-only public-bio behavior.
 
 ---
 
@@ -76,7 +65,7 @@ The mobile pipeline in `CameraScreen.js` mirrors this exactly. **Changes to pipe
 - **Never embed story objects as JSON in `onclick` attributes** — use a module-level lookup keyed by a safe primitive, resolve at click time via a named function (see `_cemeteryStoryCache` + `viewCemeteryStory()` in map-cemetery.js as the established pattern)
 
 ### Cloudflare Worker auth (two layers)
-1. **ALLOWED_ORIGIN** env var (`"https://j3k420.github.io"`) — blocks cross-origin browser requests
+1. **ALLOWED_ORIGIN** env var (`"https://gravestory.pages.dev,https://j3k420.github.io"` during cutover) — blocks cross-origin browser requests; remove the legacy origin only after explicit retirement approval
 2. **CLIENT_KEY** Wrangler secret (`gs-client-2025`) — all proxy fetch calls include `X-Client-Key: CLIENT_KEY` header; blocks direct API calls without Origin header (mobile app, curl, scrapers)
    - Web: `CLIENT_KEY` constant in `js/config.js`
    - Mobile: `CLIENT_KEY` export from `mobile/src/lib/config.js`
@@ -137,21 +126,21 @@ Stories fetched from the community global map have `_isGlobal: true`. This contr
 
 | Target | Command |
 |---|---|
-| Web | Push to `main` → GitHub Pages auto-deploys |
+| Web | Stage the 22-file allowlisted bundle, then `npx wrangler pages deploy <staging-dir> --project-name gravestory` (manual Direct Upload; see `docs/cloudflare-pages-cutover.md`) |
 | Worker | `cd worker && wrangler deploy` |
 | Mobile preview APK | `npx eas build --platform android --profile preview` |
 | Mobile phase-9 test build | `npx eas build --platform android --profile phase9` |
-| Mobile OTA update | `npx eas update --branch preview` |
+| Mobile OTA update | From `mobile/`: verify clean source + `production` channel, then `npx eas update --branch production --environment production --platform android` |
 
 ---
 
-## Current state (Phase 9, branch `phase-9`)
+## Current state (Cloudflare URL cutover, 2026-07-13)
 
-**Done:** Grave photo gallery, biography cache, freemium limits (web + mobile), device fingerprinting, portrait persistence, global map portraits, RevenueCat SDK (disabled pending Play Store), security hardening (XSS fixes, web limits, Worker CLIENT_KEY + model allowlist).
+**Done:** The Android app is live, the web scan pipeline has been retired, and the landing page/global map/read-only bio surface is live at `https://gravestory.pages.dev/`. Source cache is `gravestory-v69`; Pages remains v68 until the reviewed bundle is redeployed.
 
-**Remaining before Play Store launch:**
-- Run `005_scan_credits.sql` in Supabase SQL editor
-- Privacy policy page hosted at `https://j3k420.github.io/gravestory-privacy` + link in Settings
-- RevenueCat webhook (Cloudflare Worker endpoint) + re-enable SDK after Play Store account
-- Store listing assets (screenshots, feature graphic, descriptions)
-- Google Play account ($25), EAS credentials (`npx eas credentials`), production build + submission
+**Cutover still gated:**
+- Publish and verify the URL-only mobile Settings OTA from the latest baseline.
+- Update Google Play's privacy-policy URL, account-deletion URL, full description, and store-listing website; then verify the public listing.
+- Keep GitHub Pages enabled and the repository public until those checks pass.
+- Keep both Cloudflare Pages and GitHub Pages in the Worker origin allowlist during the overlap.
+- Follow `docs/cloudflare-pages-cutover.md`; disabling the old site, privatizing the repository, or removing the legacy Worker origin requires explicit owner approval.

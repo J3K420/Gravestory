@@ -157,7 +157,7 @@ Worth a pitch if this list is expanded, but no contact or beat research has been
 - **Honest answers rehearsed** for the questions local press always asks:
   - *"How many downloads?"* — "It just launched on Google Play on June 29 — too new for meaningful numbers." Never invent or estimate a figure.
   - *"So it's AI?"* — sources-first and honest: "The stories are compiled from verified public records with AI assistance — the sources are cited so readers can check them, thin records get short honest stories, and there's a report button in the app."
-  - *"What about privacy?"* — living relatives' names are redacted before any story becomes public; policy at https://j3k420.github.io/Gravestory/privacy-policy/
+  - *"What about privacy?"* — living relatives' names are redacted before any story becomes public; policy at https://gravestory.pages.dev/privacy-policy/
   - *"iPhone?"* — "Android today; iOS is planned but not built."
 
 ---
@@ -182,7 +182,7 @@ genealogy-media pitch. Judge it on whether you get the clipping, not on installs
 - Never leads with "AI" — verified named sources are the trust device; "AI assistance" appears only in the honest-disclaimer answer (§3), never in the hook.
 - Never "the only AI gravestone scanner," and never "reads the stone" as the *differentiator* — Find A Grave added OCR in Jan 2026; the claim is always the source-cited STORY.
 - Never a flat "nobody writes a life story" — CWGC's For Evermore exists; the scoped claim is "a source-cited life story from a gravestone scan of any ordinary person."
-- Never "competitors have no map" — Stories in Stone has a private one; ours is a PUBLIC community map (free, no account: https://j3k420.github.io/Gravestory/).
+- Never "competitors have no map" — Stories in Stone has a private one; ours is a PUBLIC community map (free, no account: https://gravestory.pages.dev/).
 - Never competitor prices as fact — only our own are hard facts (3 free scans; one-time packs from $1.99; credits never expire; no subscription).
 - Never implies an iPhone app exists ("iOS planned" is the only permitted phrasing), a guaranteed rich bio on every stone, or photos/faces of the ordinary dead (portraits are famous-figures-only, from Wikipedia/Wikidata).
 - Never an invented usage number, backstory detail, or canned quote — reporters will ask for quotes; give them real ones in your own words, and placeholders stay placeholders until the owner fills them.

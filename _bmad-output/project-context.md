@@ -19,7 +19,7 @@ optimized_for_llm: true
 
 Mobile-first PWA + React Native app for cemetery visitors. Photo a gravestone → Gemini AI OCRs it → searches genealogy databases → generates a biographical story. Users save, share, and view stories on per-cemetery maps. Signed-in users can publish to a community global map.
 
-**Platform:** Web (GitHub Pages, static deploy) + Android/iOS (Expo managed workflow, EAS build).
+**Platform:** Web landing/map/bio surface (Cloudflare Pages Direct Upload) + Android/iOS (Expo managed workflow, EAS build).
 
 ---
 
@@ -142,14 +142,14 @@ supabase-migrations/— SQL migration files (run manually in Supabase SQL editor
 
 ---
 
-## The Pipeline (web: `startAnalysis` in `index.html` / mobile: `CameraScreen.js`)
+## Mobile Pipeline (`CameraScreen.js`)
 
-Both platforms mirror each other exactly. Changes to pipeline logic MUST be applied to BOTH.
+The scan/research/biography pipeline is mobile-only. The former web pipeline was retired; do not restore it or port mobile pipeline changes to web. Coordinate only surviving community-map/public-bio behavior across platforms.
 
 1. `verifyIsGravestone(base64)` — throws `{ __verificationRejection: true }` on failure
 2. `reverseGeocode(lat, lng)` — GPS → "City, State" (runs in parallel with step 1)
 3. `readGravestone(base64, locationHint)` — Gemini OCR → structured JSON with `name_confidence`, `alternate_names`, `multiple_subjects`
-4. `incrementWebScanCount()` / `incrementScanCount()` — counts the scan
+4. `incrementScanCount()` — counts the scan
 5. Parallel: `searchForPerson` + `searchWikiTree` + `queryWikidata` + `searchChroniclingAmerica` + `fetchWikipediaArticleSummary` + `fetchWikipediaPortraits`
 6. `generateBiography(graveData, searchResults, wikiData, location, wikipediaSummary, wikidataResult)`
 7. Portrait retry if step 5 returned empty (single-token OCR names)
@@ -186,8 +186,8 @@ Both platforms mirror each other exactly. Changes to pipeline logic MUST be appl
 5. Sync: sign-in pulls all cloud stories; delta sync on HomeScreen focus
 
 ### Deployment for testing
-- Web: push to `main` → GitHub Pages auto-deploys
-- Mobile: `npx eas update --branch preview` for OTA JS-only changes to testers with APK installed
+- Web: stage the 22-file allowlisted bundle, then `npx wrangler pages deploy <staging-dir> --project-name gravestory` (manual Direct Upload; see `docs/cloudflare-pages-cutover.md`)
+- Mobile: from `mobile/`, verify clean source and the `production` channel, then use `npx eas update --branch production --environment production --platform android` for production OTA JS-only changes
 - New native modules require a full `npx eas build --platform android --profile preview`
 
 ---
@@ -211,8 +211,8 @@ Both platforms mirror each other exactly. Changes to pipeline logic MUST be appl
 - One file per screen/component; global custom properties in `base.css` only
 - No preprocessor; design language: `#1a1410` bg, `#c9a84c` gold, `#e8d4a0` cream
 
-### Dual-platform rule
-Any change to pipeline logic, API modules, or biography generation MUST be applied to BOTH `js/` (web) and `mobile/src/lib/` (mobile).
+### Platform boundary
+Pipeline logic, scan APIs, and biography generation are mobile-only. Cross-platform coordination applies only to the surviving community global-map and read-only public-bio paths.
 
 ---
 
@@ -227,11 +227,11 @@ Any change to pipeline logic, API modules, or biography generation MUST be appli
 
 | Target | Command |
 |---|---|
-| Web | Push to `main` → GitHub Pages auto-deploys |
+| Web | Stage allowlisted bundle → `npx wrangler pages deploy <staging-dir> --project-name gravestory` |
 | Worker | `cd worker && wrangler deploy` |
 | Mobile dev | `npx expo start` + `adb reverse tcp:8081 tcp:8081` |
 | Mobile tester APK | `npx eas build --platform android --profile preview` |
-| Mobile OTA update | `npx eas update --branch preview` |
+| Mobile OTA update | `npx eas update --branch production --environment production --platform android` (after checking clean source and the production channel) |
 | Mobile production AAB | `npx eas build --platform android --profile production` |
 
 - OTA updates push JS-only changes without a new build — use for all non-native changes after testers have the APK
@@ -287,16 +287,12 @@ Any change to pipeline logic, API modules, or biography generation MUST be appli
 
 ---
 
-## Current State (Phase 9, branch `phase-9`)
+## Current State (Cloudflare URL cutover, 2026-07-13)
 
-**Done:** Grave photo gallery, biography cache, freemium limits (web + mobile), device fingerprinting, portrait persistence, global map portraits, RevenueCat SDK (disabled pending Play Store), security hardening (XSS, web scan/save limits, Worker CLIENT_KEY + model allowlist).
+**Done:** The Android app is live. The web scan pipeline is retired, and the landing page/global map/read-only bio surface is live at `https://gravestory.pages.dev/`. Source cache is `gravestory-v69`; Pages remains v68 until the reviewed bundle is redeployed.
 
-**Remaining before Play Store launch:**
-- Run `005_scan_credits.sql` in Supabase SQL editor
-- Privacy policy page at `https://j3k420.github.io/gravestory-privacy` + link in Settings
-- RevenueCat webhook (Cloudflare Worker endpoint) + re-enable SDK after Play Store account
-- Store listing assets; Google Play account ($25); `npx eas credentials`; production build + submission
+**Cutover still gated:** publish and verify the URL-only production OTA; update and publicly verify the Google Play privacy, deletion, description, and website fields; keep GitHub Pages and the repository public until those pass; retain both origins in the Worker allowlist. Follow `docs/cloudflare-pages-cutover.md`. Retiring the legacy site/origin requires explicit owner approval.
 
 ---
 
-_Last Updated: 2026-06-05 — Update when technology stack, patterns, or phase status changes._
+_Last Updated: 2026-07-13 — Update when technology stack, patterns, or cutover status changes._

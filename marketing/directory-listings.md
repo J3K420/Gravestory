@@ -14,7 +14,7 @@
 
 **Platforms:** Android *(check Android only — do not check iOS or iPhone anywhere; iOS is planned, not built)*
 
-**Website:** `https://j3k420.github.io/Gravestory/`
+**Website:** `https://gravestory.pages.dev/`
 
 **Google Play link:** `https://play.google.com/store/apps/details?id=com.gravestory.app`
 
@@ -72,7 +72,7 @@ MyHeritage serves deep family-tree research; GraveStory is the lightweight compa
 ## 2. Generic directory blurbs
 
 For any app-directory submission form. Use the Play link as the primary URL and the community map
-(`https://j3k420.github.io/Gravestory/`) as the website field. Contact field: [YOUR EMAIL].
+(`https://gravestory.pages.dev/`) as the website field. Contact field: [YOUR EMAIL].
 
 ### 50-word version
 
@@ -111,7 +111,7 @@ Word count: 100 ✓
    - Description → the 123-word description above
    - Platforms → **Android only**
    - Pricing / license → **Freemium**, one-time in-app purchases, no subscription
-   - Website → `https://j3k420.github.io/Gravestory/`
+   - Website → `https://gravestory.pages.dev/`
    - Google Play URL → `https://play.google.com/store/apps/details?id=com.gravestory.app`
    - Icon + 2-3 screenshots → reuse the live Play set in `store-listing/screenshots/` (lead with the Life Story result, then the community map).
 4. **(5 min)** Open each of the three competitor pages — `alternativeto.net/software/find-a-grave/`, `/software/billiongraves/`, `/software/myheritage/` — and use **"Suggest an alternative"** to add GraveStory, pasting the matching anchor line from section 1 into the comment/justification field.

@@ -15,7 +15,7 @@ The form has 3 stages: **Overview questions → Data types → Security practice
 |---|---|---|
 | Does your app collect or share any of the required user data types? | **Yes** | It collects location, photos, account info, purchases, analytics. |
 | Is all of the user data collected by your app encrypted in transit? | **Yes** | Every endpoint is HTTPS (Supabase, Worker, Gemini, R2, RevenueCat, Nominatim, Photon, Wikidata, Wikipedia, LoC, IA). |
-| Do you provide a way for users to request that their data be deleted? | **Yes** | In-app account deletion (Settings → type-DELETE) **and** a public web URL: `https://j3k420.github.io/Gravestory/delete-account/`. Provide that URL when asked. |
+| Do you provide a way for users to request that their data be deleted? | **Yes** | In-app account deletion (Settings → type-DELETE) **and** a public web URL: `https://gravestory.pages.dev/delete-account/`. Provide that URL when asked. |
 
 > "Collected" = leaves the device. "Shared" = sent to a third party separate from you. Google
 > treats your own backend (Supabase/Worker/R2) as "you," but a third-party **processor**
@@ -112,7 +112,7 @@ say collected. **Required vs optional** as noted. **Purpose** as noted.
 
 ## Stage 3 — Security practices
 - **Encrypted in transit: Yes.**
-- **Users can request deletion: Yes** — provide `https://j3k420.github.io/Gravestory/delete-account/`.
+- **Users can request deletion: Yes** — provide `https://gravestory.pages.dev/delete-account/`.
 - **Committed to Play Families Policy?** — N/A (not a children's app; target audience 18+).
 - **Independent security review** — optional; you can leave it unmarked (no formal audit done).
 

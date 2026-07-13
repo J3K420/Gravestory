@@ -6,8 +6,9 @@ account_id = "2d619125d0ccbcd40083cee777ae6222"
 [vars]
 # Set to your production domain — NEVER "*" in production.
 # Comma-separated for multiple origins, e.g.:
-#   "https://j3k420.github.io,http://localhost:5500"
-ALLOWED_ORIGIN = "https://j3k420.github.io"
+#   "https://gravestory.pages.dev,https://j3k420.github.io"
+# Keep the legacy GitHub origin until the Play Console and production OTA cutover is verified.
+ALLOWED_ORIGIN = "https://gravestory.pages.dev,https://j3k420.github.io"
 R2_PUBLIC_URL = "https://pub-0550b9a48a574a0b812771f0ea4c9377.r2.dev"
 SUPABASE_URL  = "https://idbrjonofqrsykqsqpwo.supabase.co"
 # Per-scan token enforcement on /gemini + /tavily + /tavily-extract.

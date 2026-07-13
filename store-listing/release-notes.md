@@ -7,7 +7,7 @@ their own line. Max 500 characters per language.
 
 ---
 
-## versionCode 16 — Play permissions compliance (no user-facing feature)
+## versionCode 16 — Play permissions compliance (prepared; not live as of 2026-07-13)
 
 vc16 drops `expo-media-library` (removes the READ_MEDIA_IMAGES request) and
 strips the unused RECORD_AUDIO permission so the manifest matches the Data

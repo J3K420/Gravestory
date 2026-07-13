@@ -31,7 +31,7 @@
 //   SUPABASE_SERVICE_KEY    — Supabase service-role key (bypasses RLS; never expose to clients)
 //
 // Vars (set in wrangler.toml [vars]):
-//   ALLOWED_ORIGIN   comma-separated origins, e.g. "https://j3k420.github.io,http://localhost:5500"
+//   ALLOWED_ORIGIN   comma-separated origins, e.g. "https://gravestory.pages.dev,https://j3k420.github.io"
 //                    Use "*" only for local testing — never in production.
 //   SCAN_TOKEN_ENFORCE  "true" → paid routes REQUIRE a valid X-Scan-Token (403 otherwise).
 //                       Anything else (unset/"false") → transition mode: a token is verified when

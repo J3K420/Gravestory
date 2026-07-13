@@ -34,10 +34,10 @@
 | **Sources searched** | WikiTree, Wikidata, Chronicling America (historic newspapers, pre-1928), Internet Archive county histories, Wikipedia — searched in parallel on every scan, cited on every story that draws on them |
 | **Speed** | A story in about 30 seconds, on the phone, standing at the stone |
 | **When records are thin** | A short story built from the inscription alone — no invented detail, no fake depth |
-| **Community map** | Public and free to browse on the web, no account required: https://j3k420.github.io/Gravestory/ |
+| **Community map** | Public and free to browse on the web, no account required: https://gravestory.pages.dev/ |
 | **Other features** | Personal GPS cemetery map · candle and flower tributes · tappable chips explaining carved-symbol meanings · "Listen to this story" read-aloud · GEDCOM export · in-app report button · 100 hand-drawn map-marker styles |
 | **Portraits** | Famous figures only, from Wikipedia/Wikidata — never photos of ordinary deceased people |
-| **Privacy** | Living relatives' names are redacted before any story becomes public. Policy: https://j3k420.github.io/Gravestory/privacy-policy/ |
+| **Privacy** | Living relatives' names are redacted before any story becomes public. Policy: https://gravestory.pages.dev/privacy-policy/ |
 | **Maker** | Solo independent developer, North Augusta, South Carolina |
 | **Play listing** | https://play.google.com/store/apps/details?id=com.gravestory.app |
 | **Demo video** | [LINK WHEN RECORDED] |
@@ -101,7 +101,7 @@ When two visitors scan the same stone, the app matches on location (within rough
 It's planned, but not built, and we won't pretend otherwise. GraveStory is a solo project, and the Android app came first; iOS follows once Android has proven itself. Today the honest answer is: Android now, iOS later.
 
 **What data do you collect?**
-Your sign-in (email and a display name — the display name appears publicly if you share a story), the photos you take, GPS coordinates to place stories on your map, your purchase history (to grant scan credits), an anonymous device fingerprint (a hash of device brand, model, and OS version, to deter abuse), and basic first-party usage analytics. No ad networks, no third-party analytics SDKs, and nothing is ever sold. Photos are only shared if you make a story public. The full policy is at https://j3k420.github.io/Gravestory/privacy-policy/ and you can delete your account and its data from inside the app.
+Your sign-in (email and a display name — the display name appears publicly if you share a story), the photos you take, GPS coordinates to place stories on your map, your purchase history (to grant scan credits), an anonymous device fingerprint (a hash of device brand, model, and OS version, to deter abuse), and basic first-party usage analytics. No ad networks, no third-party analytics SDKs, and nothing is ever sold. Photos are only shared if you make a story public. The full policy is at https://gravestory.pages.dev/privacy-policy/ and you can delete your account and its data from inside the app.
 
 ---
 
@@ -131,5 +131,5 @@ All paths are in this repository; happy to send any of them as attachments on re
 I reply within 24 hours, usually much faster.
 
 - Play listing: https://play.google.com/store/apps/details?id=com.gravestory.app
-- Community map (no account needed): https://j3k420.github.io/Gravestory/
-- Privacy policy: https://j3k420.github.io/Gravestory/privacy-policy/
+- Community map (no account needed): https://gravestory.pages.dev/
+- Privacy policy: https://gravestory.pages.dev/privacy-policy/

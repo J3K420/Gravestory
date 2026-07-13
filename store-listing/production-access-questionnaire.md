@@ -178,7 +178,7 @@ stories. The result is a more polished, more trustworthy app than when testing b
    (you have in-app + web). A mismatch vs your actual permissions/SDKs is a top rejection cause.
 
 ### Other App content declarations that must be GREEN to publish
-- **Privacy policy**: live URL covering photos/location/account (your GitHub Pages link).
+- **Privacy policy**: live URL covering photos/location/account: `https://gravestory.pages.dev/privacy-policy/`.
 - **Content rating (IARC)**: submit the questionnaire — rate truthfully (AI bios can surface
   death/illness/historical-violence content).
 - **Target audience**: select **adults (18+ / not under-13)** — consistent with Q5. (This

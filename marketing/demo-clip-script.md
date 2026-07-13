@@ -124,7 +124,7 @@ Photograph a gravestone and GraveStory reads the name, dates, and inscription, t
 
 When the records come up thin, it stays honest: a short story built from the inscription alone, with no invented detail.
 
-Also in the app: a personal GPS cemetery map, candle and flower tributes, plain-language explanations of carved symbols, read-aloud stories, and GEDCOM export. Browse the free public community map, no account needed: https://j3k420.github.io/Gravestory/
+Also in the app: a personal GPS cemetery map, candle and flower tributes, plain-language explanations of carved symbols, read-aloud stories, and GEDCOM export. Browse the free public community map, no account needed: https://gravestory.pages.dev/
 
 3 free scans. One-time credit packs from $1.99 — no subscription, and credits never expire. Android today; iOS planned.
 

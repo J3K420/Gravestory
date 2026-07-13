@@ -313,7 +313,7 @@ export default function SettingsScreen({ navigation }) {
             <TouchableOpacity
               style={styles.privacyLink}
               activeOpacity={0.7}
-              onPress={() => Linking.openURL('https://j3k420.github.io/Gravestory/privacy-policy/')}
+              onPress={() => Linking.openURL('https://gravestory.pages.dev/privacy-policy/')}
             >
               <Text style={styles.privacyLinkText}>Privacy Policy</Text>
             </TouchableOpacity>
@@ -321,7 +321,7 @@ export default function SettingsScreen({ navigation }) {
             <TouchableOpacity
               style={styles.privacyLink}
               activeOpacity={0.7}
-              onPress={() => Linking.openURL('https://j3k420.github.io/Gravestory/terms/')}
+              onPress={() => Linking.openURL('https://gravestory.pages.dev/terms/')}
             >
               <Text style={styles.privacyLinkText}>Terms of Service</Text>
             </TouchableOpacity>

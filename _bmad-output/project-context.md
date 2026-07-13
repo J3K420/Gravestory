@@ -289,7 +289,7 @@ Pipeline logic, scan APIs, and biography generation are mobile-only. Cross-platf
 
 ## Current State (Cloudflare URL cutover, 2026-07-13)
 
-**Done:** The Android app is live. The web scan pipeline is retired, and the landing page/global map/read-only bio surface is live at `https://gravestory.pages.dev/`. Source cache is `gravestory-v69`; Pages remains v68 until the reviewed bundle is redeployed.
+**Done:** The Android app is live. The web scan pipeline is retired, and the landing page/global map/read-only bio surface is live at `https://gravestory.pages.dev/` with verified service-worker cache `gravestory-v69`.
 
 **Cutover still gated:** publish and verify the URL-only production OTA; update and publicly verify the Google Play privacy, deletion, description, and website fields; keep GitHub Pages and the repository public until those pass; retain both origins in the Worker allowlist. Follow `docs/cloudflare-pages-cutover.md`. Retiring the legacy site/origin requires explicit owner approval.
 

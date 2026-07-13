@@ -136,7 +136,7 @@ Stories fetched from the community global map have `_isGlobal: true`. This contr
 
 ## Current state (Cloudflare URL cutover, 2026-07-13)
 
-**Done:** The Android app is live, the web scan pipeline has been retired, and the landing page/global map/read-only bio surface is live at `https://gravestory.pages.dev/`. Source cache is `gravestory-v69`; Pages remains v68 until the reviewed bundle is redeployed.
+**Done:** The Android app is live, the web scan pipeline has been retired, and the landing page/global map/read-only bio surface is live at `https://gravestory.pages.dev/` with verified service-worker cache `gravestory-v69`.
 
 **Cutover still gated:**
 - Publish and verify the URL-only mobile Settings OTA from the latest baseline.

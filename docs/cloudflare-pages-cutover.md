@@ -8,9 +8,9 @@ This runbook moves every current GraveStory pointer and policy surface to Cloudf
 
 | Surface | Local state | Remote state |
 |---|---|---|
-| Landing metadata and legal links | Reviewed source uses cache `gravestory-v69` and overlap-safe legal links | Live Pages is v68; reviewed 22-file redeploy pending |
+| Landing metadata and legal links | Reviewed source uses cache `gravestory-v69` and overlap-safe legal links | Verified live; deployment `62c7fbe9.gravestory.pages.dev` |
 | Mobile Privacy and Terms links | Prepared for BMAD review | Production OTA not yet published |
-| Worker origin allowlist | Prepared with both new and legacy origins | Worker deployment not yet performed |
+| Worker origin allowlist | Contains both new and legacy origins | Verified live; version `4a01f4da-8cd9-48de-9478-f65ad47b3f8f` |
 | Google Play source copy | Updated locally | Authenticated console fields and public listing not yet verified |
 | Legacy GitHub Pages/repository visibility | Intentionally unchanged | Must remain available/public until every retirement gate passes |
 
@@ -223,7 +223,7 @@ foreach ($entry in $checks.GetEnumerator()) {
   $response = Invoke-WebRequest -Uri $uri -Method Get -MaximumRedirection 0 -ErrorAction Stop
   $contentType = [string]$response.Headers['Content-Type']
   if ($response.StatusCode -ne 200) { throw "Unexpected status for $uri" }
-  if ($contentType -notmatch $entry.Value.Type) { throw "Unexpected content type for $uri: $contentType" }
+  if ($contentType -notmatch $entry.Value.Type) { throw "Unexpected content type for ${uri}: $contentType" }
   if ($entry.Value.Marker -and -not $response.Content.Contains($entry.Value.Marker)) {
     throw "Expected content marker missing from $uri"
   }
@@ -274,9 +274,9 @@ If any gate before retirement fails, leave GitHub Pages enabled, leave the repos
 
 ## Final sign-off record
 
-- [ ] Cutover commit pushed: `<commit>`
-- [ ] Cloudflare Pages deployment verified: `<deployment URL/ID/date>`
-- [ ] Worker dual-origin deployment verified: `<version ID/date>`
+- [x] Cutover commit pushed: `e97b215` to `main` (2026-07-13)
+- [x] Cloudflare Pages deployment verified: `https://62c7fbe9.gravestory.pages.dev` (2026-07-13)
+- [x] Worker dual-origin deployment verified: `4a01f4da-8cd9-48de-9478-f65ad47b3f8f` (2026-07-13)
 - [ ] Production Android OTA group/runtime verified on installed app: `<group/runtime/date>`
 - [ ] OTA rollback window ends: `<date/owner decision>`
 - [ ] Google Play privacy policy verified publicly: `<date>`

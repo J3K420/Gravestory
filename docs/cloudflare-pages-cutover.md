@@ -95,7 +95,7 @@ These are authenticated external changes. Select GraveStory (`com.gravestory.app
    - Set the required external web resource to `https://gravestory.pages.dev/delete-account/`.
    - Review the preview, save, and submit the Data safety update.
 3. **Full description** — Grow users → Store presence → Main store listing:
-   - Paste the current full description from `store-listing/description.md` so its privacy link is `https://gravestory.pages.dev/privacy-policy/`.
+   - Replace only the existing legacy privacy URL with `https://gravestory.pages.dev/privacy-policy/`. Do not change any other listing copy, title, graphics, or screenshots as part of this cutover.
    - Save the listing change.
 4. **Store-listing website** — Grow users → Store presence → Store settings → Store listing contact details:
    - Set Website to `https://gravestory.pages.dev/`.

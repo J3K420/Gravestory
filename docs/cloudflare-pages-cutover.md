@@ -9,7 +9,7 @@ This runbook moves every current GraveStory pointer and policy surface to Cloudf
 | Surface | Local state | Remote state |
 |---|---|---|
 | Landing metadata and legal links | Reviewed source uses cache `gravestory-v69` and overlap-safe legal links | Verified live; deployment `62c7fbe9.gravestory.pages.dev` |
-| Mobile Privacy and Terms links | Prepared for BMAD review | Production OTA not yet published |
+| Mobile Privacy and Terms links | Reviewed cutover-only change merged to `main` | Published to production Android as group `a405b5dc-2f30-4cc8-983d-855bce3a0673` on runtime `exposdk:54.0.0`; installed-app verification pending |
 | Worker origin allowlist | Contains both new and legacy origins | Verified live; version `4a01f4da-8cd9-48de-9478-f65ad47b3f8f` |
 | Google Play source copy | Updated locally | Authenticated console fields and public listing not yet verified |
 | Legacy GitHub Pages/repository visibility | Intentionally unchanged | Must remain available/public until every retirement gate passes |
@@ -115,6 +115,8 @@ Record the verification date and screenshots before retiring the old site. Manag
 ## Production mobile OTA handoff
 
 The Settings link change is JavaScript-only, so it does not require a Play build or versionCode increment. Google Play currently serves versionCode 15 (owner-confirmed 2026-07-13); `mobile/app.config.js` reserves versionCode 16 for a future AAB and vc16 is not live. The OTA must still be published from the latest mobile baseline. Commit `c367395` is the minimum cutover ancestor because it already contains all mobile work known at handoff.
+
+The production Android OTA was published on 2026-07-13 from reviewed commit `c1697cfd5374ba7d8615f51d9bd80f35f793f606`. EAS production channel verification shows runtime `exposdk:54.0.0`, update group `a405b5dc-2f30-4cc8-983d-855bce3a0673`, and Android update ID `019f5d76-183c-7b15-a26b-d7431075db90`. The immediately previous production Android group recorded for rollback is `e713a050-d620-4bd0-aaf7-9c0a486f86c0`.
 
 From the repository root after BMAD review and after the cutover commit exists:
 
@@ -277,7 +279,8 @@ If any gate before retirement fails, leave GitHub Pages enabled, leave the repos
 - [x] Cutover commit pushed: `e97b215` to `main` (2026-07-13)
 - [x] Cloudflare Pages deployment verified: `https://62c7fbe9.gravestory.pages.dev` (2026-07-13)
 - [x] Worker dual-origin deployment verified: `4a01f4da-8cd9-48de-9478-f65ad47b3f8f` (2026-07-13)
-- [ ] Production Android OTA group/runtime verified on installed app: `<group/runtime/date>`
+- [x] Production Android OTA published and verified as the latest production-channel group: `a405b5dc-2f30-4cc8-983d-855bce3a0673` / `exposdk:54.0.0` (2026-07-13)
+- [ ] Production Android OTA verified on an installed app: `<Settings links/basic screen/date>`
 - [ ] OTA rollback window ends: `<date/owner decision>`
 - [ ] Google Play privacy policy verified publicly: `<date>`
 - [ ] Google Play account-deletion link verified publicly: `<date>`

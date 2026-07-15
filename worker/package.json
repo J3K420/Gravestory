@@ -1,0 +1,16 @@
+{
+  "name": "gravestory-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.13.1"
+  },
+  "packageManager": "npm@10.9.2",
+  "scripts": {
+    "verify": "node --check worker.js && wrangler deploy --dry-run --outdir .wrangler/dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "4.110.0"
+  }
+}

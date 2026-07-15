@@ -1,9 +1,12 @@
 .claude/
+mobile/node_modules/
+worker/node_modules/
 worker/.wrangler/
 
 # Metrics digest — service-role key + local node_modules (never commit the key)
 tools/metrics-digest/.env
 tools/metrics-digest/node_modules/
+tools/eas-cli/node_modules/
 
 # FourThought predictions are branch-local operational state.
 tools/fourthought/

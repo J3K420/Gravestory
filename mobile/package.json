@@ -2,6 +2,10 @@
   "name": "mobile",
   "version": "1.0.0",
   "main": "index.js",
+  "engines": {
+    "node": "22.13.1"
+  },
+  "packageManager": "npm@10.9.2",
   "dependencies": {
     "@expo-google-fonts/crimson-pro": "^0.4.2",
     "@expo-google-fonts/fraunces": "^0.4.1",
@@ -44,7 +48,9 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "verify:config": "expo config --type public --json",
+    "verify:bundle": "expo export --platform android --output-dir .expo-verification"
   },
   "private": true
 }

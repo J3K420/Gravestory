@@ -1,0 +1,17 @@
+{
+  "name": "gravestory-eas-tooling",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "22.13.1"
+  },
+  "packageManager": "npm@10.9.2",
+  "scripts": {
+    "verify": "eas --version && node verify.mjs"
+  },
+  "devDependencies": {
+    "@expo/eas-json": "21.0.0",
+    "eas-cli": "21.0.0",
+    "typescript": "5.9.3"
+  }
+}

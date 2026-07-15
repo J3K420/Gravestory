@@ -23,3 +23,7 @@
 ## Deferred from: code review (2026-07-13) — Cloudflare Pages URL cutover
 
 - **Settings external links have no failure feedback** — `Linking.openURL(...)` is called without awaiting/catching rejection, so an Android intent/browser failure can leave the user with no explanation. Pre-existing behavior exposed by the URL-only change; add a shared safe-link helper and user-facing alert in a focused mobile UX change. [mobile/src/screens/SettingsScreen.js]
+
+## Deferred from: code review of SPEC-deterministic-verification (2026-07-14)
+
+- **Applied migration deletion or renumbering is not yet rejected against a durable ledger** — the foundation verifier checks current SQL filenames, duplicate primary IDs, and non-empty files, but it does not prove that an already-applied migration was preserved. Add the durable inventory/checksum and explicit exception handling in `spec-supabase-change-control`, which owns migration provenance and live-state reconciliation. [tools/verify-repo.mjs]

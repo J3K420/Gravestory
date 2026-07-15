@@ -1,4 +1,5 @@
 // GraveStory proxy — Cloudflare Worker
+import { featureForPath, validateWorkerConfig, validateWorkerFeature } from './config.js';
 //
 // Front-end calls:
 //   POST /begin-scan              header: Authorization: Bearer <user JWT>  → { token } (one per scan)
@@ -86,13 +87,21 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const origin = request.headers.get('Origin') || '';
+    const isAdminMetrics = url.pathname === '/admin/metrics';
+
+    const config = validateWorkerConfig(env);
+    if (!config.ok) return configurationUnavailable(config.errors, origin, config.allowedOrigins, isAdminMetrics);
+
+    const feature = featureForPath(url.pathname);
+    if (feature) {
+      const featureConfig = validateWorkerFeature(env, feature);
+      if (!featureConfig.ok) return configurationUnavailable(featureConfig.errors, origin, config.allowedOrigins, isAdminMetrics);
+    }
 
     // ALLOWED_ORIGIN may be a single origin or a comma-separated list.
-    // Use "*" only for permissive local testing.
-    const allowedRaw = env.ALLOWED_ORIGIN || '*';
-    const allowed = allowedRaw === '*'
-      ? '*'
-      : allowedRaw.split(',').map(s => s.trim()).filter(Boolean);
+    // Wildcards are available only through the explicit local/test config harness;
+    // runtime requests always use the production-safe validator above.
+    const allowed = config.allowedOrigins;
 
     // ── CORS preflight ────────────────────────────────────────────
     if (request.method === 'OPTIONS') {
@@ -1646,6 +1655,19 @@ async function handleDeleteAccount(request, env, origin, allowed) {
 }
 
 // ── helpers ───────────────────────────────────────────────────────
+function configurationUnavailable(errors, origin, allowed, isAdminMetrics = false) {
+  return new Response(JSON.stringify({
+    error: 'Worker configuration unavailable',
+    invalid: errors.map(({ key, rule }) => ({ key, rule })),
+  }), {
+    status: 503,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(isAdminMetrics ? adminCorsHeaders(origin) : corsHeaders(origin, allowed)),
+    },
+  });
+}
+
 function corsHeaders(origin, allowed) {
   let acao;
   if (allowed === '*') {

@@ -4,6 +4,7 @@ compatibility_date = "2024-01-01"
 account_id = "2d619125d0ccbcd40083cee777ae6222"
 
 [vars]
+WORKER_ENV = "production"
 # Set to your production domain — NEVER "*" in production.
 # Comma-separated for multiple origins, e.g.:
 #   "https://gravestory.pages.dev,https://j3k420.github.io"

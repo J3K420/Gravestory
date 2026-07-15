@@ -1,3 +1,6 @@
+set session characteristics as transaction read only;
+set transaction read only;
+
 -- AUDIT — scan_credits is the highest-stakes table: it controls how many paid
 -- scans a user has. It's meant to be SERVICE-ROLE-WRITE-ONLY (clients can read
 -- their own row, but only the RevenueCat webhook/service role may change

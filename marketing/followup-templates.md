@@ -83,7 +83,7 @@
 
 ## 4. "YES" reply — the bridge into the reviewer flow
 
-**WHEN TO SEND:** within the hour of ANY reply that says yes, interested, or "tell me more" — speed is the asset. Then immediately open `reviewer-onepager.md`: send its full copy-paste email within the hour, and grant `is_unlimited` (SQL in CLAUDE.md, Freemium section) as soon as their sign-in email arrives.
+**WHEN TO SEND:** within the hour of ANY reply that says yes, interested, or "tell me more" — speed is the asset. Then immediately open `reviewer-onepager.md`: send its full copy-paste email within the hour, and use the approval-gated `tools/tester-access.mjs` runbook after their sign-in resolves to an exact user UUID.
 
 **Subject:** Re: (their thread) — your free access + everything you need
 

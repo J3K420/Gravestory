@@ -23,19 +23,34 @@ this script and emails/pushes the output — see "Automating" below.
 cd tools/metrics-digest
 npm install
 Copy-Item .env.example .env
-# then edit .env and paste the service_role key
+# then edit .env for the selected target
 ```
 
-Get the key from: **Supabase dashboard → Project Settings → API → `service_role`**.
+For an approved production read, get the URL and key from **Supabase dashboard →
+Project Settings → API**. For local reads, use the disposable local stack's
+service-role key. Never reuse a production key for the local target.
 
-## Run it
+## Select a target and run it
 
 ```powershell
-npm run digest            # last 24h vs the prior 24h  (the daily glance)
-npm run week              # last 7 days
-node digest.mjs --hours 72
-node digest.mjs --json    # machine-readable, for piping into something else
+# Disposable local Supabase (default local URL is loopback only)
+npm run digest -- --target local --confirm local-read
+npm run week -- --target local --confirm local-read
+
+# Production requires separate approval plus explicit production-named URL and key
+node digest.mjs --target production --confirm production-read --hours 72
+node digest.mjs --target production --confirm production-read --json
 ```
+
+There is deliberately no production URL default. Omitting `--target`, using the
+wrong confirmation phrase, or selecting production without an exact HTTPS
+`SUPABASE_PRODUCTION_URL` and `SUPABASE_PRODUCTION_SERVICE_ROLE_KEY` fails before
+any request is made. Local reads use `SUPABASE_LOCAL_SERVICE_ROLE_KEY` and an
+optional loopback-only `SUPABASE_LOCAL_URL`, so a credential cannot silently
+cross targets. The explicit production URL must also match the reviewed,
+non-secret origin allowlist in `tools/supabase-target-policy.mjs`; the allowlist authorizes a destination
+but does not supply a default or grant approval. A production read still requires
+the owner's explicit approval; the command-line confirmation does not grant it.
 
 ## What it shows
 
@@ -55,13 +70,20 @@ node digest.mjs --json    # machine-readable, for piping into something else
 
 ## Automating (optional, later)
 
-Windows Task Scheduler can run this daily and pipe the output somewhere you'll see
-it. Quickest path — a `.cmd` that writes the digest to a file you check, or pipes
-to a notifier:
+Windows Task Scheduler can run this daily. Create an environment-specific
+`run-local-digest.cmd` outside the repository with absolute paths (Task Scheduler
+does not guarantee a working directory and direct actions do not interpret `>>`):
+
+```bat
+@echo off
+"C:\Program Files\nodejs\node.exe" "C:\absolute\path\to\GraveStory\tools\metrics-digest\digest.mjs" --target local --confirm local-read >> "%USERPROFILE%\gravestory-digest.log" 2>&1
+```
+
+Then register that wrapper from PowerShell after resolving its absolute path:
 
 ```powershell
-# Example: run at 8am daily, append to a dated log
-schtasks /create /tn "GraveStory digest" /tr "node \"%CD%\digest.mjs\" >> \"%USERPROFILE%\gravestory-digest.log\"" /sc daily /st 08:00
+$wrapper = (Resolve-Path 'C:\absolute\path\to\run-local-digest.cmd').Path
+schtasks.exe /create /tn 'GraveStory local digest' /tr "`"$wrapper`"" /sc daily /st 08:00
 ```
 
 For phone push, swap the redirect for a curl to a Pushover/ntfy webhook, or wire a
@@ -70,6 +92,6 @@ Supabase MCP connector and use `/schedule` so it runs without your PC on.
 ## Notes
 
 - Read-only. The service-role key *can* write, but this script only SELECTs.
-- Safe to run as often as you like; it pulls a bounded window (≤50k events).
+- The window is limited to 8,760 whole hours and each event query is capped at 50k rows.
 - `scan_events` has no per-row timestamp filter issues, but if a query is denied
   the script degrades gracefully (shows `—`) rather than crashing.

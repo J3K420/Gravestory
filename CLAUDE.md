@@ -101,7 +101,7 @@ js/
 - `tributes` — one candle or flower per user per grave (`UNIQUE(grave_id, user_id)`).
 - `grave_photos` — one row per photo per story; powers the global-map photo gallery.
 - `scan_events` — immutable lifetime scan counter (INSERT/SELECT only via RLS); `scan_credits` — purchased credits, service-role write only.
-- Migrations live in `supabase-migrations/` (001–010, all run; 008 on 2026-06-13, 010 `symbol_meanings` jsonb on 2026-06-13; 009 was a confirmed no-op). New migrations must be run manually in the Supabase SQL editor.
+- Migrations live in `supabase-migrations/` and are fingerprinted/classified by `database/catalog.json`; follow `docs/database-change-control.md`. Existing numbered migrations are immutable and corrections use a new forward migration. Local parity remains explicitly blocked on the missing pre-001 `stories` baseline. Any live read, SQL-editor application, CLI link/push, repair, reset, or data change requires its documented explicit approval gate.
 
 ---
 
@@ -234,7 +234,7 @@ mobile/
 
 - **Scans are the sole cost control** (Tavily/Gemini cost): guest 3, free signed-in 3 lifetime (lowered from 10 in S66 — the pipeline has no warm-up, so a strong first bio sells the app and lands the paywall at peak WTP; signing in no longer adds free scans, it adds cloud save/sync + the ability to buy credits), + purchased credits. Save limits were removed entirely (no-ops kept for API compat). Limits fail closed on Supabase errors. (Tavily degrades gracefully when its ~4000-credit pool is exhausted — slots return empty and bios thin out, but Gemini still writes from the stone + free sources; no outage.)
 - Credits-only model (no subscriptions): `gravestory_5_scans` $1.99 · `gravestory_20_scans` $5.99 · `gravestory_60_scans` $12.99 · `gravestory_150_scans` $24.99 (Legacy/gift tier, added 2026-06-13 per pricing research — captures high-WTP gift buyers, anchors the $12.99 pack as the middle); never expire. Prices are set in Google Play Console and surfaced live via RevenueCat (`pkg.product.priceString`) — a price change is a STORE-side action, no code/OTA needed; the `PACK_INFO` strings in `PaywallScreen.js` are only an offline-preview fallback to keep in sync. **New product IDs must be added in THREE places: Play Console + RevenueCat (store-side), the worker `CREDIT_MAP` (else the webhook grants 0 credits — `unknown product`), and `PaywallScreen.js` PRODUCT_IDS+PACK_INFO.** Pack render order on the paywall follows the RevenueCat offering order, not the code. Premium pricing was chosen to pre-fund the planned AR ghost-narrator feature (`docs/ar-ghost-narrator-design.md`). RevenueCat SDK live (production `goog_` key via EAS Secret, Sensitive visibility); `Purchases.logIn(userId)` after auth; purchases land as credits via the Worker webhook.
-- Tester bypass: `is_unlimited: true` in `app_metadata` via SQL editor: `UPDATE auth.users SET raw_app_meta_data = raw_app_meta_data || '{"is_unlimited": true}'::jsonb WHERE id = '<user-id>';` (current: j3k420@gmail.com, james.edmonds26@gmail.com).
+- Tester bypass: changing `is_unlimited` in `app_metadata` is a cataloged production-write operation. Follow `docs/database-change-control.md#tester-access`; do not retain tester identities or runnable privileged SQL in this file.
 
 ## Current status (2026-06)
 

@@ -175,4 +175,6 @@ Powered by **migration 034** (`034_admin_metrics_v2.sql`) — a superset of the 
 - **Content reports** have no "resolved" state in the schema, so the page shows
   the raw total + the **urgent** subset (privacy/offensive on a public story).
 - Cross-check any time against the terminal digest:
-  `node tools/metrics-digest/digest.mjs --json` — it reads the same tables.
+  `node tools/metrics-digest/digest.mjs --target local --confirm local-read --json`
+  for the disposable local stack, or use the separately approved production form
+  documented in `tools/metrics-digest/README.md` — it reads the same tables.

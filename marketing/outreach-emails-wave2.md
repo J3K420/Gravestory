@@ -161,7 +161,7 @@ on one non-reply.
 - [ ] Replace `[YOUR NAME]` / `[YOUR EMAIL]` in each.
 - [ ] Record the 30-45s demo clip BEFORE sending — every draft offers it.
 - [ ] Human-verify the Family History Fanatics contact page in a browser (~1 min; site blocks bots): confirm the form exists AND that the page invites video/topic ideas — if it doesn't, cut the "since your contact page invites them" clause from the pitch opening.
-- [ ] Have `is_unlimited` ready to grant the moment anyone bites (SQL in CLAUDE.md; send `reviewer-onepager.md` within the hour).
+- [ ] Have the approved `tools/tester-access.mjs` workflow ready for the exact reviewer UUID; send `reviewer-onepager.md` within the hour.
 - [ ] Space the sends per the sequence above; wave 1 first, EOGN first overall.
 
 ## What every draft deliberately does NOT say (NEVER-SAY compliance)

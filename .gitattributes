@@ -1,0 +1,4 @@
+supabase-migrations/*.sql text eol=crlf
+supabase-migrations/**/*.sql text eol=crlf
+queries/*.sql text eol=crlf
+queries/**/*.sql text eol=crlf

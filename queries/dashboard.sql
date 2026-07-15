@@ -1,3 +1,6 @@
+set session characteristics as transaction read only;
+set transaction read only;
+
 -- ════════════════════════════════════════════════════════════════════════
 -- GraveStory — ONE-SHOT APP DASHBOARD  (single result table)
 -- ════════════════════════════════════════════════════════════════════════

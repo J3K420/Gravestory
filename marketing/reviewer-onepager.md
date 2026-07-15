@@ -11,7 +11,7 @@
 ## Owner notes (do NOT send this section)
 
 - **Speed is the asset.** A "yes" cools fast. Send the email below within the hour; grant access within a few hours of getting their sign-in email.
-- **Granting unlimited access:** the `is_unlimited` flag goes on their account after their first Google sign-in. The SQL lives in CLAUDE.md (Freemium section) — run it against their user id in the Supabase SQL editor. Do not paste the SQL anywhere outside this repo.
+- **Granting unlimited access:** the `is_unlimited` flag goes on their account after their first Google sign-in. Use the explicitly approved, UUID-targeted `tools/tester-access.mjs` workflow in `docs/database-change-control.md#tester-access`; do not copy privileged SQL into outreach notes.
 - **Press kit: `marketing/press-kit.md` (written 2026-07-01).** It's markdown — export/print it to PDF before attaching, or paste it inline (the Links line below says "attached (PDF)"). Attach or link the demo clip once it exists.
 - Everything from the next divider down is reviewer-facing.
 

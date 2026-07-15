@@ -44,7 +44,7 @@ mobile/             — Expo React Native app (separate codebase, do NOT mix wit
 worker/             — Cloudflare Worker proxy (worker.js + wrangler.toml)
 _bmad/              — BMAD-METHOD install (agents, skills, config)
 _bmad-output/       — BMAD artifacts (PRDs, architecture docs, stories)
-supabase-migrations/— SQL migration files (run manually in Supabase SQL editor)
+supabase-migrations/— Immutable forward SQL artifacts governed by database/catalog.json
 ```
 
 ---
@@ -76,7 +76,7 @@ The scan, OCR, research, biography, save, and account-write pipeline lives only 
 ### Scan/save limits (freemium)
 - **Web**: `js/scan-limit.js` — `checkWebScanLimit()` (fail-closed on Supabase error) gates `startAnalysis()`; `checkWebSaveLimit()` gates `saveStory()`
 - **Mobile**: `mobile/src/lib/scan-limit.js` — same logic; `checkScanLimit()` fail-closed; `CameraScreen` checks before opening picker
-- Guest: **0 scans** (must sign in to scan; can browse the app + community global map and read public bios without an account). Free signed-in: **3 lifetime scans** (lowered from 10, S66). `is_unlimited: true` in `app_metadata` bypasses all limits (testers only, set via Supabase SQL).
+- Guest: **0 scans** (must sign in to scan; can browse the app + community global map and read public bios without an account). Free signed-in: **3 lifetime scans** (lowered from 10, S66). `is_unlimited: true` in `app_metadata` bypasses all limits (testers only, changed through the approval-gated `tools/tester-access.mjs` runbook).
 - Credits model: `scan_credits` table (Supabase). Starter 5/$1.99, Explorer 20/$5.99, Historian 60/$12.99, Legacy 150/$24.99 (premium set + Legacy gift tier, 2026-06-13; prices live from Play Console via RevenueCat, no code change; new product IDs also need a worker `CREDIT_MAP` entry).
 
 ### Pull-to-refresh (mobile)
@@ -104,7 +104,7 @@ Stories fetched from the community global map have `_isGlobal: true`. This contr
 | `scan_events` | Immutable INSERT-only rows counting lifetime scans. RLS: INSERT/SELECT only. |
 | `scan_credits` | Purchased scan credits. Service-role write only. |
 
-**Pending migration:** `005_scan_credits.sql` — must be run in Supabase SQL editor before credits purchase flow works.
+**Migration state:** live application state has not been inspected in the Twelve-Factor program and must not be inferred from historical notes. Follow `docs/database-change-control.md`; any remote read, migration application, repair, reset, or data change requires its explicit approval gate.
 
 ---
 

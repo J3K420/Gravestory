@@ -153,7 +153,7 @@ Worth a pitch if this list is expanded, but no contact or beat research has been
 - **The 30-45s demo clip** — the same asset owed to the genealogy-media batch (`gtm-strategy.md` move #4): [LINK WHEN RECORDED]. TV desks especially won't move without seeing that it films well.
 - **`marketing/press-kit.md`** — send within the hour of any yes (boilerplate, fact sheet, honest-limits section, and visual-asset paths are all in it; the free-access flow matches `reviewer-onepager.md`: they install, sign in with Google, reply with the sign-in email).
 - **The 2-3 pre-scanned known-good local stones** at the chosen demo cemetery — walk the route yourself first, confirm each stone produces a strong, source-cited story, and know exactly where each one stands. The on-the-spot demo must be a stone you already KNOW lands. [OWNER: pick the cemetery and pre-scan 2-3 known-good stones first — never demo a thin-bio gamble]
-- **`is_unlimited` grant ready** for the reporter's account — the SQL lives in CLAUDE.md (Freemium section); grant within hours of getting their sign-in email.
+- **`is_unlimited` grant ready** for the reporter's account — follow the approval-gated `tools/tester-access.mjs` runbook after resolving their exact user UUID.
 - **Honest answers rehearsed** for the questions local press always asks:
   - *"How many downloads?"* — "It just launched on Google Play on June 29 — too new for meaningful numbers." Never invent or estimate a figure.
   - *"So it's AI?"* — sources-first and honest: "The stories are compiled from verified public records with AI assistance — the sources are cited so readers can check them, thin records get short honest stories, and there's a report button in the app."

@@ -10,12 +10,14 @@ Reads from four layers (highest priority last):
 
 Outputs merged JSON to stdout. Errors go to stderr.
 
-Requires Python 3.11+ (uses stdlib `tomllib`). No `uv`, no `pip install`,
-no virtualenv — plain `python3` is sufficient.
+Uses only the Python stdlib (`tomllib`) — no third-party dependencies.
+BMad is standardizing on `uv run` to invoke scripts (uv provisions a suitable
+interpreter for you); a plain `python3` on PATH still works during the
+transition. Either runner needs Python 3.11+ for `tomllib`.
 
-  python3 resolve_config.py --project-root /abs/path/to/project
-  python3 resolve_config.py --project-root ... --key core
-  python3 resolve_config.py --project-root ... --key agents
+  uv run resolve_config.py --project-root /abs/path/to/project
+  uv run resolve_config.py --project-root ... --key core
+  uv run resolve_config.py --project-root ... --key agents
 
 Merge rules (same as resolve_customization.py):
   - Scalars: override wins
@@ -123,6 +125,14 @@ def deep_merge(base, override):
     return override
 
 
+def write_json_stdout(output):
+    """Write JSON as UTF-8 so Windows cp1252 stdout can carry emoji icons."""
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(encoding="utf-8")
+    sys.stdout.write(json.dumps(output, indent=2, ensure_ascii=False) + "\n")
+
+
 def extract_key(data, dotted_key: str):
     parts = dotted_key.split(".")
     current = data
@@ -169,7 +179,7 @@ def main():
     else:
         output = merged
 
-    sys.stdout.write(json.dumps(output, indent=2, ensure_ascii=False) + "\n")
+    write_json_stdout(output)
 
 
 if __name__ == "__main__":

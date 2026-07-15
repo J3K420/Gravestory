@@ -4,3 +4,10 @@ worker/.wrangler/
 # Metrics digest — service-role key + local node_modules (never commit the key)
 tools/metrics-digest/.env
 tools/metrics-digest/node_modules/
+
+# FourThought predictions are branch-local operational state.
+tools/fourthought/
+
+# Python workflow/test caches are local build artifacts.
+__pycache__/
+*.py[cod]

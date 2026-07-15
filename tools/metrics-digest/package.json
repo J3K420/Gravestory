@@ -14,7 +14,7 @@
   "scripts": {
     "digest": "node digest.mjs",
     "week": "node digest.mjs --hours 168",
-    "verify": "node --check digest.mjs"
+    "verify": "node --check digest.mjs && node --check target.mjs && node --test target.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"

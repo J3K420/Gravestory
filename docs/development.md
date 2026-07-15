@@ -10,6 +10,7 @@ GraveStory uses one repository verification entry point for the static web app, 
 - Expo SDK 54 as locked by `mobile/package-lock.json`
 - EAS CLI 21.0.0 in the isolated `tools/eas-cli` development package
 - Wrangler 4.110.0 as a Worker development dependency
+- Supabase CLI 2.101.0 in the isolated `tools/supabase-cli` development package
 
 Node 22.13.1 satisfies Expo SDK 54's supported Node range and the repository's versioned Expo v56 documentation rule. Pinning this toolchain does not upgrade the mobile application to Expo SDK 56.
 
@@ -21,7 +22,9 @@ From the repository root, use an already configured Node 22.13.1, npm 10.9.2, an
 node tools/verify-repo.mjs --install
 ```
 
-The command performs clean `npm ci` installs from all committed lockfiles, resolves the public Expo config with build-time keys removed, creates and removes a local Android Expo export to compile the mobile source, validates `eas.json` with EAS CLI's bundled parser, performs a Wrangler dry run with telemetry disabled, checks static and inline JavaScript syntax, validates the Cloudflare Pages manifest and SQL file ledger, and runs the Node and BMad tests. Sensitive environment variables are removed from child processes. These checks run offline after dependency installation; neither the Expo export nor Wrangler's `--dry-run` deploys anything.
+The command performs clean `npm ci` installs from all committed lockfiles, resolves the public Expo config with build-time keys removed, creates and removes a local Android Expo export to compile the mobile source, validates `eas.json` with EAS CLI's bundled parser, performs a Wrangler dry run with telemetry disabled, checks static and inline JavaScript syntax, validates the Cloudflare Pages manifest and fingerprinted database catalog, confirms the pinned Supabase CLI binary, and runs the Node and BMad tests. Sensitive environment variables are removed from child processes. These checks run offline after dependency installation; neither the Expo export nor Wrangler's `--dry-run` deploys anything.
+
+The default verifier does not start Docker or claim database parity. `docs/database-change-control.md` records the missing pre-001 `stories` baseline that currently blocks a disposable local Supabase reset and Auth/PostgREST/RLS behavior tests.
 
 `expo install --check` currently reports two pre-existing patch drifts: `expo` 54.0.34 versus expected 54.0.35 and `expo-font` 14.0.11 versus expected 14.0.12. They are recorded for the dependency-maintenance batch rather than being mixed into this verification-foundation change.
 

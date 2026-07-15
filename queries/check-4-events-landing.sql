@@ -1,3 +1,6 @@
+set session characteristics as transaction read only;
+set transaction read only;
+
 -- CHECK 4 — are both auth paths producing events?
 -- First do ONE signed-in action and ONE signed-out (guest) action in the app/web,
 -- then run this.

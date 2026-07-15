@@ -1,3 +1,6 @@
+set session characteristics as transaction read only;
+set transaction read only;
+
 -- GraveStory — analytics & monetization queries
 -- Paste any of these into the Supabase SQL editor. Read-only (no writes).
 -- Requires migration 008_analytics_events.sql to be run first for the funnel queries.

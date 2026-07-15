@@ -40,7 +40,7 @@ changes, recording, sending emails, granting access). Total: roughly one focused
 **Passive + response readiness (same day)**
 
 - [ ] **[OWNER-ONLY]** Submit the AlternativeTo listing + 3 "suggest an alternative" anchors — checklist in `directory-listings.md` §4 — **~15 min**
-- [ ] Have the "yes" flow staged: `followup-templates.md` template 4 within the hour of any yes, then the `reviewer-onepager.md` package, then **[OWNER-ONLY]** grant `is_unlimited` (SQL in CLAUDE.md, Freemium section) as soon as their sign-in email arrives — **seconds when it fires**
+- [ ] Have the "yes" flow staged: `followup-templates.md` template 4 within the hour of any yes, then the `reviewer-onepager.md` package, then **[OWNER-ONLY]** use the approval-gated `tools/tester-access.mjs` runbook for the exact signed-in user UUID.
 
 **Weeks 3–6 (respond, don't chase)**
 

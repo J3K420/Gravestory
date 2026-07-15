@@ -1,3 +1,6 @@
+set session characteristics as transaction read only;
+set transaction read only;
+
 -- CHECK 2 — exactly one INSERT policy, no SELECT/UPDATE/DELETE
 -- Expected: one row, cmd = INSERT. Any SELECT/UPDATE/DELETE row = misconfig
 -- (clients could read or alter events).

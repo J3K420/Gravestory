@@ -14,16 +14,18 @@
 // jumps, you notice. No wallpaper.
 //
 // Usage:
-//   node tools/metrics-digest/digest.mjs            # last 24h vs the prior 24h
-//   node tools/metrics-digest/digest.mjs --hours 168   # last 7 days
-//   node tools/metrics-digest/digest.mjs --json     # machine-readable (for piping)
+//   node tools/metrics-digest/digest.mjs --target local --confirm local-read
+//   node tools/metrics-digest/digest.mjs --target production --confirm production-read --hours 168
+//   node tools/metrics-digest/digest.mjs --target production --confirm production-read --json
 //
-// Setup: copy .env.example -> .env, paste the service-role key. See README.md.
+// Setup: copy .env.example -> .env, paste the selected target's inputs. See README.md.
+// @database-operation metrics-digest
 
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { resolveDigestTarget, resolveDigestWindow } from './target.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -49,25 +51,23 @@ function loadEnv() {
 }
 loadEnv();
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://idbrjonofqrsykqsqpwo.supabase.co';
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!SERVICE_KEY) {
-  console.error('\n  ✗ Missing SUPABASE_SERVICE_ROLE_KEY.');
-  console.error('    Copy tools/metrics-digest/.env.example -> .env and paste the key.');
-  console.error('    Find it: Supabase dashboard → Project Settings → API → service_role.\n');
+const args = process.argv.slice(2);
+let selectedTarget;
+let windowHours;
+try {
+  selectedTarget = resolveDigestTarget(args, process.env);
+  windowHours = resolveDigestWindow(args);
+} catch (error) {
+  console.error(`\n  ✗ ${error.message}`);
+  console.error('    Local:      node digest.mjs --target local --confirm local-read');
+  console.error('    Production: node digest.mjs --target production --confirm production-read');
   process.exit(1);
 }
+const { target: TARGET, url: SUPABASE_URL, serviceKey: SERVICE_KEY } = selectedTarget;
 
 // ── Args ───────────────────────────────────────────────────────────
-const args = process.argv.slice(2);
 const asJson = args.includes('--json');
-const hoursArg = args.indexOf('--hours');
-const WINDOW_HOURS = hoursArg !== -1 ? Number(args[hoursArg + 1]) : 24;
-if (!Number.isFinite(WINDOW_HOURS) || WINDOW_HOURS <= 0) {
-  console.error('  ✗ --hours must be a positive number.');
-  process.exit(1);
-}
+const WINDOW_HOURS = windowHours;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -183,6 +183,7 @@ async function main() {
   const signedStarts = started - guestStarts;
 
   const report = {
+    target: TARGET,
     window_hours: WINDOW_HOURS,
     generated_at: new Date(now).toISOString(),
     funnel: { started, ocr, bio, saved, madePublic, limitHit, errors, cacheHit },
@@ -224,7 +225,7 @@ async function main() {
   const L = [];
   const win = WINDOW_HOURS === 24 ? 'last 24h' : `last ${WINDOW_HOURS}h`;
   L.push('');
-  L.push(`  GRAVESTORY — metrics digest (${win})`);
+  L.push(`  GRAVESTORY — metrics digest (${win}; target=${TARGET})`);
   L.push(`  ${new Date(now).toLocaleString()}`);
   L.push('  ' + '─'.repeat(54));
 

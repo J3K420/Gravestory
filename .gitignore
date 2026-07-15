@@ -7,6 +7,13 @@ worker/.wrangler/
 tools/metrics-digest/.env
 tools/metrics-digest/node_modules/
 tools/eas-cli/node_modules/
+tools/supabase-cli/node_modules/
+
+# Supabase CLI local-only state and generated migration mirror.
+supabase/.branches/
+supabase/.temp/
+supabase/.database-control.lock*
+supabase/migrations/
 
 # FourThought predictions are branch-local operational state.
 tools/fourthought/

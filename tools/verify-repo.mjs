@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { loadDatabaseCatalog, validateDatabaseControl } from './database-control.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -18,6 +19,7 @@ export const TOOLCHAIN = Object.freeze({
   typescript: '5.9.3',
   wrangler: '4.110.0',
   supabaseBrowser: '2.110.5',
+  supabaseCli: '2.101.0',
 });
 
 export const REQUIRED_PAGES_ASSETS = Object.freeze([
@@ -295,6 +297,9 @@ function validateContracts() {
     if (pkg.devDependencies?.['@expo/eas-json'] !== TOOLCHAIN.easJson) fail(`tools/eas-cli must pin @expo/eas-json ${TOOLCHAIN.easJson}`);
     if (pkg.devDependencies?.typescript !== TOOLCHAIN.typescript) fail(`tools/eas-cli must pin TypeScript ${TOOLCHAIN.typescript}`);
   });
+  validatePackage(join(ROOT, 'tools', 'supabase-cli', 'package.json'), (pkg) => {
+    if (pkg.devDependencies?.supabase !== TOOLCHAIN.supabaseCli) fail(`tools/supabase-cli must pin Supabase CLI ${TOOLCHAIN.supabaseCli}`);
+  });
 
   const eas = readJson(join(ROOT, 'mobile', 'eas.json'));
   if (eas.cli?.version !== TOOLCHAIN.eas) fail(`mobile/eas.json must require eas-cli ${TOOLCHAIN.eas}`);
@@ -318,6 +323,7 @@ function validateContracts() {
   ];
   const emptySql = allSql.filter((path) => !readText(path).trim());
   if (emptySql.length) fail(`Empty SQL files: ${emptySql.map((path) => relative(ROOT, path)).join(', ')}`);
+  validateDatabaseControl(ROOT, loadDatabaseCatalog(join(ROOT, 'database', 'catalog.json')));
   return pagesAssets;
 }
 
@@ -357,11 +363,15 @@ function runVerification(install) {
     }
   });
 
-  run(process.execPath, ['--test', join(ROOT, 'tools', 'tests', 'verify-repo.test.mjs')]);
+  run(process.execPath, ['--test',
+    join(ROOT, 'tools', 'tests', 'verify-repo.test.mjs'),
+    join(ROOT, 'tools', 'tests', 'database-control.test.mjs'),
+    join(ROOT, 'tools', 'tests', 'tester-access.test.mjs'),
+  ]);
   run(python, ['-m', 'unittest', 'discover', '-s', '_bmad/scripts/tests', '-p', 'test_*.py', '-v']);
 
   if (install) {
-    for (const directory of ['mobile', 'worker', 'tools/metrics-digest', 'tools/eas-cli']) {
+    for (const directory of ['mobile', 'worker', 'tools/metrics-digest', 'tools/eas-cli', 'tools/supabase-cli']) {
       runNpm(['ci'], { cwd: join(ROOT, directory) });
     }
     const mobileEnv = {
@@ -381,6 +391,7 @@ function runVerification(install) {
     });
     runNpm(['run', 'verify'], { cwd: join(ROOT, 'tools', 'metrics-digest'), capture: true });
     runNpm(['run', 'verify'], { cwd: join(ROOT, 'tools', 'eas-cli'), capture: true });
+    runNpm(['run', 'verify'], { cwd: join(ROOT, 'tools', 'supabase-cli'), capture: true });
   }
 }
 

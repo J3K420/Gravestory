@@ -1,3 +1,6 @@
+set session characteristics as transaction read only;
+set transaction read only;
+
 -- AUDIT — for every public table: is RLS enabled, and how many policies guard it?
 -- This is the real safety check. Broad anon/authenticated GRANTs (which this
 -- project hands out by default) are only safe if RLS is ENABLED and a policy

@@ -1,0 +1,15 @@
+{
+  "name": "gravestory-supabase-cli",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "22.13.1"
+  },
+  "packageManager": "npm@10.9.2",
+  "scripts": {
+    "verify": "supabase --version"
+  },
+  "devDependencies": {
+    "supabase": "2.101.0"
+  }
+}

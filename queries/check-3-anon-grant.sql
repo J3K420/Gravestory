@@ -1,3 +1,6 @@
+set session characteristics as transaction read only;
+set transaction read only;
+
 -- CHECK 3 — does the anon role have table-level INSERT?
 -- Without it, GUEST (signed-out) events are silently rejected even though the
 -- RLS policy permits NULL user_id.

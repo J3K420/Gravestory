@@ -92,7 +92,7 @@
 
 - [ ] Replace `[YOUR NAME]` / `[YOUR EMAIL]` in each.
 - [ ] Verify the Family Tree Magazine address on their live contact page (~1 min — see `outreach-contacts.md`).
-- [ ] Have `is_unlimited` ready to grant the moment a reviewer bites (SQL in CLAUDE.md / `reference-play-reviewer-test-account`).
+- [ ] Have the approved `tools/tester-access.mjs` workflow ready for the exact reviewer UUID (`docs/database-change-control.md#tester-access`).
 - [ ] Optional but high-leverage: attach or link a 30-45s scan→story demo clip (esp. for Genealogy TV — she asked for a filmable idea). See `gtm-strategy.md` roadmap Weeks 1-2.
 - [ ] Space the sends; don't blast all three same-hour. Eastman first (fastest signal).
 

@@ -165,7 +165,7 @@ test('Worker service, binding, bucket, handles, and runtime inventory are evalua
 test('Worker runtime coverage, feature mappings, entrypoint type, and TOML scopes fail closed', (t) => {
   const requiredRoot = fixture(t);
   const requiredPath = join(requiredRoot, 'worker/config.js');
-  writeFileSync(requiredPath, readFileSync(requiredPath, 'utf8').replace("  'SCAN_TOKEN_SECRET',\n", ''));
+  writeFileSync(requiredPath, readFileSync(requiredPath, 'utf8').replace(/  'SCAN_TOKEN_SECRET',\r?\n/, ''));
   assert.throws(() => buildDeployConfigAttestation(requiredRoot, 'worker'), /must exactly enumerate every required runtime input/);
 
   const featureRoot = fixture(t);

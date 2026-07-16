@@ -15,6 +15,7 @@ const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-
 const CANONICAL_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const RETIREMENT_EVIDENCE = Object.freeze(['adoption-telemetry', 'enforced-version', 'installed-client-verification']);
 const ATTESTATION_KEYS = Object.freeze(['schemaVersion', 'kind', 'component', 'identity', 'validation', 'remotePresence', 'compatibilityGenerationIds', 'remoteEvidence', 'remoteEvidenceSha256']);
+const FATAL_UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 function fail(key, rule) {
   throw new Error(`${key}: ${rule}`);
@@ -22,11 +23,12 @@ function fail(key, rule) {
 
 function readText(path, key = path) {
   if (!existsSync(path) || !statSync(path).isFile()) fail(key, 'required file is missing');
-  return readFileSync(path, 'utf8');
+  try { return FATAL_UTF8.decode(readFileSync(path)); } catch { fail(key, 'must be valid UTF-8 text'); }
 }
 
 function readJson(path, key = path) {
-  try { return JSON.parse(readText(path, key)); } catch (error) { fail(key, `invalid JSON (${error.message})`); }
+  const text = readText(path, key);
+  try { return JSON.parse(text); } catch (error) { fail(key, `invalid JSON (${error.message})`); }
 }
 
 function assertObject(value, key) {
@@ -487,16 +489,25 @@ export function calculateDeployConfigIdentity(root, component, model = loadModel
   if (!RELEASE_COMPONENTS.includes(component)) fail('component', 'must be pages, mobile, worker, or database');
   const contractEntry = model.contract.components[component];
   const sourcePaths = [...new Set([...contractEntry.resources.map((resource) => resource.source), ...(contractEntry.compatibilitySources ?? [])])].sort();
-  const generations = expectedGenerationIds(component, model.compatibility).map((id) => model.compatibility.generations.find((item) => item.id === id));
+  const coversEveryClient = component === 'worker' || component === 'database';
+  const generations = model.compatibility.generations.filter((item) => coversEveryClient || item.component === component);
+  const generationIds = new Set(generations.map((item) => item.id));
+  const compatibility = {
+    schemaVersion: model.compatibility.schemaVersion,
+    retirementPolicy: model.compatibility.retirementPolicy,
+    currentGenerations: coversEveryClient
+      ? model.compatibility.currentGenerations
+      : { [component]: model.compatibility.currentGenerations[component] },
+    generations,
+    retirements: model.compatibility.retirements.filter((item) => generationIds.has(item.generationId)),
+  };
   const payload = {
     schemaVersion: 1,
     component,
     contract: contractEntry,
     configuration: model.configs[component],
-    compatibility: generations,
+    compatibility,
     sourceHashes: Object.fromEntries(sourcePaths.map((path) => [path, portableSourceHash(join(root, path), path)])),
-    contractHash: portableSourceHash(join(root, 'deploy', 'config', 'contract.json'), 'deploy/config/contract.json'),
-    compatibilityHash: portableSourceHash(join(root, 'deploy', 'config', 'compatibility.json'), 'deploy/config/compatibility.json'),
   };
   return sha256(canonicalJson(payload));
 }

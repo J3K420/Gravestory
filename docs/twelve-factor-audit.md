@@ -137,6 +137,8 @@ Evidence:
 
 Required outcome: add non-deploying preflight tooling and a two-phase append-only record. Preflight emits an immutable candidate tied to reviewed source, configuration identity, migration state, and current rollback baseline. After an explicitly approved release, finalization writes a new immutable record referencing the candidate and the returned platform or database execution evidence; it never edits the candidate. Run remains platform-managed.
 
+Implementation status (2026-07-15): repository-local provenance tooling, component genesis metadata, canonical record hashes, serialized execution-intent leases, baseline revalidation, and immutable final/abandon records are implemented in `tools/release-control.mjs`, `release/baselines.json`, and `docs/release-provenance.md`. No platform action is invoked. Ordinary Pages and Worker eligibility remains blocked because their preceding rollback releases are not recorded; database eligibility remains blocked on unverified live state and the missing pre-001 baseline. Candidate configuration authority also remains fail-closed until Batch 04 supplies the deploy-config contract rather than accepting ad-hoc identity.
+
 ### VI. Processes — compliant for server execution; client exception documented
 
 Evidence:

@@ -2,6 +2,8 @@
 
 GraveStory uses one repository verification entry point for the static web app, Expo app, Cloudflare Worker, SQL assets, local tooling, and BMad workflow tests. It is intentionally non-production: it does not deploy, contact Supabase, write data, read application secrets, publish an Expo update, or mutate Cloudflare resources.
 
+Release candidates, execution leases, and append-only deployment evidence are governed by [`release-provenance.md`](release-provenance.md). `node tools/release-control.mjs validate` is non-deploying and is included in the repository verifier.
+
 ## Supported toolchain
 
 - Node.js 22.13.1 (`.nvmrc` and each Node package's `engines` field)

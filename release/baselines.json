@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "contentHash": "3ebb7fc8ab0a5ff98cea0148a7172c7d40ca26e621673d2d7068dbe7996f4ff9",
+  "components": {
+    "pages": {
+      "baselineId": "baseline-pages-20260713-62c7fbe9",
+      "releaseId": "62c7fbe9.gravestory.pages.dev",
+      "sourceCommit": "e97b215dde4d566f194e325c6e7e583371d45c30",
+      "basis": "repository-evidence",
+      "evidencePath": "docs/cloudflare-pages-cutover.md",
+      "cacheVersion": 69,
+      "rollback": { "status": "unknown", "releaseId": null },
+      "ordinaryEligibility": "blocked-no-known-rollback"
+    },
+    "worker": {
+      "baselineId": "baseline-worker-20260713-4a01f4da",
+      "releaseId": "4a01f4da-8cd9-48de-9478-f65ad47b3f8f",
+      "sourceCommit": "e97b215dde4d566f194e325c6e7e583371d45c30",
+      "basis": "repository-evidence",
+      "evidencePath": "docs/cloudflare-pages-cutover.md",
+      "rollback": { "status": "unknown", "releaseId": null },
+      "ordinaryEligibility": "blocked-no-known-rollback"
+    },
+    "mobile": {
+      "baselineId": "baseline-mobile-android-20260713-a405b5dc",
+      "releaseId": "a405b5dc-2f30-4cc8-983d-855bce3a0673",
+      "sourceCommit": "c1697cfd5374ba7d8615f51d9bd80f35f793f606",
+      "basis": "repository-evidence",
+      "evidencePath": "docs/cloudflare-pages-cutover.md",
+      "runtime": "exposdk:54.0.0",
+      "channel": "production",
+      "platform": "android",
+      "rollback": {
+        "status": "known",
+        "releaseId": "e713a050-d620-4bd0-aaf7-9c0a486f86c0"
+      },
+      "ordinaryEligibility": "eligible"
+    },
+    "database": {
+      "baselineId": "baseline-database-unresolved-pre001",
+      "releaseId": null,
+      "sourceCommit": null,
+      "basis": "repository-intended-only",
+      "evidencePath": "database/catalog.json",
+      "rollback": { "status": "unknown", "releaseId": null },
+      "ordinaryEligibility": "blocked-unverified-live-state"
+    }
+  }
+}

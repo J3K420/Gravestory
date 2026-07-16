@@ -112,6 +112,8 @@ Evidence:
 
 Required outcome: define granular required/optional values for each unit, fail closed for missing security controls, validate release configuration without printing values, and centralize deploy-varying public handles at the boundary of each unit.
 
+Implementation status (2026-07-16): `deploy/config/contract.json`, the component attestations, and `tools/deploy-config.mjs` now validate the public, secret-name, and binding contract without printing supplied values. Static web resolves one versioned no-build boundary; Expo resolves public substitutions through `app.config.js`/`extra`; Worker, database, and metrics inputs remain environment/binding injected. Remote presence is explicitly unverified rather than inferred.
+
 ### IV. Backing services — partial
 
 Evidence:
@@ -124,6 +126,8 @@ Evidence:
 - Stable provider API paths are application code; per-deploy credentials, project/bucket identifiers, and replaceable resource locators are configuration.
 
 Required outcome: document every attached resource, its locator source, credential class, owner, and validation rule. Make deploy-specific handles replaceable through that unit's release configuration while retaining public-by-design identifiers in distributable artifacts.
+
+Implementation status (2026-07-16): `docs/deploy-configuration.md` inventories each attachment and `deploy/config/compatibility.json` preserves locators for cached web and installed mobile generations. Retirement requires allowed evidence plus owner approval; repository checks fail when a required legacy browser origin or supported-generation locator is dropped.
 
 ### V. Build, release, run — partial; major operational gap
 

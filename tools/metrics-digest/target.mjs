@@ -1,9 +1,9 @@
-const CONFIRMATIONS = Object.freeze({
+export const DIGEST_CONFIRMATIONS = Object.freeze({
   local: 'local-read',
   production: 'production-read',
 });
 
-const TARGET_INPUTS = Object.freeze({
+export const DIGEST_TARGET_INPUTS = Object.freeze({
   local: {
     url: 'SUPABASE_LOCAL_URL',
     key: 'SUPABASE_LOCAL_SERVICE_ROLE_KEY',
@@ -36,23 +36,24 @@ function exactOrigin(raw, protocol) {
 
 function requireCredential(env, name) {
   const value = env[name];
-  if (typeof value !== 'string' || !value.trim() || value.startsWith('paste-')) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed || trimmed !== value || /(?:^|[-_<])(?:paste|placeholder|replace|change|changeme|your|todo|tbd|insert)(?:$|[-_>:])/i.test(trimmed)) {
     throw new Error(`Missing ${name} for the selected target`);
   }
-  return value;
+  return trimmed;
 }
 
 export function resolveDigestTarget(args, env) {
   const target = valueAfter(args, '--target');
-  if (!Object.hasOwn(CONFIRMATIONS, target)) {
+  if (!Object.hasOwn(DIGEST_CONFIRMATIONS, target)) {
     throw new Error('--target must be explicitly set to local or production');
   }
   const confirmation = valueAfter(args, '--confirm');
-  if (confirmation !== CONFIRMATIONS[target]) {
-    throw new Error(`--target ${target} requires --confirm ${CONFIRMATIONS[target]}`);
+  if (confirmation !== DIGEST_CONFIRMATIONS[target]) {
+    throw new Error(`--target ${target} requires --confirm ${DIGEST_CONFIRMATIONS[target]}`);
   }
 
-  const inputs = TARGET_INPUTS[target];
+  const inputs = DIGEST_TARGET_INPUTS[target];
   let url;
   if (target === 'local') {
     url = env[inputs.url] || 'http://127.0.0.1:54321';

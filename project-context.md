@@ -113,7 +113,7 @@ Stories fetched from the community global map have `_isGlobal: true`. This contr
 - Do not add TypeScript, bundlers, or npm to the web codebase
 - Do not use ES module `import`/`export` in web JS files
 - Do not call Gemini, Tavily, or WikiTree directly from the client (all go through the Worker proxy)
-- Do not add the Cloudflare Worker URL as a hardcoded string anywhere except `js/config.js` and `mobile/src/lib/config.js` — use `PROXY_BASE`
+- Do not add the Cloudflare Worker URL as a hardcoded string anywhere except the deploy boundaries in `js/config.js` and `mobile/app.config.js` — application modules use `PROXY_BASE`
 - Do not add boundary polygon drawing to the mobile cemetery map (was removed — Nominatim polygon_geojson produced wrong boundaries)
 - Do not use `<Callout>` from react-native-maps for custom content (touch events silently broken on Android — use state-driven floating overlay instead)
 - Do not use `tracksViewChanges={false}` unconditionally on mobile map markers (SVG won't render)
@@ -126,7 +126,7 @@ Stories fetched from the community global map have `_isGlobal: true`. This contr
 
 | Target | Command |
 |---|---|
-| Web | Stage the 22-file allowlisted bundle, then `npx wrangler pages deploy <staging-dir> --project-name gravestory` (manual Direct Upload; see `docs/cloudflare-pages-cutover.md`) |
+| Web | Stage the 22-file allowlisted bundle, resolve the project with `node tools/deploy-config.mjs pages-project-name`, then pass that exact value to `npx wrangler pages deploy <staging-dir> --project-name <resolved-project>` (manual Direct Upload; see `docs/cloudflare-pages-cutover.md`) |
 | Worker | `cd worker && wrangler deploy` |
 | Mobile preview APK | `npx eas build --platform android --profile preview` |
 | Mobile phase-9 test build | `npx eas build --platform android --profile phase9` |

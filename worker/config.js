@@ -22,19 +22,24 @@ export const WORKER_CONFIG_CONTRACT = Object.freeze([
   { name: 'GCLOUD_LAST_SPEND', kind: 'var', requirement: 'optional', features: ['admin-gcloud'], sensitive: false },
 ]);
 
-const REQUIRED_PRODUCTION = Object.freeze([
+export const WORKER_REQUIRED_PRODUCTION = Object.freeze([
+  'WORKER_ENV',
+  'ALLOWED_ORIGIN',
   'CLIENT_KEY',
+  'SCAN_TOKEN_ENFORCE',
   'SCAN_TOKEN_SECRET',
   'SUPABASE_URL',
   'SUPABASE_SERVICE_KEY',
 ]);
 
-const FEATURE_REQUIREMENTS = Object.freeze({
+export const WORKER_FEATURE_REQUIREMENTS = Object.freeze({
   gemini: ['GEMINI_KEY'],
   tavily: ['TAVILY_KEY'],
   'image-storage': ['IMAGES', 'R2_PUBLIC_URL'],
   'admin-metrics': ['ADMIN_KEY'],
   'revenuecat-webhook': ['REVENUECAT_WEBHOOK_SECRET'],
+  'admin-revenuecat': ['REVENUECAT_SECRET_KEY'],
+  'admin-gcloud': ['GCP_SA_EMAIL', 'GCP_SA_PRIVATE_KEY', 'GCP_PROJECT_ID', 'GCP_BILLING_TABLE'],
 });
 
 const MIN_INDEPENDENT_SECRET_BYTES = 32;
@@ -91,7 +96,7 @@ export function validateWorkerConfig(env, { allowLocal = false } = {}) {
   }
 
   if (!localMode) {
-    for (const key of REQUIRED_PRODUCTION) {
+    for (const key of WORKER_REQUIRED_PRODUCTION) {
       if (!hasStringValue(env[key])) errors.push(issue(key, 'must be a non-empty string in production'));
     }
     if (hasStringValue(env.SCAN_TOKEN_SECRET) && env.SCAN_TOKEN_SECRET.trim() !== env.SCAN_TOKEN_SECRET) {
@@ -109,7 +114,7 @@ export function validateWorkerConfig(env, { allowLocal = false } = {}) {
 }
 
 export function validateWorkerFeature(env, feature) {
-  const required = FEATURE_REQUIREMENTS[feature] ?? [];
+  const required = WORKER_FEATURE_REQUIREMENTS[feature] ?? [];
   const errors = required
     .filter((key) => key !== 'IMAGES' && !hasStringValue(env[key]))
     .map((key) => issue(key, `must be a non-empty string for ${feature}`));

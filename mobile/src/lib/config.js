@@ -1,11 +1,23 @@
 import Constants from 'expo-constants';
 
-export const PROXY_BASE = 'https://gravestory-proxy.james-gravestory.workers.dev';
+const deployConfig = Constants.expoConfig?.extra?.deployConfig;
+
+function requiredPublicConfig(name) {
+  const value = deployConfig?.[name];
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`Missing public deploy configuration: ${name}`);
+  }
+  return value;
+}
+
+export const PROXY_BASE = requiredPublicConfig('workerOrigin');
+export const SUPABASE_URL = requiredPublicConfig('supabaseOrigin');
+export const SUPABASE_ANON_KEY = requiredPublicConfig('supabaseAnonKey');
 
 // Shared client key sent as X-Client-Key on all proxy requests.
 // Not a true secret (in client source) but blocks casual direct API abuse.
 // Rotate by updating here + `wrangler secret put CLIENT_KEY`.
-export const CLIENT_KEY = 'gs-client-2025';
+export const CLIENT_KEY = requiredPublicConfig('clientKey');
 // RevenueCat Android (Google) SDK key.
 //
 // The production key is NEVER committed here. It is provided as an EAS env var

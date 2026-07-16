@@ -7,6 +7,7 @@ import { basename, delimiter, dirname, isAbsolute, join, relative, resolve } fro
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { loadDatabaseCatalog, validateDatabaseControl } from './database-control.mjs';
+import { validateReleaseRepository } from './release-control.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -324,6 +325,7 @@ function validateContracts() {
   const emptySql = allSql.filter((path) => !readText(path).trim());
   if (emptySql.length) fail(`Empty SQL files: ${emptySql.map((path) => relative(ROOT, path)).join(', ')}`);
   validateDatabaseControl(ROOT, loadDatabaseCatalog(join(ROOT, 'database', 'catalog.json')));
+  validateReleaseRepository(ROOT);
   return pagesAssets;
 }
 
@@ -367,6 +369,7 @@ function runVerification(install) {
     join(ROOT, 'tools', 'tests', 'verify-repo.test.mjs'),
     join(ROOT, 'tools', 'tests', 'database-control.test.mjs'),
     join(ROOT, 'tools', 'tests', 'tester-access.test.mjs'),
+    join(ROOT, 'tools', 'tests', 'release-control.test.mjs'),
   ]);
   run(python, ['-m', 'unittest', 'discover', '-s', '_bmad/scripts/tests', '-p', 'test_*.py', '-v']);
 

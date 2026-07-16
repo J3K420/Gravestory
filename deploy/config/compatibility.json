@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "retirementPolicy": {
+    "ownerApprovalRequired": true,
+    "allowedEvidence": ["adoption-telemetry", "enforced-version", "installed-client-verification"]
+  },
+  "currentGenerations": {
+    "pages": "pages-cache-v72-source",
+    "mobile": "mobile-android-v16-source"
+  },
+  "generations": [
+    {
+      "id": "pages-cache-v69-live",
+      "component": "pages",
+      "browserOrigins": ["https://gravestory.pages.dev", "https://j3k420.github.io"],
+      "locators": {
+        "siteOrigin": "https://gravestory.pages.dev",
+        "workerOrigin": "https://gravestory-proxy.james-gravestory.workers.dev",
+        "supabaseOrigin": "https://idbrjonofqrsykqsqpwo.supabase.co",
+        "clientKeySha256": "8f89e33b52bca971025d6b169d842f86fee5c194bb4e278086a802043c92150a",
+        "supabaseAnonKeySha256": "f83716855d4447999fe422a2da9c39ae24805fc5588056cf93e142fa13e830ec",
+        "serviceWorkerCacheId": "gravestory-v69"
+      }
+    },
+    {
+      "id": "pages-cache-v70-source",
+      "component": "pages",
+      "browserOrigins": ["https://gravestory.pages.dev", "https://j3k420.github.io"],
+      "locators": {
+        "siteOrigin": "https://gravestory.pages.dev",
+        "workerOrigin": "https://gravestory-proxy.james-gravestory.workers.dev",
+        "supabaseOrigin": "https://idbrjonofqrsykqsqpwo.supabase.co",
+        "clientKeySha256": "8f89e33b52bca971025d6b169d842f86fee5c194bb4e278086a802043c92150a",
+        "supabaseAnonKeySha256": "f83716855d4447999fe422a2da9c39ae24805fc5588056cf93e142fa13e830ec",
+        "serviceWorkerCacheId": "gravestory-v70-163335005418"
+      }
+    },
+    {
+      "id": "pages-cache-v72-source",
+      "component": "pages",
+      "browserOrigins": ["https://gravestory.pages.dev", "https://j3k420.github.io"],
+      "locators": {
+        "siteOrigin": "https://gravestory.pages.dev",
+        "workerOrigin": "https://gravestory-proxy.james-gravestory.workers.dev",
+        "supabaseOrigin": "https://idbrjonofqrsykqsqpwo.supabase.co",
+        "clientKeySha256": "8f89e33b52bca971025d6b169d842f86fee5c194bb4e278086a802043c92150a",
+        "supabaseAnonKeySha256": "f83716855d4447999fe422a2da9c39ae24805fc5588056cf93e142fa13e830ec",
+        "serviceWorkerCacheId": "gravestory-v72-f36d9e62c920"
+      }
+    },
+    {
+      "id": "mobile-android-v15-production-a405b5dc",
+      "component": "mobile",
+      "browserOrigins": [],
+      "locators": {
+        "workerOrigin": "https://gravestory-proxy.james-gravestory.workers.dev",
+        "supabaseOrigin": "https://idbrjonofqrsykqsqpwo.supabase.co",
+        "clientKeySha256": "8f89e33b52bca971025d6b169d842f86fee5c194bb4e278086a802043c92150a",
+        "supabaseAnonKeySha256": "f83716855d4447999fe422a2da9c39ae24805fc5588056cf93e142fa13e830ec",
+        "updatesUrl": "https://u.expo.dev/f26f7a8b-2c63-4a68-bb44-903d7ed01b30",
+        "easProjectId": "f26f7a8b-2c63-4a68-bb44-903d7ed01b30",
+        "versionCode": 15,
+        "revenueCatSdkKeyIdentity": "remote-unverified",
+        "googleMapsSdkKeyIdentity": "remote-unverified"
+      }
+    },
+    {
+      "id": "mobile-android-v16-source",
+      "component": "mobile",
+      "browserOrigins": [],
+      "locators": {
+        "workerOrigin": "https://gravestory-proxy.james-gravestory.workers.dev",
+        "supabaseOrigin": "https://idbrjonofqrsykqsqpwo.supabase.co",
+        "clientKeySha256": "8f89e33b52bca971025d6b169d842f86fee5c194bb4e278086a802043c92150a",
+        "supabaseAnonKeySha256": "f83716855d4447999fe422a2da9c39ae24805fc5588056cf93e142fa13e830ec",
+        "updatesUrl": "https://u.expo.dev/f26f7a8b-2c63-4a68-bb44-903d7ed01b30",
+        "easProjectId": "f26f7a8b-2c63-4a68-bb44-903d7ed01b30",
+        "versionCode": 16,
+        "revenueCatSdkKeyIdentity": "remote-unverified",
+        "googleMapsSdkKeyIdentity": "remote-unverified"
+      }
+    }
+  ],
+  "retirements": []
+}

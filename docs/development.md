@@ -4,6 +4,8 @@ GraveStory uses one repository verification entry point for the static web app, 
 
 Release candidates, execution leases, and append-only deployment evidence are governed by [`release-provenance.md`](release-provenance.md). `node tools/release-control.mjs validate` is non-deploying and is included in the repository verifier.
 
+Deploy-varying public handles, secret/binding names, attached-resource ownership, installed-client compatibility, and source-bound release attestations are governed by [`deploy-configuration.md`](deploy-configuration.md). `node tools/deploy-config.mjs validate` is also local-only and included in repository verification; remote presence remains explicitly `unverified` unless a separately approved versioned observation is committed.
+
 ## Supported toolchain
 
 - Node.js 22.13.1 (`.nvmrc` and each Node package's `engines` field)
@@ -25,6 +27,8 @@ node tools/verify-repo.mjs --install
 ```
 
 The command performs clean `npm ci` installs from all committed lockfiles, resolves the public Expo config with build-time keys removed, creates and removes a local Android Expo export to compile the mobile source, validates `eas.json` with EAS CLI's bundled parser, performs a Wrangler dry run with telemetry disabled, checks static and inline JavaScript syntax, validates the Cloudflare Pages manifest and fingerprinted database catalog, confirms the pinned Supabase CLI binary, and runs the Node and BMad tests. Sensitive environment variables are removed from child processes. These checks run offline after dependency installation; neither the Expo export nor Wrangler's `--dry-run` deploys anything.
+
+The same command validates all four deploy-config attestations, rejects unsupported installed-client locator retirement, and confirms the release-provenance verifier can reproduce configuration authority from the candidate source revision.
 
 The default verifier does not start Docker or claim database parity. `docs/database-change-control.md` records the missing pre-001 `stories` baseline that currently blocks a disposable local Supabase reset and Auth/PostgREST/RLS behavior tests.
 

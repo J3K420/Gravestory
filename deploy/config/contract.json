@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "components": {
+    "pages": {
+      "owner": "web release owner",
+      "boundary": "js/config.js",
+      "compatibilitySources": ["js/auth.js"],
+      "resources": [
+        { "id": "pages-project", "name": "projectName", "kind": "public-identifier", "requirement": "required", "source": "deploy/config/pages-target.json", "owner": "Cloudflare Pages owner", "sensitive": false, "validation": "non-placeholder" },
+        { "id": "site-origin", "name": "canonicalSiteOrigin", "kind": "public-locator", "requirement": "required", "source": "index.html", "owner": "Cloudflare Pages owner", "sensitive": false, "validation": "exact-https-origin" },
+        { "id": "worker-origin", "name": "workerOrigin", "kind": "public-locator", "requirement": "required", "source": "js/config.js", "owner": "Worker release owner", "sensitive": false, "validation": "exact-https-origin" },
+        { "id": "supabase-origin", "name": "supabaseOrigin", "kind": "public-locator", "requirement": "required", "source": "js/config.js", "owner": "database owner", "sensitive": false, "validation": "exact-https-origin" },
+        { "id": "supabase-anon-key", "name": "supabaseAnonKey", "kind": "public-identifier", "requirement": "required", "source": "js/config.js", "owner": "database owner", "sensitive": false, "validation": "non-placeholder" },
+        { "id": "client-key", "name": "clientKey", "kind": "public-identifier", "requirement": "required", "source": "js/config.js", "owner": "Worker release owner", "sensitive": false, "validation": "non-placeholder" },
+        { "id": "service-worker-cache", "name": "serviceWorkerCacheId", "kind": "public-identifier", "requirement": "required", "source": "sw.js", "owner": "web release owner", "sensitive": false, "validation": "non-placeholder" }
+      ]
+    },
+    "mobile": {
+      "owner": "mobile release owner",
+      "boundary": "mobile/app.config.js",
+      "resources": [
+        { "id": "worker-origin", "name": "workerOrigin", "kind": "public-locator", "requirement": "required", "source": "mobile/app.config.js", "owner": "Worker release owner", "sensitive": false, "validation": "exact-https-origin" },
+        { "id": "supabase-origin", "name": "supabaseOrigin", "kind": "public-locator", "requirement": "required", "source": "mobile/app.config.js", "owner": "database owner", "sensitive": false, "validation": "exact-https-origin" },
+        { "id": "supabase-anon-key", "name": "supabaseAnonKey", "kind": "public-identifier", "requirement": "required", "source": "mobile/app.config.js", "owner": "database owner", "sensitive": false, "validation": "non-placeholder" },
+        { "id": "client-key", "name": "clientKey", "kind": "public-identifier", "requirement": "required", "source": "mobile/app.config.js", "owner": "Worker release owner", "sensitive": false, "validation": "non-placeholder" },
+        { "id": "updates-url", "name": "expo.updates.url", "kind": "public-locator", "requirement": "required", "source": "mobile/app.config.js", "owner": "EAS project owner", "sensitive": false, "validation": "exact-https-url" },
+        { "id": "eas-project", "name": "expo.extra.eas.projectId", "kind": "public-identifier", "requirement": "required", "source": "mobile/app.config.js", "owner": "EAS project owner", "sensitive": false, "validation": "uuid" },
+        { "id": "revenuecat-enable", "name": "GRAVESTORY_ENABLE_REVENUECAT", "kind": "config-value", "requirement": "optional", "source": "mobile/app.config.js", "owner": "mobile release owner", "sensitive": false, "validation": "true-or-false-when-supplied" },
+        { "id": "revenuecat-sdk-key", "name": "REVENUECAT_API_KEY", "kind": "public-identifier", "requirement": "feature-gated", "condition": "revenuecat", "source": "mobile/app.config.js", "owner": "RevenueCat owner", "sensitive": false, "validation": "required-non-placeholder-when-enabled" },
+        { "id": "google-maps-enable", "name": "GRAVESTORY_ENABLE_GOOGLE_MAPS", "kind": "config-value", "requirement": "optional", "source": "mobile/app.config.js", "owner": "mobile release owner", "sensitive": false, "validation": "true-or-false-when-supplied" },
+        { "id": "google-maps-sdk-key", "name": "GOOGLE_MAPS_ANDROID_API_KEY", "kind": "public-identifier", "requirement": "feature-gated", "condition": "google-maps", "source": "mobile/app.config.js", "owner": "Google Cloud owner", "sensitive": false, "validation": "required-non-placeholder-when-enabled" }
+      ]
+    },
+    "worker": {
+      "owner": "Worker release owner",
+      "boundary": "worker/wrangler.toml and Wrangler secret/binding injection",
+      "resources": [
+        { "id": "service-name", "name": "name", "kind": "public-identifier", "requirement": "required", "source": "worker/wrangler.toml", "owner": "Cloudflare account owner", "sensitive": false, "validation": "non-placeholder" },
+        { "id": "account-id", "name": "account_id", "kind": "public-identifier", "requirement": "required", "source": "worker/wrangler.toml", "owner": "Cloudflare account owner", "sensitive": false, "validation": "cloudflare-account-id" },
+        { "id": "entrypoint", "name": "main", "kind": "config-value", "requirement": "required", "source": "worker/wrangler.toml", "owner": "Worker release owner", "sensitive": false, "validation": "repository-file" },
+        { "id": "worker-env", "name": "WORKER_ENV", "kind": "config-value", "requirement": "required", "source": "worker/config.js", "owner": "Worker release owner", "sensitive": false, "validation": "worker-config-validator" },
+        { "id": "allowed-origin", "name": "ALLOWED_ORIGIN", "kind": "public-locator", "requirement": "required", "source": "worker/config.js", "owner": "Worker release owner", "sensitive": false, "validation": "worker-config-validator" },
+        { "id": "client-key", "name": "CLIENT_KEY", "kind": "public-identifier", "requirement": "required", "source": "worker/config.js", "owner": "Worker release owner", "sensitive": false, "validation": "public-value-presence-only" },
+        { "id": "scan-token-enforce", "name": "SCAN_TOKEN_ENFORCE", "kind": "config-value", "requirement": "required", "source": "worker/config.js", "owner": "Worker release owner", "sensitive": false, "validation": "worker-config-validator" },
+        { "id": "scan-token-secret", "name": "SCAN_TOKEN_SECRET", "kind": "secret", "requirement": "required", "source": "worker/config.js", "owner": "Cloudflare account owner", "sensitive": true, "validation": "remote-presence-only" },
+        { "id": "supabase-url", "name": "SUPABASE_URL", "kind": "public-locator", "requirement": "required", "source": "worker/config.js", "owner": "database owner", "sensitive": false, "validation": "worker-config-validator" },
+        { "id": "supabase-service-key", "name": "SUPABASE_SERVICE_KEY", "kind": "secret", "requirement": "required", "source": "worker/config.js", "owner": "database owner", "sensitive": true, "validation": "remote-presence-only" },
+        { "id": "gemini-key", "name": "GEMINI_KEY", "kind": "secret", "requirement": "feature-gated", "condition": "gemini", "source": "worker/config.js", "owner": "Google AI owner", "sensitive": true, "validation": "remote-presence-only" },
+        { "id": "tavily-key", "name": "TAVILY_KEY", "kind": "secret", "requirement": "feature-gated", "condition": "tavily", "source": "worker/config.js", "owner": "Tavily owner", "sensitive": true, "validation": "remote-presence-only" },
+        { "id": "images-binding", "name": "IMAGES", "kind": "binding", "requirement": "feature-gated", "condition": "image-storage", "source": "worker/config.js", "owner": "Cloudflare account owner", "sensitive": false, "validation": "wrangler-binding-declaration" },
+        { "id": "images-bucket", "name": "IMAGES.bucket_name", "kind": "public-identifier", "requirement": "feature-gated", "condition": "image-storage", "source": "worker/wrangler.toml", "owner": "Cloudflare account owner", "sensitive": false, "validation": "non-placeholder" },
+        { "id": "r2-public-url", "name": "R2_PUBLIC_URL", "kind": "public-locator", "requirement": "feature-gated", "condition": "image-storage", "source": "worker/config.js", "owner": "Cloudflare account owner", "sensitive": false, "validation": "worker-config-validator" },
+        { "id": "admin-key", "name": "ADMIN_KEY", "kind": "secret", "requirement": "feature-gated", "condition": "admin-metrics", "source": "worker/config.js", "owner": "Worker release owner", "sensitive": true, "validation": "remote-presence-only" },
+        { "id": "revenuecat-webhook-secret", "name": "REVENUECAT_WEBHOOK_SECRET", "kind": "secret", "requirement": "feature-gated", "condition": "revenuecat-webhook", "source": "worker/config.js", "owner": "RevenueCat owner", "sensitive": true, "validation": "remote-presence-only" },
+        { "id": "revenuecat-secret-key", "name": "REVENUECAT_SECRET_KEY", "kind": "secret", "requirement": "feature-gated", "condition": "admin-revenuecat", "source": "worker/config.js", "owner": "RevenueCat owner", "sensitive": true, "validation": "remote-presence-only" },
+        { "id": "revenuecat-project-id", "name": "REVENUECAT_PROJECT_ID", "kind": "public-identifier", "requirement": "optional", "source": "worker/config.js", "owner": "RevenueCat owner", "sensitive": false, "validation": "non-placeholder-when-supplied" },
+        { "id": "gcp-sa-email", "name": "GCP_SA_EMAIL", "kind": "secret", "requirement": "feature-gated", "condition": "admin-gcloud", "source": "worker/config.js", "owner": "Google Cloud owner", "sensitive": true, "validation": "remote-presence-only" },
+        { "id": "gcp-sa-private-key", "name": "GCP_SA_PRIVATE_KEY", "kind": "secret", "requirement": "feature-gated", "condition": "admin-gcloud", "source": "worker/config.js", "owner": "Google Cloud owner", "sensitive": true, "validation": "remote-presence-only" },
+        { "id": "gcp-project-id", "name": "GCP_PROJECT_ID", "kind": "public-identifier", "requirement": "feature-gated", "condition": "admin-gcloud", "source": "worker/config.js", "owner": "Google Cloud owner", "sensitive": false, "validation": "remote-presence-only" },
+        { "id": "gcp-billing-table", "name": "GCP_BILLING_TABLE", "kind": "public-identifier", "requirement": "feature-gated", "condition": "admin-gcloud", "source": "worker/config.js", "owner": "Google Cloud owner", "sensitive": false, "validation": "remote-presence-only" },
+        { "id": "gcloud-monthly-budget", "name": "GCLOUD_MONTHLY_BUDGET", "kind": "config-value", "requirement": "optional", "source": "worker/config.js", "owner": "Worker release owner", "sensitive": false, "validation": "worker-config-validator" },
+        { "id": "gcloud-last-spend", "name": "GCLOUD_LAST_SPEND", "kind": "config-value", "requirement": "optional", "source": "worker/config.js", "owner": "Worker release owner", "sensitive": false, "validation": "worker-config-validator" }
+      ]
+    },
+    "database": {
+      "owner": "database change owner",
+      "boundary": "database/catalog.json and explicit target environment",
+      "resources": [
+        { "id": "production-origin", "name": "SUPABASE_PRODUCTION_URL", "kind": "public-locator", "requirement": "required-for-production", "source": "tools/supabase-target-policy.mjs", "owner": "database owner", "sensitive": false, "validation": "approved-exact-https-origin" },
+        { "id": "production-credential", "name": "SUPABASE_PRODUCTION_SERVICE_ROLE_KEY", "kind": "secret", "requirement": "required-for-production", "source": "database/catalog.json", "owner": "database owner", "sensitive": true, "validation": "explicit-target-presence-only" },
+        { "id": "local-origin", "name": "SUPABASE_LOCAL_URL", "kind": "public-locator", "requirement": "optional-local", "source": "database/catalog.json", "owner": "developer", "sensitive": false, "validation": "loopback-http-origin" },
+        { "id": "local-credential", "name": "SUPABASE_LOCAL_SERVICE_ROLE_KEY", "kind": "secret", "requirement": "required-for-local", "source": "database/catalog.json", "owner": "developer", "sensitive": true, "validation": "explicit-target-presence-only" }
+      ]
+    },
+    "metrics-digest": {
+      "owner": "admin-task operator",
+      "boundary": "tools/metrics-digest/target.mjs and explicit target environment",
+      "resources": [
+        { "id": "selected-origin", "name": "SUPABASE_LOCAL_URL or SUPABASE_PRODUCTION_URL", "kind": "public-locator", "requirement": "required-by-selected-target", "source": "tools/metrics-digest/target.mjs", "owner": "admin-task operator", "sensitive": false, "validation": "explicit-target-policy" },
+        { "id": "selected-credential", "name": "SUPABASE_LOCAL_SERVICE_ROLE_KEY or SUPABASE_PRODUCTION_SERVICE_ROLE_KEY", "kind": "secret", "requirement": "required-by-selected-target", "source": "tools/metrics-digest/target.mjs", "owner": "admin-task operator", "sensitive": true, "validation": "explicit-target-presence-only" }
+      ]
+    }
+  }
+}

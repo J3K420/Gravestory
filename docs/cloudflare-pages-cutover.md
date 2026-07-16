@@ -75,8 +75,9 @@ if ($difference -or $actual.Count -ne 22) {
 Only after that command passes, run the production upload from the non-Git staging directory:
 
 ```powershell
-Set-Location <verified-staging-directory>
-npx wrangler pages deploy . --project-name gravestory
+$repositoryRoot = '<repository>'
+$pagesProject = node (Join-Path $repositoryRoot 'tools/deploy-config.mjs') pages-project-name
+npx wrangler pages deploy . --project-name $pagesProject
 ```
 
 Cloudflare documents this Direct Upload workflow at <https://developers.cloudflare.com/pages/get-started/direct-upload/>. After upload, confirm Wrangler reports the production deployment and re-run every public endpoint check below.

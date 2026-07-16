@@ -1,3 +1,68 @@
+const DEFAULT_PUBLIC_CONFIG = Object.freeze({
+  workerOrigin: 'https://gravestory-proxy.james-gravestory.workers.dev',
+  supabaseOrigin: 'https://idbrjonofqrsykqsqpwo.supabase.co',
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlkYnJqb25vZnFyc3lrcXNxcHdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3MDYyMTUsImV4cCI6MjA5NDI4MjIxNX0.hF26KwrkhWRy7Z74YnEd6Oqr3brPSOOz9ykRQZOBWiw',
+  clientKey: 'gs-client-2025',
+});
+
+function exactHttpsOrigin(value, name) {
+  let url;
+  try { url = new URL(value); } catch { throw new Error(`${name} must be an exact HTTPS origin`); }
+  if (url.protocol !== 'https:' || url.origin !== value || url.username || url.password) {
+    throw new Error(`${name} must be an exact HTTPS origin`);
+  }
+  return value;
+}
+
+function requiredPublicValue(value, name) {
+  if (typeof value !== 'string' || !value.trim() || /(?:^|[-_<])(?:paste|placeholder|replace|change|changeme|your|todo|tbd|insert)(?:$|[-_>:])/i.test(value.trim())) {
+    throw new Error(`${name} must be a non-placeholder public value`);
+  }
+  return value.trim();
+}
+
+export function resolveMobileDeployConfig(overrides = {}) {
+  const unknown = Object.keys(overrides).filter((key) => !Object.hasOwn(DEFAULT_PUBLIC_CONFIG, key));
+  if (unknown.length) throw new Error(`Unknown mobile public configuration: ${unknown.join(', ')}`);
+  const value = Object.fromEntries(Object.keys(DEFAULT_PUBLIC_CONFIG).map((key) => [
+    key,
+    requiredPublicValue(overrides[key] ?? DEFAULT_PUBLIC_CONFIG[key], key),
+  ]));
+  exactHttpsOrigin(value.workerOrigin, 'workerOrigin');
+  exactHttpsOrigin(value.supabaseOrigin, 'supabaseOrigin');
+  return Object.freeze(value);
+}
+
+function conditionalPublicIdentifier(env, feature, flag, input) {
+  const state = env[flag];
+  if (state !== undefined && state !== 'true' && state !== 'false') {
+    throw new Error(`${flag} must be explicitly true or false when supplied`);
+  }
+  const supplied = env[input] !== undefined && env[input] !== '';
+  const enabled = state === 'true' || (state === undefined && supplied);
+  if (state === 'false' && supplied) {
+    throw new Error(`${input} requires ${flag}=true`);
+  }
+  return {
+    enabled,
+    feature,
+    value: enabled ? requiredPublicValue(env[input], input) : '',
+  };
+}
+
+export function resolveMobileBuildInputs(env = process.env) {
+  const googleMaps = conditionalPublicIdentifier(env, 'google-maps', 'GRAVESTORY_ENABLE_GOOGLE_MAPS', 'GOOGLE_MAPS_ANDROID_API_KEY');
+  const revenueCat = conditionalPublicIdentifier(env, 'revenuecat', 'GRAVESTORY_ENABLE_REVENUECAT', 'REVENUECAT_API_KEY');
+  return Object.freeze({
+    enabledFeatures: [googleMaps, revenueCat].filter((item) => item.enabled).map((item) => item.feature),
+    googleMapsApiKey: googleMaps.value,
+    revenueCatApiKey: revenueCat.value,
+  });
+}
+
+const deployConfig = resolveMobileDeployConfig();
+const buildInputs = resolveMobileBuildInputs();
+
 export default {
   expo: {
     name: 'GraveStory',
@@ -45,7 +110,7 @@ export default {
           // Key lives in .env (gitignored) locally, or in EAS Secrets for builds.
           // Restrict this key in Google Cloud Console to your app's package name
           // + SHA-1 certificate so it's useless even if extracted from the APK.
-          apiKey: process.env.GOOGLE_MAPS_ANDROID_API_KEY ?? '',
+          apiKey: buildInputs.googleMapsApiKey,
         },
       },
     },
@@ -53,6 +118,7 @@ export default {
       favicon: './assets/favicon.png',
     },
     extra: {
+      deployConfig,
       eas: {
         projectId: 'f26f7a8b-2c63-4a68-bb44-903d7ed01b30',
       },
@@ -60,7 +126,7 @@ export default {
       // REVENUECAT_API_KEY at build time; read back via expo-constants in
       // src/lib/config.js. Empty in local dev unless the env var is set, in
       // which case config.js falls back to the RevenueCat test key.
-      revenueCatApiKey: process.env.REVENUECAT_API_KEY ?? '',
+      revenueCatApiKey: buildInputs.revenueCatApiKey,
     },
     plugins: [
       'expo-secure-store',

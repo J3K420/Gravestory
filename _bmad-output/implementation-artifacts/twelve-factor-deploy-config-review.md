@@ -41,6 +41,8 @@ Final clean-room re-review after all remediations: CLEAN from Blind Hunter, Edge
 - [x] [Review][Patch] Add the Cloudflare Pages project handle to an authoritative consumed boundary and remove duplicated project literals from operator commands. [`deploy/config/pages-target.json`; `tools/deploy-config.mjs`; `project-context.md`; `docs/cloudflare-pages-cutover.md`]
 - [x] [Review][Patch] Bind remote evidence and owner approval to the exact configuration identity and Git commit. [`tools/deploy-config.mjs`]
 - [x] [Review][Patch] Make post-review remote evidence appendable without a commit-hash fixed point by resolving the named source commit's component attestation and requiring the same configuration identity. [`tools/deploy-config.mjs`]
+- [x] [Review][Patch] Scope contract and compatibility identity material per client component so a Pages-only generation change does not invalidate mobile; Worker/database continue to cover every supported client generation. [`tools/deploy-config.mjs`; `tools/tests/deploy-config.test.mjs`]
+- [x] [Review][Patch] Decode authoritative contract and compatibility JSON with fatal UTF-8 handling before validation or identity projection, preventing replacement-decoding collisions. [`tools/deploy-config.mjs`; `tools/tests/deploy-config.test.mjs`]
 - [x] [Review][Patch] Preserve already-provisioned EAS SDK keys as a compatible explicit enable condition while retaining opt-in flags for new environments. [`mobile/app.config.js`]
 - [x] [Review][Patch] Retain the verified-live Pages v69 cache generation in addition to v70 and current v72 source boundaries. [`deploy/config/compatibility.json`]
 - [x] [Review][Patch] Resolve the authoritative Pages project before entering the allowlisted staging directory that intentionally excludes repository tools. [`docs/cloudflare-pages-cutover.md`]
@@ -55,10 +57,10 @@ Final clean-room re-review after all remediations: CLEAN from Blind Hunter, Edge
 
 ## Verification after remediation
 
-- `node --test tools/tests/deploy-config.test.mjs`: 25 passed
+- `node --test tools/tests/deploy-config.test.mjs`: 26 passed
 - `node tools/deploy-config.mjs validate`: passed
 - `node tools/release-control.mjs validate`: passed
-- `node tools/verify-repo.mjs`: 74 Node tests and 2 BMad tooling tests passed
-- `node tools/verify-repo.mjs --install`: passed after all second-pass remediations, including clean installs, Expo config/bundle checks, and Wrangler dry-run
+- `node tools/verify-repo.mjs`: 90 Node tests and 2 BMad tooling tests passed after the component-isolation and fatal UTF-8 corrections
+- `node tools/verify-repo.mjs --install`: passed after the final corrections, including clean installs, Expo config/bundle checks, and Wrangler dry-run
 
 No remote provider, secret, binding, database, deployment, or production state was read or changed.

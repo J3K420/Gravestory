@@ -69,8 +69,8 @@ function writeSealed(root, path, value) {
   return sha256(readFileSync(target));
 }
 
-function resealAll(root) {
-  for (const component of ['pages', 'mobile', 'worker', 'database']) {
+function resealAll(root, components = ['pages', 'mobile', 'worker', 'database']) {
+  for (const component of components) {
     writeFileSync(join(root, `deploy/config/${component}.json`), canonicalJson(buildDeployConfigAttestation(root, component)));
   }
 }
@@ -109,8 +109,23 @@ test('configuration identities are stable across LF and CRLF checkouts', (t) => 
   assert.throws(() => calculateDeployConfigIdentity(root, 'pages'), /must be valid UTF-8 text for deploy identity hashing/);
 });
 
+test('authoritative contract and compatibility JSON reject malformed UTF-8 bytes', (t) => {
+  for (const relative of ['deploy/config/contract.json', 'deploy/config/compatibility.json']) {
+    const root = fixture(t);
+    const path = join(root, relative);
+    const bytes = readFileSync(path);
+    const marker = Buffer.from(relative.endsWith('contract.json') ? 'web release owner' : 'pages-cache-v69-live');
+    const index = bytes.indexOf(marker);
+    assert.notEqual(index, -1);
+    bytes[index + 1] = 0x80;
+    writeFileSync(path, bytes);
+    assert.throws(() => calculateDeployConfigIdentity(root, 'pages'), /must be valid UTF-8 text/);
+  }
+});
+
 test('full repository validation permits one client locator boundary to move independently', (t) => {
   const root = fixture(t);
+  const mobileBefore = json(root, 'deploy/config/mobile.json');
   const oldOrigin = resolvePagesDeployConfig(root).workerOrigin;
   const nextOrigin = 'https://preview-worker.example.test';
   const sourcePath = join(root, 'js/config.js');
@@ -118,8 +133,10 @@ test('full repository validation permits one client locator boundary to move ind
   const compatibility = json(root, 'deploy/config/compatibility.json');
   compatibility.generations.find((item) => item.id === compatibility.currentGenerations.pages).locators.workerOrigin = nextOrigin;
   writeJson(root, 'deploy/config/compatibility.json', compatibility);
-  resealAll(root);
+  resealAll(root, ['pages', 'worker', 'database']);
   assert.equal(resolvePagesDeployConfig(root).workerOrigin, nextOrigin);
+  assert.deepEqual(json(root, 'deploy/config/mobile.json'), mobileBefore);
+  assert.doesNotThrow(() => verifyDeployConfigAttestation(root, 'mobile', 'deploy/config/mobile.json'));
   assert.doesNotThrow(() => validateDeployConfigRepository(root));
 });
 

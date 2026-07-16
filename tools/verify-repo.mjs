@@ -373,6 +373,7 @@ function runVerification(install) {
     join(ROOT, 'tools', 'tests', 'tester-access.test.mjs'),
     join(ROOT, 'tools', 'tests', 'deploy-config.test.mjs'),
     join(ROOT, 'tools', 'tests', 'release-control.test.mjs'),
+    join(ROOT, 'worker', 'tests', 'runtime.test.mjs'),
   ]);
   run(python, ['-m', 'unittest', 'discover', '-s', '_bmad/scripts/tests', '-p', 'test_*.py', '-v']);
 

@@ -59,6 +59,13 @@ function fileHash(path) {
   return sha256(readFileSync(path));
 }
 
+function portableSourceHash(path, key) {
+  let text;
+  try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(readFileSync(path)); } catch { fail(key, 'must be valid UTF-8 text for deploy identity hashing'); }
+  if (text.includes('\0')) fail(key, 'must be UTF-8 text without NUL bytes for deploy identity hashing');
+  return sha256(text.replace(/\r\n?/g, '\n'));
+}
+
 function exactHttpsOrigin(value, key) {
   value = requiredValue(value, key);
   let url;
@@ -487,9 +494,9 @@ export function calculateDeployConfigIdentity(root, component, model = loadModel
     contract: contractEntry,
     configuration: model.configs[component],
     compatibility: generations,
-    sourceHashes: Object.fromEntries(sourcePaths.map((path) => [path, fileHash(join(root, path))])),
-    contractHash: fileHash(join(root, 'deploy', 'config', 'contract.json')),
-    compatibilityHash: fileHash(join(root, 'deploy', 'config', 'compatibility.json')),
+    sourceHashes: Object.fromEntries(sourcePaths.map((path) => [path, portableSourceHash(join(root, path), path)])),
+    contractHash: portableSourceHash(join(root, 'deploy', 'config', 'contract.json'), 'deploy/config/contract.json'),
+    compatibilityHash: portableSourceHash(join(root, 'deploy', 'config', 'compatibility.json'), 'deploy/config/compatibility.json'),
   };
   return sha256(canonicalJson(payload));
 }

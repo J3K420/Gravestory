@@ -45,16 +45,19 @@ Final clean-room re-review after all remediations: CLEAN from Blind Hunter, Edge
 - [x] [Review][Patch] Retain the verified-live Pages v69 cache generation in addition to v70 and current v72 source boundaries. [`deploy/config/compatibility.json`]
 - [x] [Review][Patch] Resolve the authoritative Pages project before entering the allowlisted staging directory that intentionally excludes repository tools. [`docs/cloudflare-pages-cutover.md`]
 - [x] [Review][Patch] Make project resolution independent of the current staging directory by invoking the validator through the repository path, and document all three mobile flag states consistently. [`docs/cloudflare-pages-cutover.md`; `docs/deploy-configuration.md`]
+- [x] [Review][Patch] Normalize text line endings only for deploy configuration identities so Windows CRLF and Linux LF checkouts reproduce the same attestations; retain exact-byte hashes for sealed evidence. [`tools/deploy-config.mjs`; `tools/tests/deploy-config.test.mjs`]
+- [x] [Review][Patch] Reject malformed UTF-8 identity sources instead of allowing replacement-character hash collisions during newline normalization. [`tools/deploy-config.mjs`; `tools/tests/deploy-config.test.mjs`]
+- [x] [Review][Patch] Preserve a leading UTF-8 BOM as identity-bearing content and reject NUL-containing identity inputs as non-text before newline normalization. [`tools/deploy-config.mjs`; `tools/tests/deploy-config.test.mjs`]
 - [x] [Review][Patch] Require the database allowlist to retain Supabase origins for every supported, non-retired client generation. [`tools/deploy-config.mjs`]
 - [x] [Review][Patch] Bind Pages generations to concrete service-worker cache IDs and mobile generations to Android versionCode; retain both the live-overlap v69 and v72 source Pages generations. [`deploy/config/compatibility.json`; `tools/deploy-config.mjs`]
 - [x] [Review][Patch] Reject the literal `placeholder` across public mobile, deploy, Pages-project, and metrics credential boundaries. [`mobile/app.config.js`; `tools/deploy-config.mjs`; `tools/metrics-digest/target.mjs`]
 
 ## Verification after remediation
 
-- `node --test tools/tests/deploy-config.test.mjs`: 24 passed
+- `node --test tools/tests/deploy-config.test.mjs`: 25 passed
 - `node tools/deploy-config.mjs validate`: passed
 - `node tools/release-control.mjs validate`: passed
-- `node tools/verify-repo.mjs`: 73 Node tests and 2 BMad tooling tests passed
+- `node tools/verify-repo.mjs`: 74 Node tests and 2 BMad tooling tests passed
 - `node tools/verify-repo.mjs --install`: passed after all second-pass remediations, including clean installs, Expo config/bundle checks, and Wrangler dry-run
 
 No remote provider, secret, binding, database, deployment, or production state was read or changed.

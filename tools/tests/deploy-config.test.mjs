@@ -92,6 +92,23 @@ test('canonical JSON and configuration identity are deterministic', () => {
   assert.equal(calculateDeployConfigIdentity(ROOT, 'pages'), calculateDeployConfigIdentity(ROOT, 'pages'));
 });
 
+test('configuration identities are stable across LF and CRLF checkouts', (t) => {
+  const root = fixture(t);
+  const before = calculateDeployConfigIdentity(root, 'pages');
+  for (const relative of ['js/config.js', 'js/auth.js', 'index.html', 'sw.js', 'deploy/config/contract.json', 'deploy/config/compatibility.json', 'deploy/config/pages-target.json']) {
+    const path = join(root, relative);
+    writeFileSync(path, readFileSync(path, 'utf8').replace(/\r?\n/g, '\r\n'));
+  }
+  assert.equal(calculateDeployConfigIdentity(root, 'pages'), before);
+  const authPath = join(root, 'js/auth.js');
+  writeFileSync(authPath, `\uFEFF${readFileSync(authPath, 'utf8')}`);
+  assert.notEqual(calculateDeployConfigIdentity(root, 'pages'), before);
+  writeFileSync(authPath, 'const marker = "text";\0\r\n');
+  assert.throws(() => calculateDeployConfigIdentity(root, 'pages'), /must be UTF-8 text without NUL bytes/);
+  writeFileSync(authPath, Buffer.from([0x61, 0x80, 0x62]));
+  assert.throws(() => calculateDeployConfigIdentity(root, 'pages'), /must be valid UTF-8 text for deploy identity hashing/);
+});
+
 test('full repository validation permits one client locator boundary to move independently', (t) => {
   const root = fixture(t);
   const oldOrigin = resolvePagesDeployConfig(root).workerOrigin;

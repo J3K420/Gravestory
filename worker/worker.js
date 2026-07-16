@@ -1,5 +1,16 @@
 // GraveStory proxy — Cloudflare Worker
 import { featureForPath, validateWorkerConfig, validateWorkerFeature } from './config.js';
+import {
+  WORKER_DEADLINES_MS,
+  canonicalWorkerRoute,
+  correlationFor,
+  emitWorkerLog,
+  fetchWithDeadline,
+  isDeadlineError,
+  isUpstreamBodyLimitError,
+  runBestEffortBatchWithinDeadline,
+  withDeadline,
+} from './runtime.js';
 //
 // Front-end calls:
 //   POST /begin-scan              header: Authorization: Bearer <user JWT>  → { token } (one per scan)
@@ -121,7 +132,11 @@ export default {
 
     // ── RevenueCat webhook: bypass Origin/CLIENT_KEY auth — has its own auth ──
     if (url.pathname === '/revenuecat-webhook') {
-      return await handleRevenueCatWebhook(request, env, origin, allowed);
+      try {
+        return await handleRevenueCatWebhook(request, env, origin, allowed);
+      } catch (error) {
+        return workerFailureResponse(error, url.pathname, origin, allowed);
+      }
     }
 
     // ── Admin metrics dashboard: bypass the public CLIENT_KEY gate — it has its
@@ -129,7 +144,11 @@ export default {
     // block, exactly like the RevenueCat webhook: the public CLIENT_KEY is in
     // client source, so gating admin metrics behind it would be no gate at all.
     if (url.pathname === '/admin/metrics') {
-      return await handleAdminMetrics(request, url, env, origin);
+      try {
+        return await handleAdminMetrics(request, url, env, origin);
+      } catch (error) {
+        return workerFailureResponse(error, url.pathname, origin, allowed, true);
+      }
     }
 
     // ── Auth: shared CLIENT_KEY + (for browsers) Origin allowlist ──
@@ -222,7 +241,7 @@ export default {
       }
       return json({ error: 'Not found', path: url.pathname }, 404, origin, allowed);
     } catch (err) {
-      return json({ error: 'Worker error', detail: String(err && err.message || err) }, 500, origin, allowed);
+      return workerFailureResponse(err, url.pathname, origin, allowed);
     }
   },
 };
@@ -266,7 +285,7 @@ async function handleBeginScan(request, env, origin, allowed) {
   //    carrying this scan's per-route call budgets. The reservation holds an allowance
   //    slot immediately (bounds token minting) and is decremented per paid call
   //    (bounds volume). It records NO permanent scan_event — that happens at commit.
-  const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/reserve_scan`, {
+  const rpcRes = await fetchWithDeadline(`${env.SUPABASE_URL}/rest/v1/rpc/reserve_scan`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -286,11 +305,10 @@ async function handleBeginScan(request, env, origin, allowed) {
       p_gemini: 8,
       p_tavily: 12,
     }),
-  });
+  }, WORKER_DEADLINES_MS.supabase);
   if (!rpcRes.ok) {
     // Supabase failure — fail CLOSED (never hand out a token we can't account for).
-    const detail = await rpcRes.text().catch(() => '');
-    console.warn('begin-scan reserve_scan failed', JSON.stringify({ userId, status: rpcRes.status, detail: detail.slice(0, 200) }));
+    emitWorkerLog('scan_reservation_failed', { status: rpcRes.status });
     return json({ error: 'Could not verify scan allowance', code: 'CHECK_FAILED' }, 503, origin, allowed);
   }
   const result = await rpcRes.json().catch(() => null);
@@ -337,7 +355,7 @@ async function handleCommitScan(request, env, origin, allowed) {
   if (!v.valid || v.userId !== auth.userId) {
     return json({ error: 'Invalid scan token', code: 'BAD_SCAN_TOKEN' }, 400, origin, allowed);
   }
-  const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/commit_reservation`, {
+  const rpcRes = await fetchWithDeadline(`${env.SUPABASE_URL}/rest/v1/rpc/commit_reservation`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -345,10 +363,9 @@ async function handleCommitScan(request, env, origin, allowed) {
       'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     },
     body: JSON.stringify({ p_reservation_id: v.reservationId, p_user_id: auth.userId }),
-  });
+  }, WORKER_DEADLINES_MS.supabase);
   if (!rpcRes.ok) {
-    const detail = await rpcRes.text().catch(() => '');
-    console.warn('commit-scan commit_reservation failed', JSON.stringify({ userId: auth.userId, status: rpcRes.status, detail: detail.slice(0, 200) }));
+    emitWorkerLog('scan_commit_failed', { status: rpcRes.status });
     return json({ error: 'Could not record scan', code: 'COMMIT_FAILED' }, 503, origin, allowed);
   }
   const result = await rpcRes.json().catch(() => null);
@@ -367,10 +384,11 @@ async function resolveUser(request, env) {
   }
   let userRes;
   try {
-    userRes = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+    userRes = await fetchWithDeadline(`${env.SUPABASE_URL}/auth/v1/user`, {
       headers: { 'Authorization': `Bearer ${token}`, 'apikey': env.SUPABASE_SERVICE_KEY },
-    });
-  } catch {
+    }, WORKER_DEADLINES_MS.supabase);
+  } catch (error) {
+    if (isDeadlineError(error)) throw error;
     // Supabase unreachable — fail closed (caller must not proceed without a verified user).
     return { userId: null, status: 503, code: 'CHECK_FAILED', error: 'Could not verify session' };
   }
@@ -427,8 +445,7 @@ async function requireScanBudget(request, env, route, origin, allowed) {
   // can verify, so in transition mode EVERY paid call silently passes unmetered.
   // Log loudly so it's caught in tail; under enforce, fail closed.
   if (!env.SCAN_TOKEN_SECRET) {
-    console.error('SCAN metering INERT: SCAN_TOKEN_SECRET unset — paid routes are unmetered',
-      JSON.stringify({ path, enforce }));
+    emitWorkerLog('scan_metering_inert', { route: canonicalWorkerRoute(path), enforce });
     if (enforce) {
       return json({ error: 'Scan metering misconfigured', code: 'METERING_INERT' }, 503, origin, allowed);
     }
@@ -439,7 +456,10 @@ async function requireScanBudget(request, env, route, origin, allowed) {
   const v = tok ? await verifyScanToken(tok, env.SCAN_TOKEN_SECRET) : { valid: false };
   if (!v.valid) {
     if (!enforce) {
-      console.warn('scan-token transition', JSON.stringify({ reason: tok ? 'invalid_or_expired' : 'missing', path }));
+      emitWorkerLog('scan_token_transition', {
+        route: canonicalWorkerRoute(path),
+        reason: tok ? 'invalid_or_expired' : 'missing',
+      });
       return null;
     }
     return json({ error: 'Scan token required', code: 'NO_SCAN_TOKEN' }, 403, origin, allowed);
@@ -453,7 +473,7 @@ async function requireScanBudget(request, env, route, origin, allowed) {
   }
   let dec, rpcRes;
   try {
-    rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/consume_budget`, {
+    rpcRes = await fetchWithDeadline(`${env.SUPABASE_URL}/rest/v1/rpc/consume_budget`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -461,15 +481,20 @@ async function requireScanBudget(request, env, route, origin, allowed) {
         'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
       },
       body: JSON.stringify({ p_reservation_id: v.reservationId, p_user_id: v.userId, p_route: route }),
-    });
+    }, WORKER_DEADLINES_MS.supabase);
     dec = rpcRes.ok ? await rpcRes.json().catch(() => null) : null;
-  } catch {
+  } catch (error) {
+    if (isDeadlineError(error)) throw error;
     dec = null; rpcRes = null;
   }
 
   if (!rpcRes || !rpcRes.ok || dec == null) {
     // Supabase failure — fail CLOSED under enforce, observe under transition.
-    console.warn('consume_budget transport failure', JSON.stringify({ route, path, status: rpcRes?.status }));
+    emitWorkerLog('scan_budget_transport_failed', {
+      route: canonicalWorkerRoute(path),
+      bucket: route,
+      status: rpcRes?.status ?? null,
+    });
     if (enforce) return json({ error: 'Could not verify scan budget', code: 'BUDGET_CHECK_FAILED' }, 503, origin, allowed);
     return null;
   }
@@ -477,7 +502,7 @@ async function requireScanBudget(request, env, route, origin, allowed) {
   if (dec.ok !== true) {
     // Budget exhausted / expired / wrong user. Under enforce 402; transition observe.
     if (!enforce) {
-      console.warn('scan-budget would_block', JSON.stringify({ route, path, reason: dec.reason }));
+      emitWorkerLog('scan_budget_would_block', { route: canonicalWorkerRoute(path), bucket: route });
       return null;
     }
     return json({ error: 'Scan budget exhausted', code: 'BUDGET_EXHAUSTED', reason: dec.reason }, 402, origin, allowed);
@@ -592,11 +617,11 @@ async function handleGemini(request, url, env, origin, allowed, prefix = '/gemin
   const body = await request.text();
   const upstream = `${GEMINI_BASE}/${encodeURIComponent(modelId)}:generateContent?key=${env.GEMINI_KEY}`;
 
-  const res = await fetch(upstream, {
+  const res = await fetchWithDeadline(upstream, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body,
-  });
+  }, WORKER_DEADLINES_MS.generativeAi);
 
   const text = await res.text();
   return new Response(text, {
@@ -625,11 +650,11 @@ async function handleTavily(request, env, origin, allowed) {
   }
   payload.api_key = env.TAVILY_KEY;
 
-  const res = await fetch(TAVILY_URL, {
+  const res = await fetchWithDeadline(TAVILY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  });
+  }, WORKER_DEADLINES_MS.searchProvider);
 
   const text = await res.text();
   return new Response(text, {
@@ -662,11 +687,11 @@ async function handleTavilyExtract(request, env, origin, allowed) {
   }
   payload.api_key = env.TAVILY_KEY;
 
-  const res = await fetch(TAVILY_EXTRACT_URL, {
+  const res = await fetchWithDeadline(TAVILY_EXTRACT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  });
+  }, WORKER_DEADLINES_MS.searchProvider);
 
   const text = await res.text();
   return new Response(text, {
@@ -700,7 +725,7 @@ async function handleWikiTree(request, origin, allowed) {
   if (body.fields)    params.set('fields',    body.fields);
   params.set('format', 'json');
 
-  const res = await fetch('https://api.wikitree.com/api.php', {
+  const res = await fetchWithDeadline('https://api.wikitree.com/api.php', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -711,7 +736,7 @@ async function handleWikiTree(request, origin, allowed) {
       'Origin': 'https://www.wikitree.com',
     },
     body: params.toString(),
-  });
+  }, WORKER_DEADLINES_MS.searchProvider);
 
   const text = await res.text();
   return new Response(text, {
@@ -750,11 +775,11 @@ async function handleOverpass(request, origin, allowed) {
   }
 
   const payload = 'data=' + encodeURIComponent(body.query);
-  let lastStatus = 502, lastText = '';
+  let lastStatus = 502, lastDeadline = null;
 
   for (const endpoint of OVERPASS_ENDPOINTS) {
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetchWithDeadline(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -762,23 +787,22 @@ async function handleOverpass(request, origin, allowed) {
           'Accept': 'application/json',
         },
         body: payload,
-      });
+      }, WORKER_DEADLINES_MS.overpassMirror);
       if (res.ok) {
         return new Response(res.body, {
           status: 200,
           headers: { 'Content-Type': 'application/json', ...corsHeaders(origin, allowed) },
         });
       }
-      const text = await res.text();
       lastStatus = res.status;
-      lastText = text.slice(0, 300);
     } catch (e) {
+      if (isDeadlineError(e)) lastDeadline = e;
       lastStatus = 502;
-      lastText = String(e && e.message || e);
     }
   }
 
-  return json({ error: 'All Overpass mirrors failed', lastStatus, detail: lastText }, 502, origin, allowed);
+  if (lastDeadline) throw lastDeadline;
+  return json({ error: 'All Overpass mirrors failed', lastStatus }, 502, origin, allowed);
 }
 
 // ── R2 image upload: POST /upload-image ──────────────────────────
@@ -850,11 +874,14 @@ async function handleUpload(request, env, origin, allowed) {
   const key = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
   try {
-    await env.IMAGES.put(key, bytes, {
-      httpMetadata: { contentType },
-    });
+    await withDeadline(
+      () => env.IMAGES.put(key, bytes, { httpMetadata: { contentType } }),
+      WORKER_DEADLINES_MS.r2Binding,
+      'R2 put',
+    );
   } catch (err) {
-    return json({ error: 'R2 put failed', detail: String(err && err.message || err) }, 500, origin, allowed);
+    if (isDeadlineError(err)) throw err;
+    return json({ error: 'R2 put failed' }, 500, origin, allowed);
   }
 
   const publicUrl = `${env.R2_PUBLIC_URL}/${key}`;
@@ -901,14 +928,15 @@ async function handleAdminMetrics(request, url, env, origin) {
     : 720;
   const sinceIso = new Date(Date.now() - windowHours * 3600 * 1000).toISOString();
 
-  // Fan out: every source resolves to its own {status, ...} object. allSettled
-  // means a thrown source becomes status:'error', not a 500 for the whole page.
+  // Fan out: a source failure becomes a redacted status:'error' section instead
+  // of a 500 for the whole read-only dashboard. The failure is still emitted as
+  // a structured event so provider deadlines are observable.
   const [summary, funnel, series, revenuecat, gcloud] = await Promise.all([
-    adminSupabaseSummary(env).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
-    adminSupabaseFunnel(env, sinceIso).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
-    adminDailySeries(env, 30).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
-    adminRevenueCat(env).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
-    adminGoogleCloud(env).catch((e) => ({ status: 'error', error: String(e && e.message || e) })),
+    adminSection('supabase_summary', adminSupabaseSummary(env)),
+    adminSection('supabase_funnel', adminSupabaseFunnel(env, sinceIso)),
+    adminSection('daily_series', adminDailySeries(env, 30)),
+    adminSection('revenuecat', adminRevenueCat(env)),
+    adminSection('google_cloud', adminGoogleCloud(env)),
   ]);
 
   // Tavily has NO usage API — derive from our own lifetime scan count + the
@@ -933,10 +961,20 @@ async function handleAdminMetrics(request, url, env, origin) {
   }, 200, origin);
 }
 
+async function adminSection(source, operation) {
+  try {
+    return await operation;
+  } catch (error) {
+    const failure = isDeadlineError(error) ? 'deadline' : 'exception';
+    emitWorkerLog('admin_source_failed', { source, failure });
+    return { status: 'error', error: failure === 'deadline' ? 'deadline' : 'provider failure' };
+  }
+}
+
 // Supabase service-role fetch helper (mirrors the sb() pattern in
 // handleDeleteAccount): raw fetch with service-role in BOTH apikey + Authorization.
 function adminSb(env, path, init) {
-  return fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
+  return fetchWithDeadline(`${env.SUPABASE_URL}/rest/v1/${path}`, {
     ...init,
     headers: {
       'apikey': env.SUPABASE_SERVICE_KEY,
@@ -944,7 +982,7 @@ function adminSb(env, path, init) {
       'Content-Type': 'application/json',
       ...(init && init.headers),
     },
-  });
+  }, WORKER_DEADLINES_MS.supabase);
 }
 
 // Heavy aggregates via the migration-030 RPC (one round-trip, service-role only).
@@ -1062,7 +1100,7 @@ async function adminSupabaseFunnel(env, sinceIso) {
 //                                it up via the projects list with the same key.
 // Defensive: RC's docs are ambiguous about whether a secret key (vs an OAuth
 // atk_ token) may hold the charts_metrics scope. So we TRY the secret key and,
-// if RC rejects it (401/403), return `degraded` carrying RC's own error text
+// if RC rejects it (401/403), return a redacted `degraded` section
 // rather than crashing — the in-DB credits ledger still drives Money-in either
 // way. Any non-2xx or shape surprise degrades, never throws past this function.
 async function adminRevenueCat(env) {
@@ -1081,18 +1119,19 @@ async function adminRevenueCat(env) {
   // Resolve the project id (explicit env wins; else take the first project).
   let projectId = env.REVENUECAT_PROJECT_ID || '';
   if (!projectId) {
-    const pRes = await fetch('https://api.revenuecat.com/v2/projects', { headers });
+    const pRes = await fetchWithDeadline('https://api.revenuecat.com/v2/projects', { headers }, WORKER_DEADLINES_MS.adminProvider);
     if (!pRes.ok) {
-      const detail = await pRes.text().catch(() => '');
+      emitWorkerLog('admin_source_failed', { source: 'revenuecat', failure: 'response' });
       return {
         status: 'degraded',
-        reason: `RevenueCat /projects ${pRes.status}: ${detail.slice(0, 160)}`,
+        reason: 'RevenueCat project lookup failed with status ' + pRes.status,
         dashboard_url: 'https://app.revenuecat.com/',
       };
     }
     const pData = await pRes.json().catch(() => null);
     projectId = pData && Array.isArray(pData.items) && pData.items[0] && pData.items[0].id;
     if (!projectId) {
+      emitWorkerLog('admin_source_failed', { source: 'revenuecat', failure: 'response' });
       return {
         status: 'degraded',
         reason: 'RevenueCat key valid but no projects returned — set REVENUECAT_PROJECT_ID.',
@@ -1101,17 +1140,18 @@ async function adminRevenueCat(env) {
     }
   }
 
-  const mRes = await fetch(
+  const mRes = await fetchWithDeadline(
     `https://api.revenuecat.com/v2/projects/${encodeURIComponent(projectId)}/metrics/overview?currency=USD`,
-    { headers }
+    { headers },
+    WORKER_DEADLINES_MS.adminProvider,
   );
   if (!mRes.ok) {
-    const detail = await mRes.text().catch(() => '');
     // 401/403 most likely = the secret key lacks charts_metrics scope (may need
     // an OAuth atk_ token). Surface it plainly instead of failing the dashboard.
+    emitWorkerLog('admin_source_failed', { source: 'revenuecat', failure: 'response' });
     return {
       status: 'degraded',
-      reason: `RevenueCat metrics ${mRes.status}: ${detail.slice(0, 200)}`,
+      reason: 'RevenueCat metrics request failed with status ' + mRes.status,
       dashboard_url: `https://app.revenuecat.com/projects/${encodeURIComponent(projectId)}`,
     };
   }
@@ -1129,6 +1169,7 @@ async function adminRevenueCat(env) {
   // Present-but-empty overview = key/scope/project issue, not a real $0 account.
   // Degrade (don't show a green "live" pill next to dashes).
   if (Object.keys(byId).length === 0) {
+    emitWorkerLog('admin_source_failed', { source: 'revenuecat', failure: 'response' });
     return {
       status: 'degraded',
       reason: 'RevenueCat returned no metrics — check the key scope (charts_metrics:overview:read) and project id.',
@@ -1185,19 +1226,20 @@ async function adminGoogleCloud(env) {
       'ANY_VALUE(currency) AS currency ' +
       'FROM `' + env.GCP_BILLING_TABLE + '` ' +
       "WHERE invoice.month = FORMAT_DATE('%Y%m', CURRENT_DATE())";
-    const qRes = await fetch(
+    const qRes = await fetchWithDeadline(
       `https://bigquery.googleapis.com/bigquery/v2/projects/${encodeURIComponent(env.GCP_PROJECT_ID)}/queries`,
       {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: sql, useLegacySql: false, timeoutMs: 20000 }),
-      }
+      },
+      WORKER_DEADLINES_MS.adminProvider,
     );
     if (!qRes.ok) {
-      const detail = await qRes.text().catch(() => '');
+      emitWorkerLog('admin_source_failed', { source: 'google_cloud', failure: 'response' });
       return {
         status: 'degraded',
-        reason: `BigQuery ${qRes.status}: ${detail.slice(0, 200)}`,
+        reason: 'BigQuery request failed with status ' + qRes.status,
         monthly_budget_usd: budget, last_known_spend_usd: lastKnown,
         dashboard_url: 'https://console.cloud.google.com/billing',
       };
@@ -1217,9 +1259,11 @@ async function adminGoogleCloud(env) {
       dashboard_url: 'https://console.cloud.google.com/billing',
     };
   } catch (e) {
+    if (isDeadlineError(e)) throw e;
+    emitWorkerLog('admin_source_failed', { source: 'google_cloud', failure: 'exception' });
     return {
       status: 'degraded',
-      reason: `Google Cloud live query failed: ${String(e && e.message || e).slice(0, 160)}`,
+      reason: 'Google Cloud live query failed',
       monthly_budget_usd: budget, last_known_spend_usd: lastKnown,
       dashboard_url: 'https://console.cloud.google.com/billing',
     };
@@ -1250,11 +1294,11 @@ async function gcpAccessToken(env) {
   );
   const jwt = `${signingInput}.${b64url(new Uint8Array(sig))}`;
 
-  const tRes = await fetch('https://oauth2.googleapis.com/token', {
+  const tRes = await fetchWithDeadline('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${encodeURIComponent(jwt)}`,
-  });
+  }, WORKER_DEADLINES_MS.adminProvider);
   if (!tRes.ok) {
     const detail = await tRes.text().catch(() => '');
     throw new Error(`token exchange ${tRes.status}: ${detail.slice(0, 160)}`);
@@ -1371,34 +1415,46 @@ async function handleRevenueCatWebhook(request, env, origin, allowed) {
   }
 
   if (!userId || !productId) {
-    console.warn('webhook missing ids', JSON.stringify({ type: event.type, eventId, userId, productId }));
+    emitWorkerLog('webhook_identifiers_missing', {
+      identityPresent: Boolean(userId),
+      eventReferencePresent: Boolean(eventId),
+      productPresent: Boolean(productId),
+    });
     return json({ error: 'Missing app_user_id or product_id' }, 400, origin, allowed);
   }
 
   // No event id means we cannot dedupe safely. Acknowledge (2xx) so RC does not
   // retry a request we would only re-process unsafely; not expected in practice.
   if (!eventId) {
-    console.warn('webhook missing event id', JSON.stringify({ type: event.type, userId, productId }));
+    emitWorkerLog('webhook_identifiers_missing', {
+      identityPresent: Boolean(userId),
+      eventReferencePresent: false,
+      productPresent: Boolean(productId),
+    });
     return json({ ok: true, action: 'ignored', reason: 'missing event id' }, 200, origin, allowed);
   }
 
   const credits = CREDIT_MAP[productId];
+  const correlation = await correlationFor(eventId);
   if (credits == null) {
     // Unknown product — may be a test SKU or from another app in the same RC
     // project. For a GRANT this is also the "real SKU not yet in CREDIT_MAP"
     // footgun (user paid, would get 0). We still 200 (a 5xx would make RC hammer
     // test/foreign SKUs forever), but for a GRANT we DURABLY record the event so a
     // paid-but-ungranted purchase is reconcilable from the DB, not just ephemeral
-    // `wrangler tail` logs. [audit 2026-06-26]
+    // `wrangler tail` logs. A failed ledger write returns 5xx so RevenueCat retries
+    // the stable event id instead of silently losing the purchase.
     if (isGrant) {
-      console.warn('webhook GRANT for unmapped product — user may have paid for 0 credits', JSON.stringify({ eventId, userId, productId }));
-      if (eventId && userId && env.SUPABASE_URL && env.SUPABASE_SERVICE_KEY) {
+      emitWorkerLog('webhook_product_unmapped', { operation: 'grant' });
+      if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
+        emitWorkerLog('webhook_record_failed', { failure: 'exception', correlation });
+        return json({ error: 'Could not record unmapped purchase' }, 500, origin, allowed);
+      }
+      if (eventId && userId) {
         // amount NULL = a flagged-for-review row (no credits granted); dedupe on
         // event_id like every other ledger write so a retry doesn't duplicate it.
-        // Best-effort: a failure here must not change the 200 (we already chose to
-        // ack). Reuse the revenuecat_events ledger (migration 017).
         try {
-          await fetch(`${env.SUPABASE_URL}/rest/v1/revenuecat_events`, {
+          const recordRes = await fetchWithDeadline(`${env.SUPABASE_URL}/rest/v1/revenuecat_events`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1407,9 +1463,15 @@ async function handleRevenueCatWebhook(request, env, origin, allowed) {
               'Prefer': 'resolution=ignore-duplicates,return=minimal',
             },
             body: JSON.stringify({ event_id: eventId, user_id: userId, product_id: productId, amount: null }),
-          });
+          }, WORKER_DEADLINES_MS.supabase);
+          if (!recordRes.ok) {
+            emitWorkerLog('webhook_record_failed', { failure: 'response', correlation });
+            return json({ error: 'Could not record unmapped purchase' }, 500, origin, allowed);
+          }
         } catch (e) {
-          console.warn('webhook unmapped-GRANT durable record failed (still acking)', JSON.stringify({ eventId, err: String(e && e.message || e) }));
+          if (isDeadlineError(e)) throw e;
+          emitWorkerLog('webhook_record_failed', { failure: 'exception', correlation });
+          return json({ error: 'Could not record unmapped purchase' }, 500, origin, allowed);
         }
       }
     }
@@ -1421,7 +1483,7 @@ async function handleRevenueCatWebhook(request, env, origin, allowed) {
   }
 
   const rpcName = isClawback ? 'clawback_scan_credits' : 'add_scan_credits';
-  const rpcRes = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${rpcName}`, {
+  const rpcRes = await fetchWithDeadline(`${env.SUPABASE_URL}/rest/v1/rpc/${rpcName}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1429,30 +1491,44 @@ async function handleRevenueCatWebhook(request, env, origin, allowed) {
       'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     },
     body: JSON.stringify({ p_user_id: userId, p_amount: credits, p_event_id: eventId }),
-  });
+  }, WORKER_DEADLINES_MS.supabase);
 
   if (!rpcRes.ok) {
-    const detail = await rpcRes.text().catch(() => '');
+    const providerError = await rpcRes.json().catch(() => null);
     // A non-Supabase-user app_user_id (e.g. an anonymous RC id from a purchase
     // before Purchases.logIn, or a user who deleted their account) violates the
     // revenuecat_events.user_id FK (SQLSTATE 23503). That is a PERMANENT error —
     // retrying re-runs the same failing INSERT forever. Detect it and return 200
     // (give up) + log for manual reconciliation, instead of 500 (infinite retry).
-    const isFkViolation = rpcRes.status === 409 || /23503|foreign key|violates foreign key/i.test(detail);
+    const isFkViolation = providerError?.code === '23503';
     if (isFkViolation) {
-      console.warn('webhook permanent FK failure — purchase dropped, needs manual grant', JSON.stringify({ eventId, userId, productId, credits, detail: detail.slice(0, 200) }));
+      emitWorkerLog('webhook_permanent_failure', {
+        operation: isClawback ? 'clawback' : 'grant',
+        status: rpcRes.status,
+        correlation,
+      });
       return json({ ok: true, action: 'dropped', reason: 'unresolvable user', event_id: eventId }, 200, origin, allowed);
     }
     // Genuine transient Supabase failure: 5xx so RevenueCat RETRIES. The retry
     // carries the same event.id, so dedupe still prevents a double-grant.
-    console.warn('webhook transient RPC failure — will retry', JSON.stringify({ rpc: rpcName, eventId, userId, status: rpcRes.status, detail: detail.slice(0, 200) }));
-    return json({ error: 'Supabase RPC failed', status: rpcRes.status, detail }, 500, origin, allowed);
+    emitWorkerLog('webhook_transient_failure', {
+      operation: isClawback ? 'clawback' : 'grant',
+      status: rpcRes.status,
+    });
+    return json({ error: 'Supabase RPC failed', status: rpcRes.status }, 500, origin, allowed);
   }
 
   // RPC body is the boolean return value: true = applied, false = duplicate.
   const applied = await rpcRes.json().catch(() => null);
   if (applied === false) {
     return json({ ok: true, action: 'duplicate', user_id: userId, event_id: eventId }, 200, origin, allowed);
+  }
+  if (applied !== true) {
+    emitWorkerLog('webhook_transient_failure', {
+      operation: isClawback ? 'clawback' : 'grant',
+      status: rpcRes.status,
+    });
+    return json({ error: 'Unexpected Supabase RPC response' }, 500, origin, allowed);
   }
 
   if (isClawback) {
@@ -1492,12 +1568,12 @@ async function handleDeleteAccount(request, env, origin, allowed) {
     return json({ error: 'Missing bearer token' }, 401, origin, allowed);
   }
 
-  const userRes = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+  const userRes = await fetchWithDeadline(`${env.SUPABASE_URL}/auth/v1/user`, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'apikey': env.SUPABASE_SERVICE_KEY,
     },
-  });
+  }, WORKER_DEADLINES_MS.supabase);
   if (!userRes.ok) {
     return json({ error: 'Invalid or expired session' }, 401, origin, allowed);
   }
@@ -1511,8 +1587,9 @@ async function handleDeleteAccount(request, env, origin, allowed) {
   if (!userId) {
     return json({ error: 'Could not resolve user' }, 401, origin, allowed);
   }
+  const correlation = await correlationFor(userId);
 
-  const sb = (path, init) => fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
+  const sb = (path, init) => fetchWithDeadline(`${env.SUPABASE_URL}/rest/v1/${path}`, {
     ...init,
     headers: {
       'apikey': env.SUPABASE_SERVICE_KEY,
@@ -1520,7 +1597,7 @@ async function handleDeleteAccount(request, env, origin, allowed) {
       'Content-Type': 'application/json',
       ...(init && init.headers),
     },
-  });
+  }, WORKER_DEADLINES_MS.supabase);
 
   // 2. Collect this user's R2 image keys from stories + grave_photos, then
   //    delete those objects from R2. Keys are random UUIDs with no user prefix
@@ -1534,16 +1611,36 @@ async function handleDeleteAccount(request, env, origin, allowed) {
       // so including the portrait columns future-proofs this against a later
       // change that uploads portraits to R2 without orphaning blobs.
       const sRes = await sb(`stories?user_id=eq.${userId}&select=image_url,portrait_left_url,portrait_right_url`, { method: 'GET' });
-      if (sRes.ok) for (const r of await sRes.json()) {
-        if (r.image_url) urls.add(r.image_url);
-        if (r.portrait_left_url) urls.add(r.portrait_left_url);
-        if (r.portrait_right_url) urls.add(r.portrait_right_url);
+      if (sRes.ok) {
+        for (const r of await sRes.json()) {
+          if (r.image_url) urls.add(r.image_url);
+          if (r.portrait_left_url) urls.add(r.portrait_left_url);
+          if (r.portrait_right_url) urls.add(r.portrait_right_url);
+        }
+      } else {
+        emitWorkerLog('account_cleanup_failed', {
+          step: 'r2_collect', status: sRes.status, failure: 'response', correlation,
+        });
       }
       const pRes = await sb(`grave_photos?user_id=eq.${userId}&select=image_url`, { method: 'GET' });
-      if (pRes.ok) for (const r of await pRes.json()) { if (r.image_url) urls.add(r.image_url); }
-    } catch { /* non-fatal — proceed to row deletion regardless */ }
+      if (pRes.ok) {
+        for (const r of await pRes.json()) { if (r.image_url) urls.add(r.image_url); }
+      } else {
+        emitWorkerLog('account_cleanup_failed', {
+          step: 'r2_collect', status: pRes.status, failure: 'response', correlation,
+        });
+      }
+    } catch (error) {
+      emitWorkerLog('account_cleanup_failed', {
+        step: 'r2_collect',
+        status: null,
+        failure: isDeadlineError(error) ? 'deadline' : 'exception',
+        correlation,
+      });
+    }
 
     const base = env.R2_PUBLIC_URL.replace(/\/$/, '');
+    const keys = [];
     for (const url of urls) {
       // Only delete objects that live in OUR bucket (prefix match), and derive
       // the key as everything after the public base URL. Strip any query suffix
@@ -1551,10 +1648,22 @@ async function handleDeleteAccount(request, env, origin, allowed) {
       if (typeof url === 'string' && url.startsWith(base + '/')) {
         const key = url.slice(base.length + 1).split('?')[0].split('#')[0];
         if (key && !key.includes('..')) {
-          try { await env.IMAGES.delete(key); } catch { /* orphan at worst */ }
+          keys.push(key);
         }
       }
     }
+    await runBestEffortBatchWithinDeadline(
+      keys,
+      (key) => env.IMAGES.delete(key),
+      WORKER_DEADLINES_MS.r2Binding,
+      (error) => emitWorkerLog('account_cleanup_failed', {
+        step: 'r2_delete',
+        status: null,
+        failure: isDeadlineError(error) ? 'deadline' : 'exception',
+        correlation,
+      }),
+      'R2 cleanup batch',
+    );
   }
 
   // 3. Delete all of this user's data rows (service-role bypasses RLS). Order
@@ -1578,14 +1687,24 @@ async function handleDeleteAccount(request, env, origin, allowed) {
       const res = await sb(path, init);
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
-        if (!tolerate(detail)) failures.push({ path: label, status: res.status, detail: detail.slice(0, 200) });
+        if (!tolerate(detail)) {
+          failures.push({ step: label, status: res.status, failure: 'response' });
+          emitWorkerLog('account_cleanup_failed', {
+            step: label, status: res.status, failure: 'response', correlation,
+          });
+        }
       }
     } catch (e) {
-      failures.push({ path: label, error: String(e && e.message || e) });
+      if (isDeadlineError(e)) throw e;
+      failures.push({ step: label, status: null, failure: 'exception' });
+      emitWorkerLog('account_cleanup_failed', {
+        step: label, status: null, failure: 'exception', correlation,
+      });
     }
   };
-  // BEST-EFFORT: never blocks the irreversible auth-user delete. Used ONLY for the
-  // de-identification (anonymize/null) steps — on a missing column there is BY
+  // BEST-EFFORT for ordinary provider responses/exceptions, but a deadline aborts
+  // before the irreversible auth-user delete so the caller can retry with proof.
+  // Used ONLY for the de-identification (anonymize/null) steps — on a missing column there is BY
   // DEFINITION no residual UUID to leak, so a cosmetic column/cache issue must not
   // strand a user unable to delete their account. Logged, not failed. [audit 2026-06-26]
   const runBestEffort = async (label, init, path) => {
@@ -1593,10 +1712,18 @@ async function handleDeleteAccount(request, env, origin, allowed) {
       const res = await sb(path, init);
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
-        console.warn('delete-account best-effort step failed (non-blocking)', JSON.stringify({ step: label, status: res.status, detail: detail.slice(0, 200) }));
+        emitWorkerLog('account_cleanup_failed', {
+          step: label, status: res.status, failure: 'response', correlation,
+        });
       }
     } catch (e) {
-      console.warn('delete-account best-effort step threw (non-blocking)', JSON.stringify({ step: label, error: String(e && e.message || e) }));
+      if (isDeadlineError(e)) throw e;
+      emitWorkerLog('account_cleanup_failed', {
+        step: label,
+        status: null,
+        failure: 'exception',
+        correlation,
+      });
     }
   };
   const minimal = { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } };
@@ -1604,15 +1731,15 @@ async function handleDeleteAccount(request, env, origin, allowed) {
 
   // 3a. Hard-delete the user's own rows (STRICT — must succeed or abort).
   const deletes = [
-    `grave_photos?user_id=eq.${userId}`,
-    `tributes?user_id=eq.${userId}`,
-    `scan_events?user_id=eq.${userId}`,
-    `scan_credits?user_id=eq.${userId}`,
-    `analytics_events?user_id=eq.${userId}`,
-    `stories?user_id=eq.${userId}`,
-    `user_prefs?user_id=eq.${userId}`,
+    ['grave_photos_delete', 'grave_photos?user_id=eq.' + userId],
+    ['tributes_delete', 'tributes?user_id=eq.' + userId],
+    ['scan_events_delete', 'scan_events?user_id=eq.' + userId],
+    ['scan_credits_delete', 'scan_credits?user_id=eq.' + userId],
+    ['analytics_events_delete', 'analytics_events?user_id=eq.' + userId],
+    ['stories_delete', 'stories?user_id=eq.' + userId],
+    ['user_prefs_delete', 'user_prefs?user_id=eq.' + userId],
   ];
-  for (const path of deletes) await runStrict(path, minimal, path);
+  for (const [step, path] of deletes) await runStrict(step, minimal, path);
 
   // 3b. ANONYMIZE rather than delete: the user's filed content_reports are a
   //     Play-required, intended-tamper-proof moderation/takedown queue (migration
@@ -1620,7 +1747,7 @@ async function handleDeleteAccount(request, env, origin, allowed) {
   //     reporter). Hard-deleting them would let a user erase the moderation
   //     evidence they generated. Null the reporter linkage; keep the report.
   //     Best-effort: a missing reporter_id column has no UUID left to leak anyway.
-  await runBestEffort('content_reports(anonymize)', patchNull('reporter_id'), `content_reports?reporter_id=eq.${userId}`);
+  await runBestEffort('content_reports_anonymize', patchNull('reporter_id'), `content_reports?reporter_id=eq.${userId}`);
 
   // 3c. The shared `graves` table is NOT deleted (it is canonical, referenced by
   //     other users' stories), but it stores the user's UUID in corrected_by /
@@ -1629,8 +1756,8 @@ async function handleDeleteAccount(request, env, origin, allowed) {
   //     complete (no residual personal identifier survives — Play data-deletion).
   //     Best-effort: if 024/025 haven't run in this env, the column simply isn't
   //     there to hold a UUID — must not block the delete.
-  await runBestEffort('graves(corrected_by)', patchNull('corrected_by'), `graves?corrected_by=eq.${userId}`);
-  await runBestEffort('graves(marker_set_by)', patchNull('marker_set_by'), `graves?marker_set_by=eq.${userId}`);
+  await runBestEffort('graves_corrected_by', patchNull('corrected_by'), `graves?corrected_by=eq.${userId}`);
+  await runBestEffort('graves_marker_set_by', patchNull('marker_set_by'), `graves?marker_set_by=eq.${userId}`);
 
   // If any DATA delete genuinely failed, do NOT delete the auth user — we don't
   // want an orphaned auth-less data row set. Surface it so the client can retry.
@@ -1639,22 +1766,33 @@ async function handleDeleteAccount(request, env, origin, allowed) {
   }
 
   // 4. Finally, delete the auth user itself (admin API, service-role).
-  const authDel = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
+  const authDel = await fetchWithDeadline(`${env.SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
     method: 'DELETE',
     headers: {
       'apikey': env.SUPABASE_SERVICE_KEY,
       'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
     },
-  });
+  }, WORKER_DEADLINES_MS.supabase);
   if (!authDel.ok) {
-    const detail = await authDel.text().catch(() => '');
-    return json({ error: 'Auth user deletion failed', status: authDel.status, detail: detail.slice(0, 200) }, 500, origin, allowed);
+    return json({ error: 'Auth user deletion failed', status: authDel.status }, 500, origin, allowed);
   }
 
   return json({ ok: true, deleted: true, user_id: userId }, 200, origin, allowed);
 }
 
 // ── helpers ───────────────────────────────────────────────────────
+function workerFailureResponse(error, pathname, origin, allowed, isAdminMetrics = false) {
+  const deadline = isDeadlineError(error);
+  const bodyLimit = isUpstreamBodyLimitError(error);
+  emitWorkerLog('worker_request_failed', {
+    route: canonicalWorkerRoute(pathname),
+    failure: deadline ? 'deadline' : bodyLimit ? 'response' : 'exception',
+  });
+  const payload = { error: deadline ? 'Upstream timeout' : bodyLimit ? 'Upstream response too large' : 'Worker error' };
+  const status = deadline ? 504 : bodyLimit ? 502 : 500;
+  return isAdminMetrics ? adminJson(payload, status, origin) : json(payload, status, origin, allowed);
+}
+
 function configurationUnavailable(errors, origin, allowed, isAdminMetrics = false) {
   return new Response(JSON.stringify({
     error: 'Worker configuration unavailable',

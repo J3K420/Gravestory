@@ -6,6 +6,8 @@ Release candidates, execution leases, and append-only deployment evidence are go
 
 Deploy-varying public handles, secret/binding names, attached-resource ownership, installed-client compatibility, and source-bound release attestations are governed by [`deploy-configuration.md`](deploy-configuration.md). `node tools/deploy-config.mjs validate` is also local-only and included in repository verification; remote presence remains explicitly `unverified` unless a separately approved versioned observation is committed.
 
+Process/port/concurrency ownership, Worker deadlines and structured events, duplicate-delivery dispositions, mobile interruption boundaries, and EAS parity claims are governed by [`runtime-operations.md`](runtime-operations.md). Its runtime checks are part of both Worker tests and the repository verifier.
+
 ## Supported toolchain
 
 - Node.js 22.13.1 (`.nvmrc` and each Node package's `engines` field)

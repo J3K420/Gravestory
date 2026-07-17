@@ -12,10 +12,15 @@
 > **Framing (locked):** lead with VERIFIED SOURCES, not "AI." Target the casual cemetery visitor,
 > not the serious genealogist. Solo indie · Android-only · goal = first revenue, then repeat purchase ·
 > owner prefers building to marketing.
+>
+> **Timing revision (2026-07-16):** the original "launch immediately" sequence is superseded by
+> [`late-summer-2026-launch-plan.md`](late-summer-2026-launch-plan.md). Prepare through August 21,
+> send advance pitches August 24–27, and use September 8–18 as the first coordinated activation
+> window. Positioning, channel verdicts, the NEVER-SAY list, and decision gates remain authoritative.
 
 ---
 
-## 1. Executive Summary — the 5 moves that matter, in order
+## 1. Executive Summary — the 5 late-summer moves that matter
 
 The whole strategy fits one insight: **Google Play will not surface a zero-install niche app organically**
 (2026 ranking weights retention/reviews/uninstall over install volume). Every install must be *pushed in
@@ -23,15 +28,16 @@ from outside*, and the app must *retain + earn reviews* or it decays. So: seed i
 genealogy gatekeepers (zero ban risk, proven-WTP audience), and make sure the listing + app convert and
 retain the borrowed traffic.
 
-| # | Move | Why THIS first |
-|---|------|----------------|
-| **1** | **Send the EOGN / Dick Eastman pitch** (`richard@eastman.net`, draft ready) | Fastest signal (1-2 wks), ~15 min, highest-WTP audience reachable by a solo dev, zero ban risk. The one move you learn from *this month*. |
-| **2** | **Ship the ASO rewrite + auto-fired In-App Review prompt — SAME sitting as move 1** *(status 2026-07-02: the code/copy half is DONE — review prompt OTA'd, `description.md` rewritten, screenshots live per S82; REMAINING = ~10 min of Play Console pasting: title + short/full description)* | Free, fully in your control, and it's the *binding constraint*: without it, borrowed installs land on a stale listing and waste their review potential. Do it BEFORE traffic arrives. |
-| **3** | **Batch the other media pitches in one sitting** — Family Tree Magazine listicle, Genealogy TV, The Genealogy Guys podcast | Same email session, same reviewer-access offer. The listicle is the durable compounding SEO asset; the rest are shots on goal at ~1-in-3 reply odds. |
-| **4** | **Record ONE 30-45s scan-to-story demo clip** | Already owed to the Genealogy TV pitch, doubles as the Play listing video, makes every "yes" convert faster. Produce once, reuse everywhere. |
-| **5** | **Fire one local-press email** (Aiken Standard / North Augusta Star) — *after* the 4 media pitches | Cheap "as featured in…" credibility asset that strengthens future pitches. A reputation primer, not a sales channel. |
+| # | Move | Date and purpose |
+|---|---|---|
+| **1** | **Protect the preparation runway** | July 16–August 21: finish the demo, verify the installed app and listing, rehearse one strong and one thin-record result, and establish the metrics baseline. No broad outreach during this readiness window; any outdoor work happens early morning. |
+| **2** | **Record ONE 30–45s scan-to-story demo clip** | Complete by August 9. It doubles as the Play listing video and lets an editor understand the product without a hot outdoor visit or immediate install. |
+| **3** | **Send four advance smaller-target pitches** | August 24–27: EOGN, Family Tree Magazine, The Family History AI Show, then Amy Johnson Crow. One per day keeps attribution and replies manageable while saving the 100K-tier ask for proof. |
+| **4** | **Run the primary activation window** | September 8–13, after Labor Day and through Grandparents Day: Genealogy Guys plus the remaining verified mid-tier targets, followed by rapid reviewer onboarding. |
+| **5** | **Use week two for proof-dependent reach** | September 14–18: pitch Genealogy TV only after smaller-target engagement or live proof, send one local newsroom after the smaller-target sequence, and use Family History Month only as a relevant editorial hook. Then stop sending and measure. |
 
-**Total owner time to execute all 5: ~one focused day of writing + ~3 hrs of code/recording.** Then back to building.
+**Total owner time remains roughly one preparation day plus short send/reply blocks.** There is no
+single launch-day stunt, paid campaign, or recurring content treadmill.
 
 **The single most important number:** don't judge this by first-sale timing. Plan on **~300-500 installs
 before the first paying customer**, and judge the *model* by the **second purchase**, not the first.
@@ -79,14 +85,14 @@ before the first paying customer**, and judge the *model* by the **second purcha
 
 | Channel | Verdict | Effort | Cost | Intent | Ban/brand risk | First action | Kill criteria |
 |---|---|---|---|---|---|---|---|
-| **EOGN / Dick Eastman newsletter** | **DO-NOW** | very-low | $0 | high | ~none | Send drafted email to `richard@eastman.net` — lead with records, NOT "AI tools" | No pickup ~3-4 wks + 1 follow-up → stop (don't 3rd-pitch) |
-| **ASO rewrite + In-App Review** | **DO-NOW** | low | $0 | high (moment-of-need) | none | Retitle → "GraveStory: Gravestone Scanner"; rewrite `description.md` (kill "AI-written" lead, fix "10 free"→"3 free"); OTA the auto-review prompt | Rank #1 for "gravestone scanner" yet installs ~0 → confirms you need external traffic; stop tinkering, don't kill |
-| **Family Tree Magazine "Best Cemetery Apps" listicle** | **DO-NOW** (compounding, slow) | very-low | $0 | high | ~none | Writer-query to `FamilyTree@yankeepub.com` (CC named editors) — NOT a byline; expect 6-8 wks, NO nudge inside window | No reply ~8-10 wks (one query, zero mid-window nudges; ONE final nudge allowed at 8-10 wks — `followup-templates.md` #3) → deprioritize |
-| **Genealogy TV / Connie Knox (100K YT)** | **DO-NOW** (batch it; not #1) | low | $0 | medium | ~none | Contact form + attach demo clip; frame as "filmable demo idea" | No reply after form + 1 LinkedIn DM (~4-6 wks) → reallocate to mid-tier |
-| **One evergreen demo clip** | **DO-NOW** (enabling asset) | low | $0 | n/a | low | Record 30-45s scan-to-story on a strong-record stone; on-screen text leads with SOURCES; YouTube → paste URL into Play listing | You catch yourself making clip #3/#4 for a self-run channel |
-| **The Genealogy Guys podcast** | **TEST-SMALL** (batch add-on) | low | $0 | medium | low (brief on traps) | Email via genealogyguys.com; attach clip. Drop dead *Generations Cafe*; add *The Family History AI Show* | No reply ~4 wks; or aired + negligible bump; or pay-for-mention |
-| **Mid-tier YouTubers** (Amy Johnson Crow, Lisa Lisson, Family History Fanatics) | **TEST-SMALL** (rider on emails) | low | $0 | medium | low | Fold into same batch; pitch mid-tier FIRST, save 100K-tier for after social proof. *(Crow is AI-literate but skeptical — precise sourcing cuts both ways)* | ~8-10 pitches over 6-8 wks, zero video commitments → video ask too heavy; pivot to newsletters/listicle |
-| **Local press (Aiken Standard / Augusta Chronicle)** | **TEST-SMALL** (after media batch) | low | $0 | medium | low | ~150-word pitch to a *named* reporter (check bylines); pre-scan 2-3 known-good local stones | No reply + 1 follow-up ~3 wks; treat as credibility asset, not sales |
+| **EOGN / Dick Eastman newsletter** | **SCHEDULED AUG 24** | very-low | $0 | high | ~none | Send drafted email to `richard@eastman.net` — lead with records, NOT "AI tools" | No pickup ~3-4 wks + 1 follow-up → stop (don't 3rd-pitch) |
+| **ASO rewrite + In-App Review** | **READINESS GATE** | low | $0 | high (moment-of-need) | none | Code/copy work is complete; reconcile the owner-edited status, verify the live listing and installed prompt, and make no new build/OTA solely for marketing | If the live listing is current and the prompt works, stop tinkering; any external correction keeps its normal approval gate |
+| **Family Tree Magazine "Best Cemetery Apps" listicle** | **SCHEDULED AUG 25** (compounding, slow) | very-low | $0 | high | ~none | Writer-query to `FamilyTree@yankeepub.com` (CC named editors) — NOT a byline; expect 6-8 wks, NO nudge inside window | No reply ~8-10 wks (one query, zero mid-window nudges; ONE final nudge allowed at 8-10 wks — `followup-templates.md` #3) → deprioritize |
+| **Genealogy TV / Connie Knox (100K YT)** | **HOLD FOR PROOF** | low | $0 | medium | ~none | After a smaller target engages or coverage is live, use the contact form + demo clip and frame it as a filmable idea | If never sent, do not count it as a failure; after a send, no reply after form + 1 LinkedIn DM (~4-6 wks) → stop |
+| **One evergreen demo clip** | **PREP BY AUG 9** (enabling asset) | low | $0 | n/a | low | Record 30-45s scan-to-story on a strong-record stone; on-screen text leads with SOURCES; YouTube → paste URL into Play listing after approval | You catch yourself making clip #3/#4 for a self-run channel |
+| **The Genealogy Guys podcast** | **SCHEDULED SEP 8** | low | $0 | medium | low (brief on traps) | Email via genealogyguys.com; attach clip. The Family History AI Show goes in the Aug 26 advance slot | No reply ~4 wks; or aired + negligible bump; or pay-for-mention |
+| **Mid-tier YouTubers** (Amy Johnson Crow, Lisa Lisson, Family History Fanatics) | **SCHEDULED AUG 27–SEP 10** | low | $0 | medium | low | Pitch mid-tier first and verify every route; save the 100K-tier target for actual engagement or live proof. *(Crow is AI-literate but skeptical — precise sourcing cuts both ways)* | The scheduled smaller-target roster closes with zero commitments after each response window → video ask too heavy; pivot to newsletters/listicle |
+| **Local press (Aiken Standard / Augusta Chronicle)** | **SCHEDULED SEP 17** (after smaller-target media sequence) | low | $0 | medium | low | One verified newsroom only; remove stale launch claims, pre-scan approved examples, and use the current owner-reconciled pitch | No reply + 1 follow-up ~3 wks; treat as credibility asset, not sales |
 | **Web / global-map SEO** | **DO-LATER** (build project) | high | $0 | low | low (privacy = HARD gate) | 10-min diagnostic ONLY: robots.txt + sitemap.xml + Search Console. Do NOT build per-grave pages yet | Build only once Search Console shows real long-tail impressions AND corpus >100-200 bios |
 
 ### SKIP list (don't waste an hour)
@@ -103,37 +109,27 @@ before the first paying customer**, and judge the *model* by the **second purcha
 
 ---
 
-## 4. 90-Day Sequenced Roadmap
+## 4. Dated Late-Summer Roadmap
 
-Front-loaded so the highest-leverage, lowest-effort moves happen first — then you're mostly back to building.
+The executable checklist, hard gates, heat rule, send-day schedule, and measurement sheet are in
+[`late-summer-2026-launch-plan.md`](late-summer-2026-launch-plan.md). This section is the strategic view.
 
-### Weeks 1-2 — the whole "launch" happens here (~1 day + ~3 hrs code)
+| Phase | Dates | Strategic job | Exit condition |
+|---|---|---|---|
+| **Readiness** | Jul 16–Aug 9 | Finish the demo, listing, press/reviewer package, and two rehearsed examples without spending the market opportunity in peak heat | A recipient can understand the product without installing; a reviewer "yes" can be handled within one hour |
+| **Quiet proof** | Aug 10–21 | Re-verify contacts, personalize only the opening line, test every link, and record the baseline | All hard gates in the late-summer plan pass by Aug 21 |
+| **Advance smaller targets** | Aug 24–27 | EOGN, Family Tree Magazine, The Family History AI Show, then Amy Johnson Crow — one pitch per day | Four accurate pitches delivered; replies have protected response time |
+| **Holiday buffer** | Aug 31–Sep 7 | Respond, onboard reviewers, and avoid forcing a cold-send wave into Labor Day | No unresolved product/support blocker; no unnecessary new scope |
+| **Primary activation** | Sep 8–13 | Send Genealogy Guys and the remaining verified mid-tier pitches after Labor Day; use Grandparents Day only as a respectful family-story hook | The seven smaller genealogy/media targets have been attempted or accurately skipped; interested reviewers are active |
+| **Proof-dependent reach** | Sep 14–18 | Pitch Genealogy TV only after smaller-target proof and send exactly one local newsroom after the smaller-target sequence | Up to eight genealogy/media targets plus one newsroom are tracked; held or open targets are not failures |
+| **Measure** | Sep 21–Oct 9 | Record 72-hour, 7-day, and 21-day signals; separate reach, listing conversion, activation, and revenue problems | Apply the ordered operating decision on Oct 9; leave documented editorial windows open |
 
-| Action | Owner time | Expected signal |
-|---|---|---|
-| **ASO pass:** retitle → "GraveStory: Gravestone Scanner"; rewrite `description.md` (records-first lead, one natural mention each of "read old headstones" / "who is buried here" — NO keyword stacking; fix "10 free"→"3 free") | ~2 hrs | Listing trap-free + Ask-Play-ready when traffic lands |
-| **In-App Review prompt** OTA'd: fire in `ResultScreen.js` `handleSave()` — gated to signed-in + ≥2nd save + `sources.length > 0` (excludes stone-only fallback) + one-time AsyncStorage flag. Run bmad-code-review first. | ~1-2 hrs | Ratings tick up with future install spikes |
-| **Record the demo clip** (strong-record stone, sources on screen) → YouTube → paste URL into Play listing | ~1-2 hrs | Reusable across all pitches |
-| **Send EOGN pitch** (`richard@eastman.net`) — hook leads with records, not "AI tools" | ~15 min | **Reply/pickup within 1-2 wks — your fastest read** |
-| **Batch other pitches, same sitting:** FTM writer-query; Genealogy TV form; The Genealogy Guys + The Family History AI Show; mid-tier YouTubers (Crow/Lisson first) | ~2-3 hrs | ~1-in-3 reply odds; diversified |
-| Grant `is_unlimited` to any reviewer who bites | seconds | — |
+The heat constraint applies to cemetery recording and demonstrations, not to email timing. Outdoor work
+moves to early morning and is postponed during a National Weather Service Heat Advisory or Extreme Heat
+Warning; the pre-recorded demo substitutes for any unsafe field meeting.
 
-### Weeks 3-6 — respond, don't chase (~2-3 hrs total)
-
-- **Answer editor/creator follow-ups fast**; honor free-access grants. This is where a "yes" converts.
-- **One local-press email** to Aiken Standard / North Augusta Star (named reporter). *Signal:* a citable feature to reuse.
-- **One polite follow-up each** to non-responders at ~2-3 wks (EOGN, Genealogy TV via LinkedIn). **No follow-up to FTM inside its 6-8 wk window.**
-- **10-min SEO diagnostic:** robots.txt + sitemap.xml + Search Console. *Signal:* starts the indexing clock.
-- *Overall:* first install trickle from any live feature; watch rating + review count.
-
-### Weeks 7-12 — measure, and mostly build (~1-2 hrs/wk)
-
-- **Watch the funnel** (below) as features ship. Attribute via per-channel **Custom Store Listing deep-links** (free, +15-57% documented conversion lift).
-- **If a mid-tier creator said yes but the 100K-tier didn't:** ship the mid-tier video, then re-pitch Genealogy TV *with the video as social proof*.
-- **If installs are flowing:** tighten the review-prompt gate if rating dips; consider the per-grave SEO build ONLY if Search Console shows real long-tail impressions.
-- **Otherwise: go build.** The pitches are sent; they compound or they don't. Don't manufacture a marketing treadmill.
-
-**Realistic total owner marketing time across 90 days: ~2-3 days.** That is the point.
+**Realistic owner time through October 9: one preparation day plus short send/reply blocks.** Then return
+to building unless a real editor, reviewer, or measurable traffic signal creates justified work.
 
 ---
 
@@ -159,7 +155,7 @@ writing, not a week of grinding.
 
 ## 6. Success Metrics & Decision Gates
 
-**Track the full funnel** (attribute via per-channel CSL links):
+**Track the full funnel** (use per-channel CSL links when available; otherwise report wave-level attribution):
 
 ```
 install → sign-up → first scan → paywall view → FIRST purchase → SECOND purchase
@@ -177,7 +173,10 @@ validation milestone, not a business. A repeat buyer proves the credit model and
 
 **Decision gates:**
 
-- **Media strategy verdict:** judge on the *aggregate* of all ~5-6 pitches over 8-12 weeks, never on one non-reply. If 0 of 6 engage AND aggregate installs stay <300 → the *reach* problem isn't solved; the video ask is too heavy / hook is wrong — revisit messaging, not the whole plan.
+- **Media strategy verdict:** judge the scheduled eight-target genealogy/media roster only after each
+  actually sent target's documented response window closes. A held Genealogy TV pitch and an open Family
+  Tree Magazine window are not rejections. If every closed target is silent and aggregate installs remain
+  below the existing evidence threshold, revisit the hook rather than abandoning the product or channel.
 - **SEO build gate:** invest the 1-3 build-days ONLY when Search Console shows rising long-tail name/cemetery impressions AND the public-bio corpus exceeds ~100-200 bios. Not before.
 - **iOS / scaling gate:** buy the Apple account and build iOS ONLY after Android shows **≥1 second purchase** — not after the first sale, not on installs alone.
 

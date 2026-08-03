@@ -1,0 +1,285 @@
+{
+  "baseline": {
+    "baselineId": "baseline-worker-20260713-4a01f4da",
+    "genesisAcceptance": {
+      "evidenceRef": "repository-baseline-unbound-rollback-20260802",
+      "ownerApprovalRef": "james-approved-ungated-20260802",
+      "recordId": "genesis-worker-20260803054453"
+    },
+    "ordinaryEligibility": "eligible",
+    "releaseId": "4a01f4da-8cd9-48de-9478-f65ad47b3f8f",
+    "rollback": {
+      "releaseId": null,
+      "status": "unknown"
+    }
+  },
+  "baselineHash": "16d20211539a6181bb24fd5ac75bb62f1b96087cc77e0e31e47c9515f9c84a70",
+  "build": {
+    "details": {
+      "allowedOrigins": [
+        "https://gravestory.pages.dev",
+        "https://j3k420.github.io"
+      ],
+      "environment": "production",
+      "wildcardOrigin": false
+    },
+    "identity": "22ec3bc4c3ed8d1bcafd9371b5406326ce59048bc40798128e01dbd3d07a4fdc",
+    "inputs": [
+      {
+        "path": "worker/config.js",
+        "sha256": "187a946d99d282c4fde1ec2aa7394852655866496e78a045c2f69d990e905749"
+      },
+      {
+        "path": "worker/package-lock.json",
+        "sha256": "a5551ef2f369607287587b6ad1e00569825992b8895263e31e2df4e98a072757"
+      },
+      {
+        "path": "worker/package.json",
+        "sha256": "3b1667664bc0c33dfed8dce8ca99889a3670280d22cf2be5b78f5b3c05f4d5a4"
+      },
+      {
+        "path": "worker/runtime.js",
+        "sha256": "13b8facde03adcec733bc9115e0db35d5a42e4e27dab0a5bf0bf5b3a157895a6"
+      },
+      {
+        "path": "worker/tests/config.test.mjs",
+        "sha256": "5354a0be817d39f4f1f2758e263ccbfacfee3ce14275cdcdf40db6e0b225a2fe"
+      },
+      {
+        "path": "worker/tests/runtime.test.mjs",
+        "sha256": "cd722734cc680b2d9651225037ceec87e9072716b0f13c3a1b39321bbedd0c42"
+      },
+      {
+        "path": "worker/worker.js",
+        "sha256": "0ca49d3a82c9ba057ad39a816ff8fdcf9bb40aed030f3187b769eee8d2069153"
+      },
+      {
+        "path": "worker/wrangler.toml",
+        "sha256": "ed2c2220061448e2c5c674a7a6b8d2192d4688ab06f6214efd543baeabed47ee"
+      }
+    ]
+  },
+  "component": "worker",
+  "configuration": {
+    "attestationBlob": "d5f8ad89ddb6e584a29a2c18d9ae97aca006c5ea",
+    "attestationPath": "deploy/config/worker.json",
+    "authority": "deploy-config-contract",
+    "component": "worker",
+    "identity": "d686ec23a9a50a2cead7a88dba1f6af13903ed95575d8522db5c7e44943e7293",
+    "remotePresence": "unverified",
+    "sourceCommit": "4334c599874873464a6487cbcf9f7130c1db75c8",
+    "validation": "passed"
+  },
+  "contentHash": "dc854409559dbb671cf200137e32161d4a8959acb82713b36b4a58acb5ed365e",
+  "createdAt": "2026-08-03T06:01:23.248Z",
+  "eligibility": {
+    "blockingReasons": [],
+    "status": "eligible"
+  },
+  "migrations": {
+    "basis": "repository-intended",
+    "bootstrapStatus": "unresolved",
+    "catalogSha256": "0d50dbb27603caa5987a58e5e70047f1090ec20e40fbb43d8ce0b58735f39c2a",
+    "count": 36,
+    "first": "001",
+    "items": [
+      {
+        "gitBlob": "268df328ae30c568305796006aa451cae9c147c2",
+        "id": "001",
+        "sha256": "0944014363e7836e5e0e47926c521841c1299a746b95ca5d757958d703c057c5"
+      },
+      {
+        "gitBlob": "c5d1c90097f72b92670b710c027b4a43652b5c9a",
+        "id": "002",
+        "sha256": "bfb10eb6fcbf5e25b21509a18da8cdb2255aae77d0599fd92ccebcc18cd22275"
+      },
+      {
+        "gitBlob": "3fb542beca161c05d93b779fec76d5e503ae8a94",
+        "id": "003",
+        "sha256": "df4eb730e6d987eaf5a3ff94e9d01a1df0e2fd9e57cc6ace4206f095f3ec7c05"
+      },
+      {
+        "gitBlob": "66e051fd5cab7344823ebb92ae23fba34ddfc368",
+        "id": "004",
+        "sha256": "860b60511b376a624931b908898972e9aed496855bf5b94a2c924a74f45cebfa"
+      },
+      {
+        "gitBlob": "18dc32471a43519b060c0326c6d70315666e9d5a",
+        "id": "005",
+        "sha256": "874bf0cd5894aaa842f0cff0af8eceb2487f8b9bc5d4b356998035d1ea8969df"
+      },
+      {
+        "gitBlob": "e40b829d39dadc9b0e622c02f9feecc41b137644",
+        "id": "006",
+        "sha256": "41ee01bae409dd1e86e819791ba460194caf5532483540b98d3393089484fa82"
+      },
+      {
+        "gitBlob": "b5d623f0ffbf785b194582b9e639c9df127bd680",
+        "id": "007",
+        "sha256": "77fce22b2e15e7a28a57fbf7d01a62fc95be15fc52ba95a8c0ea7906e6fdf373"
+      },
+      {
+        "gitBlob": "776a165608d467c889df7409b1382d394d0c28d7",
+        "id": "008",
+        "sha256": "56271aa873847a6a9fb3331a5e1649ce194cdbf19d7f29113efa0a5cd60522be"
+      },
+      {
+        "gitBlob": "6ad50f71a783c39dfecee21e55e6d4dc03e2decd",
+        "id": "009",
+        "sha256": "283f993639fb7dd93d9a08adb20119e57406d3704b82bfd841ac1fb6308a2f78"
+      },
+      {
+        "gitBlob": "8346351bc69c590ac45ba1832aae08df61ff6861",
+        "id": "010",
+        "sha256": "e3462f9094eca46c21e5dfb36e289ebe5f8e43ea1c275d01273a6a237a5438a5"
+      },
+      {
+        "gitBlob": "bf237f7b1eec60bff66fb09a0078576f602340e8",
+        "id": "011",
+        "sha256": "1d42cc5b781a7fbf59be8ba1bf46a207f69822c2633129845d56d2bc7a465cd9"
+      },
+      {
+        "gitBlob": "a44844e0427f5c10513b2d8a052891c152665db6",
+        "id": "012",
+        "sha256": "25a64b26e116fb2381e3dff2b5636ee25844c8a9044cf45f99e72afe3356ad5a"
+      },
+      {
+        "gitBlob": "5d64d01769618c0c2cc17a8a6b83e5b68a56a87b",
+        "id": "013",
+        "sha256": "0a1a756b6b9f929f43ae97f4cb65d682ee6749dc17522b84b6fa4c66b92043a6"
+      },
+      {
+        "gitBlob": "7bc8dca42fd59621b5c36b3f876351de85c0dc42",
+        "id": "014",
+        "sha256": "30c95fc60574c815b129cb36a6f665bde9fe434faae4ed592193ffbd8d50e7df"
+      },
+      {
+        "gitBlob": "e89ba6dc07dfb46ffe34019870a3e10440ceaa35",
+        "id": "015",
+        "sha256": "eb76d6124bdb5b5e0de31d6fe25c1c049b86b23069d8c7fc8cb4ef52f4128067"
+      },
+      {
+        "gitBlob": "a327d1b9da344506ecb2c8d239aa782ef104593a",
+        "id": "016",
+        "sha256": "94dec0da7a02280b5f5be37177f568171a60be3c32ac691b46f6014d459ab67a"
+      },
+      {
+        "gitBlob": "1b5c73285b0f556bc03a056c8634dc253ee44df9",
+        "id": "017",
+        "sha256": "de3dcdcaa3e351057edbce776ae5554a1cc8d7f07a576605b49f08bdc63b53c7"
+      },
+      {
+        "gitBlob": "885c44a5db68abefd261bbd264a8dfb8f47e125d",
+        "id": "018",
+        "sha256": "331b468e4ab9107d401d90e79079c36dbbfba8083dc2c6e1817cf97b8b65012c"
+      },
+      {
+        "gitBlob": "3b90c47ce1a2998c8a7132a4438d41eb68cb9a41",
+        "id": "019",
+        "sha256": "6c02a3bb2423fda9b8ec0eb7e68352cac537dbb21573a63368ebe546a62bf21f"
+      },
+      {
+        "gitBlob": "216f643ef84ef046efc784e1499b1fe49e3fd960",
+        "id": "020",
+        "sha256": "c4e11c18cebd013dad31da77c27b2a312b4e8483bdb804f9788a9f747ea7a34d"
+      },
+      {
+        "gitBlob": "c42a2bc4b9a1520d28eb5a9dce0a7616a2166f67",
+        "id": "021",
+        "sha256": "214c6a206f3b8df16b2ef28ffe9e47c6703ef67120c02fdde6e7e051aa801178"
+      },
+      {
+        "gitBlob": "f62079674977867b0c62116c1189b508ed62f985",
+        "id": "022",
+        "sha256": "144e2306b787fc144cb0ab4acaed96d9fabdf9d61ca108039dd4439c10f25e66"
+      },
+      {
+        "gitBlob": "756b746d51cd40e50eb487e5c424bb2a830a7439",
+        "id": "023",
+        "sha256": "26976d18bb839ddd7ab05bd6ad65ab9e5c492ef35387d9354e571212087ff5b4"
+      },
+      {
+        "gitBlob": "0cde5a3f1a1299a0a084a71d7d428a7b9c68dd8d",
+        "id": "024",
+        "sha256": "db83ca2624746f7ea2128c94e442fca332f448d13c74aa678f4aea8a3b173943"
+      },
+      {
+        "gitBlob": "fc8f22b2b98a80407d7cb2f5758e8aa932ad3072",
+        "id": "025",
+        "sha256": "91ca25baae7c24019fbb89a5a833bc1e0282109b4898f0d1f7c024528861fed1"
+      },
+      {
+        "gitBlob": "c07c91fb9d200e92e9c39bc915188109bb4a7471",
+        "id": "026",
+        "sha256": "d08f911dcf1efff76584919b66e303b9ba60bb235fe7e03f300542fe7e200c26"
+      },
+      {
+        "gitBlob": "3e07b81410007025a9c9f0c1ca27ccdf8006e206",
+        "id": "028",
+        "sha256": "4bec9521e51d8a97da928371ae882ccbd4fe52ea8e1b8261c6b494d485d572aa"
+      },
+      {
+        "gitBlob": "7a01ad41ddcc43936ee7764b1fd7ea584b1c6f51",
+        "id": "029",
+        "sha256": "791fa6d78cecd459d51acec058e4e8153079a87c3803c0c8ea1294a2ae45db7e"
+      },
+      {
+        "gitBlob": "0b8a296b0ff4b0db1cf1c4a67e08f0f104085413",
+        "id": "030",
+        "sha256": "44a463e30f10ad7ccb0a37c6cc5ec0e20fc20382e0d1f7cf15112250e3ae2567"
+      },
+      {
+        "gitBlob": "09465ed1447bbe3a975cb9667d42f05b46348367",
+        "id": "031",
+        "sha256": "68dda06b6237f0dc9e841245dae52092b3aba8e771342b92d2c0248446ddbb4f"
+      },
+      {
+        "gitBlob": "2c9632a010e7d718b1fba4a0217010a71ae21a4e",
+        "id": "032",
+        "sha256": "07d7f0d6b68560c5b9524f8d7ae05cf720c7058064dce826898657f8c1663d23"
+      },
+      {
+        "gitBlob": "b79c465943705ef77703b91b6d4faf3bfde703b9",
+        "id": "033",
+        "sha256": "ff847958046eb92c08373f06762196a0067fe5c6be49bc7cc2af93d1127c77b9"
+      },
+      {
+        "gitBlob": "c31bb93cd9a5061ec6b0c448b78abfcbf77adde2",
+        "id": "034",
+        "sha256": "88f0d659f022093db0ef68018b8053efb4de32baeb8f980a9da88eb56c3e0174"
+      },
+      {
+        "gitBlob": "672b0bfc31f4b8d11fd8a3094f83d12fa8043ca6",
+        "id": "035",
+        "sha256": "718083b940ad17c92cafce3057184bf08d3b96f2b96685ec8a0d61c345a8f93c"
+      },
+      {
+        "gitBlob": "cbea680b813122835c9e544b4e89fe38313a4de8",
+        "id": "036",
+        "sha256": "c92ec6b2175aed461b66e600146da7242ccdcace5fb004c84fdf1e79eaf74e63"
+      },
+      {
+        "gitBlob": "cbce720c2dacde749dab811f46307561b1bf06c1",
+        "id": "037",
+        "sha256": "9cef6450080daab2f356e26a6ce1b5aa5b0d1dce5ebdd8734a931fec5a8d64ca"
+      }
+    ],
+    "last": "037"
+  },
+  "recordId": "candidate-worker-4334c5998748-20260803060123",
+  "recordType": "candidate",
+  "review": {
+    "artifactBlob": "d9171e55a40176c8d59ddc03842b849728f3ad2e",
+    "artifactPath": "_bmad-output/implementation-artifacts/share-remembrance-review/final-review.md",
+    "bmad": "passed",
+    "evidenceSha256": "c8548c1267b172ed980c518bfe12d57ad3390b8d28ee9fa038a7440faced4614",
+    "pr": "J3K420/Gravestory#21",
+    "recordBlob": "cc6c9481f20dd395772651f4dab0de0c457b1f78",
+    "recordPath": "_bmad-output/implementation-artifacts/review-receipts/share-remembrance-release-20260802.json",
+    "reviewCommit": "de6f601262321f94e97cf15954d337dad497e4b8",
+    "reviewId": "share-remembrance-release-20260802",
+    "sourceCommit": "4334c599874873464a6487cbcf9f7130c1db75c8"
+  },
+  "schemaVersion": 1,
+  "sourceCommit": "4334c599874873464a6487cbcf9f7130c1db75c8"
+}

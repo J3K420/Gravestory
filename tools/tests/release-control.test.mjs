@@ -53,7 +53,7 @@ function fixtureRoot(t) {
   const files = {
     'mobile/app.config.js': "export default { runtimeVersion: { policy: 'sdkVersion' } };",
     'mobile/eas.json': '{"build":{"production":{"channel":"production","android":{"buildType":"app-bundle"}}}}',
-    'mobile/package-lock.json': '{}',
+    'mobile/package-lock.json': '{\n  "lockfileVersion": 3\n}\n',
     'docs/cloudflare-pages-manifest.txt': 'index.html',
     'sw.js': 'cache',
     'worker/worker.js': 'worker',
@@ -378,8 +378,15 @@ test('repository validation recomputes identities from reviewed Git objects and 
   const root = fixtureRoot(t);
   const reviewPath = '_bmad-output/specs/review.md';
   const receiptPath = '_bmad-output/review-receipt.json';
+  const lockfilePath = join(root, 'mobile/package-lock.json');
+  const committedLockfile = readFileSync(lockfilePath);
   const git = (...args) => {
     const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', shell: false });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  const gitInput = (args, input) => {
+    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', shell: false, input });
     assert.equal(result.status, 0, result.stderr);
     return result.stdout.trim();
   };
@@ -389,6 +396,7 @@ test('repository validation recomputes identities from reviewed Git objects and 
   git('add', '.');
   git('commit', '-m', 'reviewed source');
   const commit = git('rev-parse', 'HEAD');
+  const committedLockfileBlob = git('rev-parse', `${commit}:mobile/package-lock.json`);
   mkdirSync(dirname(join(root, reviewPath)), { recursive: true });
   writeFileSync(join(root, reviewPath), '# Review\n\n## Review Findings\n\n- [x] [Review][Patch] Complete\n');
   const artifactBlob = git('hash-object', reviewPath);
@@ -396,12 +404,26 @@ test('repository validation recomputes identities from reviewed Git objects and 
   git('add', '.');
   git('commit', '-m', 'record completed review');
   const reviewCommit = git('rev-parse', 'HEAD');
+
+  writeFileSync(lockfilePath, '{\n  "lockfileVersion": 999\n}\n');
+  git('add', 'mobile/package-lock.json');
+  const alternateTree = git('write-tree');
+  const alternateCommit = gitInput(['commit-tree', alternateTree], 'replacement commit\n');
+  const alternateLockfileBlob = git('rev-parse', `${alternateCommit}:mobile/package-lock.json`);
+  git('reset', '--hard', reviewCommit);
+  git('replace', commit, alternateCommit);
+  git('replace', committedLockfileBlob, alternateLockfileBlob);
+  git('config', 'core.autocrlf', 'true');
+  writeFileSync(lockfilePath, committedLockfile.toString('utf8').replace(/\r?\n/g, '\r\n'));
+
   const candidate = createCandidate({
     root, component: 'mobile', sourceCommit: commit, createdAt: '2026-07-15T12:00:00Z',
     review: { sourceCommit: commit, reviewCommit, reviewId: 'bmad-review-source', pr: 'J3K420/Gravestory#99', bmad: 'passed', recordPath: receiptPath, recordBlob: git('rev-parse', `HEAD:${receiptPath}`), artifactPath: reviewPath, artifactBlob },
     configuration: { sourceCommit: commit, component: 'mobile', identity: 'd'.repeat(64), validation: 'passed', remotePresence: 'unverified', authoritative: false },
     baselines,
   });
+  const lockfileInput = candidate.build.inputs.find(({ path }) => path === 'mobile/package-lock.json');
+  assert.equal(lockfileInput.sha256, createHash('sha256').update(committedLockfile).digest('hex'));
   const evidenceDirectory = join(root, 'release/evidence');
   mkdirSync(evidenceDirectory, { recursive: true });
   const components = {};
@@ -416,6 +438,9 @@ test('repository validation recomputes identities from reviewed Git objects and 
   writeFileSync(join(root, 'release/baselines.json'), canonicalJson(baselineFile));
   const candidatePath = join(root, `release/records/${candidate.recordId}.json`);
   writeFileSync(candidatePath, canonicalJson(candidate));
+  mkdirSync(join(root, '.git/info'), { recursive: true });
+  writeFileSync(join(root, '.git/info/attributes'), 'mobile/package-lock.json export-ignore\n');
+  git('config', 'core.autocrlf', 'false');
   assert.doesNotThrow(() => validateReleaseRepository(root, { checkHistory: false }));
   const forged = sealRecord({ ...candidate, build: { ...candidate.build, identity: 'f'.repeat(64) } });
   writeFileSync(candidatePath, canonicalJson(forged));
@@ -425,6 +450,97 @@ test('repository validation recomputes identities from reviewed Git objects and 
   assert.throws(() => validateReleaseRepository(root, { checkHistory: false }), /filename must match recordId/);
 });
 
+test('candidate Git reads ignore inherited repository and object-database redirection', (t) => {
+  const root = fixtureRoot(t);
+  const decoy = fixtureRoot(t);
+  const init = (directory, message) => {
+    const git = (...args) => {
+      const result = spawnSync('git', args, { cwd: directory, encoding: 'utf8', shell: false });
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout.trim();
+    };
+    git('init', '-b', 'main');
+    git('config', 'user.email', 'release-test@example.invalid');
+    git('config', 'user.name', 'Release Test');
+    writeFileSync(join(directory, 'mobile/package-lock.json'), message);
+    git('add', '.');
+    git('commit', '-m', 'fixture');
+    return git('rev-parse', 'HEAD');
+  };
+  const commit = init(root, '{\n  "lockfileVersion": 3\n}\n');
+  init(decoy, '{\n  "lockfileVersion": 999\n}\n');
+  const redirected = {
+    GIT_DIR: join(decoy, '.git'),
+    GIT_WORK_TREE: decoy,
+    GIT_OBJECT_DIRECTORY: join(decoy, '.git', 'objects'),
+  };
+  const previous = Object.fromEntries(Object.keys(redirected).map((key) => [key, process.env[key]]));
+  let candidate;
+  try {
+    Object.assign(process.env, redirected);
+    candidate = createCandidate({
+      root, component: 'mobile', sourceCommit: commit, createdAt: '2026-07-15T12:00:00Z',
+      review: { sourceCommit: commit, reviewCommit: 'f'.repeat(40), reviewId: 'bmad-review-git-env', pr: 'J3K420/Gravestory#99', bmad: 'passed', recordPath: '_bmad-output/review-receipt.json', recordBlob: 'e'.repeat(40), artifactPath: '_bmad-output/specs/review.md', artifactBlob: 'c'.repeat(40) },
+      configuration: { sourceCommit: commit, component: 'mobile', identity: 'd'.repeat(64), validation: 'passed', remotePresence: 'unverified', authoritative: false },
+      baselines,
+    });
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+  const lockfileInput = candidate.build.inputs.find(({ path }) => path === 'mobile/package-lock.json');
+  assert.equal(lockfileInput.sha256, createHash('sha256').update('{\n  "lockfileVersion": 3\n}\n').digest('hex'));
+});
+
+test('candidate materialization rejects aliases, collisions, and malformed raw-tree modes', (t) => {
+  const root = fixtureRoot(t);
+  const git = (args, input) => {
+    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', shell: false, input });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  git(['init', '-b', 'main']);
+  git(['config', 'user.email', 'release-test@example.invalid']);
+  git(['config', 'user.name', 'Release Test']);
+  const blob = git(['hash-object', '-w', '--stdin'], 'content\n');
+  const rawTree = (entries) => {
+    const body = Buffer.concat(entries.map(({ mode, name, object = blob }) => Buffer.concat([
+      Buffer.from(`${mode} ${name}\0`, 'utf8'),
+      Buffer.from(object, 'hex'),
+    ])));
+    return git(['hash-object', '--literally', '-t', 'tree', '-w', '--stdin'], body);
+  };
+  const commitTree = (tree) => git(['commit-tree', tree], 'malicious tree\n');
+  const candidateFor = (sourceCommit) => createCandidate({
+    root,
+    component: 'mobile',
+    sourceCommit,
+    createdAt: '2026-07-15T12:00:00Z',
+    review: { sourceCommit, reviewCommit: 'f'.repeat(40), reviewId: 'bmad-review-raw-tree', pr: 'J3K420/Gravestory#99', bmad: 'passed', recordPath: '_bmad-output/review-receipt.json', recordBlob: 'e'.repeat(40), artifactPath: '_bmad-output/specs/review.md', artifactBlob: 'c'.repeat(40) },
+    configuration: { sourceCommit, component: 'mobile', identity: 'd'.repeat(64), validation: 'passed', remotePresence: 'unverified', authoritative: false },
+    baselines,
+  });
+
+  for (const name of ['.GiT', '.g\u200Cit', 'CON.txt', 'CONIN$', 'CONOUT$.log', 'COM¹.log', 'long\u017F.txt', 'sigma\u03C2.txt', 'control\u0001.txt', 'e\u0301.txt']) {
+    assert.throws(() => candidateFor(commitTree(rawTree([{ mode: '100644', name }]))), /unsafe path/);
+  }
+  const collision = commitTree(rawTree([
+    { mode: '100644', name: 'README' },
+    { mode: '100644', name: 'Readme' },
+  ]));
+  assert.throws(() => candidateFor(collision), /colliding paths/);
+  const upperDirectory = rawTree([{ mode: '100644', name: 'a' }]);
+  const lowerDirectory = rawTree([{ mode: '100644', name: 'b' }]);
+  const prefixCollision = commitTree(rawTree([
+    { mode: '040000', name: 'Dir', object: upperDirectory },
+    { mode: '040000', name: 'dir', object: lowerDirectory },
+  ]));
+  assert.throws(() => candidateFor(prefixCollision), /colliding paths/);
+  const malformedMode = commitTree(rawTree([{ mode: '120000', name: 'mobile-package-lock.json' }]));
+  assert.throws(() => candidateFor(malformedMode), /unsupported non-file entry/);
+});
 test('release preflight rejects malformed migration ordering and Windows-unsafe execution IDs', (t) => {
   const root = fixtureRoot(t);
   const catalogPath = join(root, 'database/catalog.json');

@@ -363,30 +363,92 @@ export function validateImmutableHistory(nameStatusText) {
   if (violations.length) fail(`Release history is append-only; found mutation/deletion: ${violations.join(', ')}`);
 }
 
+function isolatedGitEnvironment() {
+  const environment = { ...process.env };
+  const networkKeys = /^GIT_(?:SSH(?:_COMMAND)?|PROXY_COMMAND|ASKPASS|TERMINAL_PROMPT|ALLOW_PROTOCOLS?|PROTOCOL_FROM_USER|HTTP_PROXY|HTTPS_PROXY|SSL_NO_VERIFY|HTTP_USER_AGENT)$/i;
+  for (const key of Object.keys(environment)) {
+    if (/^GIT_/i.test(key) && !networkKeys.test(key)) delete environment[key];
+  }
+  return environment;
+}
+
+function spawnGit(root, args, options = {}) {
+  const repository = resolve(root);
+  return spawnSync('git', ['--no-replace-objects', '-C', repository, ...args], {
+    cwd: repository,
+    env: isolatedGitEnvironment(),
+    shell: false,
+    ...options,
+  });
+}
+
 function runGit(root, args, allowFailure = false) {
-  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', shell: false, timeout: 30_000 });
+  const result = spawnGit(root, args, { encoding: 'utf8', timeout: 30_000 });
   if (result.error) fail(`git ${args.join(' ')} could not complete: ${result.error.message}`);
   if (result.status !== 0 && !allowFailure) fail(`git ${args.join(' ')} failed: ${(result.stderr || result.stdout).trim()}`);
   return result.status === 0 ? result.stdout.trim() : null;
 }
 
+const WINDOWS_DEVICE_PATH = /^(?:con|conin\$|conout\$|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i;
+
+function unsafeMaterializedGitPath(path) {
+  if (path.includes('\\') || path.includes('\uFFFD')) return true;
+  return path.split('/').some((part) => {
+    if (!part || part === '.' || part === '..' || !/^[\x20-\x7E]+$/u.test(part)) return true;
+    if (/[<>:"|?*]/u.test(part) || /[. ]$/u.test(part)) return true;
+    return part.toLowerCase() === '.git' || WINDOWS_DEVICE_PATH.test(part);
+  });
+}
+
+function registerMaterializedGitPath(path, registry, sourceCommit) {
+  const canonical = [];
+  const original = [];
+  const parts = path.split('/');
+  for (const [index, part] of parts.entries()) {
+    canonical.push(part.toLowerCase());
+    original.push(part);
+    const key = canonical.join('/');
+    const spelling = original.join('/');
+    const kind = index === parts.length - 1 ? 'file' : 'directory';
+    const existing = registry.get(key);
+    if (existing && (existing.spelling !== spelling || existing.kind !== kind)) fail(`Candidate source ${sourceCommit} contains colliding paths`);
+    registry.set(key, { spelling, kind });
+  }
+}
+
 function withCommitTree(root, sourceCommit, callback) {
   if (!existsSync(join(root, '.git'))) return callback(root);
   const temporary = mkdtempSync(join(tmpdir(), 'gravestory-release-tree-'));
-  const archivePath = join(temporary, 'source.tar');
   const treePath = join(temporary, 'tree');
   mkdirSync(treePath);
   try {
-    const archive = spawnSync('git', ['archive', '--format=tar', `--output=${archivePath}`, sourceCommit], { cwd: root, encoding: 'utf8', shell: false, timeout: 60_000 });
-    if (archive.status !== 0) fail(`Could not materialize candidate source ${sourceCommit}: ${(archive.stderr || archive.stdout).trim()}`);
-    const extract = spawnSync('tar', ['-xf', archivePath, '-C', treePath], { cwd: root, encoding: 'utf8', shell: false, timeout: 60_000 });
-    if (extract.status !== 0) fail(`Could not extract candidate source ${sourceCommit}: ${(extract.stderr || extract.stdout).trim()}`);
+    const listing = spawnGit(root, ['ls-tree', '-r', '-z', '--full-tree', sourceCommit], {
+      encoding: null, timeout: 60_000, maxBuffer: 64 * 1024 * 1024,
+    });
+    if (listing.status !== 0) fail(`Could not enumerate candidate source ${sourceCommit}: ${String(listing.stderr || listing.stdout).trim()}`);
+    const treeRoot = resolve(treePath);
+    const materializedPaths = new Map();
+    for (const entry of listing.stdout.toString('utf8').split('\0').filter(Boolean)) {
+      const match = /^([0-7]{6}) (blob|commit) ([a-f0-9]{40,64})\t(.+)$/s.exec(entry);
+      if (!match) fail(`Candidate source ${sourceCommit} contains an unsupported Git tree entry`);
+      const [, mode, type, object, path] = match;
+      if (type !== 'blob' || !['100644', '100755'].includes(mode)) fail(`Candidate source ${sourceCommit} contains an unsupported non-file entry: ${path}`);
+      if (unsafeMaterializedGitPath(path)) fail(`Candidate source ${sourceCommit} contains an unsafe path`);
+      registerMaterializedGitPath(path, materializedPaths, sourceCommit);
+      const destination = resolve(treeRoot, ...path.split('/'));
+      if (!destination.startsWith(`${treeRoot}${sep}`)) fail(`Candidate source ${sourceCommit} path escapes the materialized tree`);
+      mkdirSync(dirname(destination), { recursive: true });
+      const blob = spawnGit(root, ['cat-file', 'blob', object], {
+        encoding: null, timeout: 60_000, maxBuffer: 64 * 1024 * 1024,
+      });
+      if (blob.status !== 0) fail(`Could not read candidate source blob ${object}: ${String(blob.stderr || blob.stdout).trim()}`);
+      writeFileSync(destination, blob.stdout, { flag: 'wx' });
+    }
     return callback(treePath);
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
 }
-
 function sourceIdentities(root, sourceCommit, component, baseline) {
   return withCommitTree(root, sourceCommit, (tree) => ({ build: buildIdentity(tree, component, baseline), migrations: migrationIdentity(tree) }));
 }

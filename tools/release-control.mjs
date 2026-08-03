@@ -416,6 +416,38 @@ function registerMaterializedGitPath(path, registry, sourceCommit) {
   }
 }
 
+function withCrlfLineEndings(content) {
+  let extraBytes = 0;
+  for (let index = 0; index < content.length; index += 1) {
+    if (content[index] === 0x0A && (index === 0 || content[index - 1] !== 0x0D)) extraBytes += 1;
+  }
+  if (!extraBytes) return content;
+  const output = Buffer.allocUnsafe(content.length + extraBytes);
+  let target = 0;
+  for (let index = 0; index < content.length; index += 1) {
+    if (content[index] === 0x0A && (index === 0 || content[index - 1] !== 0x0D)) output[target++] = 0x0D;
+    output[target++] = content[index];
+  }
+  return output;
+}
+
+function materializeCatalogedSqlBytes(root, sourceCommit) {
+  const catalogPath = join(root, 'database', 'catalog.json');
+  if (!existsSync(catalogPath)) return;
+  const catalog = readJson(catalogPath);
+  for (const artifact of catalog.artifacts ?? []) {
+    if (typeof artifact.path !== 'string' || !artifact.path.endsWith('.sql')) continue;
+    const parts = artifact.path.split('/');
+    if (isAbsolute(artifact.path) || artifact.path.includes('\\') || parts.some((part) => !part || part === '.' || part === '..')) fail(`Candidate source ${sourceCommit} contains an unsafe catalog path`);
+    const destination = resolve(root, ...parts);
+    if (!destination.startsWith(`${resolve(root)}${sep}`) || !existsSync(destination)) continue;
+    const content = readFileSync(destination);
+    if (sha256(content) === artifact.sha256) continue;
+    const crlf = withCrlfLineEndings(content);
+    if (sha256(crlf) === artifact.sha256) writeFileSync(destination, crlf);
+  }
+}
+
 function withCommitTree(root, sourceCommit, callback) {
   if (!existsSync(join(root, '.git'))) return callback(root);
   const temporary = mkdtempSync(join(tmpdir(), 'gravestory-release-tree-'));
@@ -444,6 +476,7 @@ function withCommitTree(root, sourceCommit, callback) {
       if (blob.status !== 0) fail(`Could not read candidate source blob ${object}: ${String(blob.stderr || blob.stdout).trim()}`);
       writeFileSync(destination, blob.stdout, { flag: 'wx' });
     }
+    materializeCatalogedSqlBytes(treePath, sourceCommit);
     return callback(treePath);
   } finally {
     rmSync(temporary, { recursive: true, force: true });

@@ -1,1 +1,17 @@
-{"compatibilityGenerationIds":["mobile-android-v15-production-a405b5dc","mobile-android-v16-source","pages-cache-v69-live","pages-cache-v70-source","pages-cache-v72-source"],"component":"database","identity":"c3cd781d3d8c4aefa12d63c5e58bd8182ef23c33455cad38276a5234d5d063e0","kind":"deploy-config-attestation","remotePresence":"unverified","schemaVersion":1,"validation":"passed"}
+{
+  "compatibilityGenerationIds": [
+    "mobile-android-v15-production-a405b5dc",
+    "mobile-android-v16-source",
+    "mobile-android-v17-source",
+    "pages-cache-v69-live",
+    "pages-cache-v70-source",
+    "pages-cache-v72-source",
+    "pages-cache-v73-source"
+  ],
+  "component": "database",
+  "identity": "5dda9ca526beb2cad885a0e6a3c0b17a50bb287a126a97c97c9ca87b8bb63ebf",
+  "kind": "deploy-config-attestation",
+  "remotePresence": "unverified",
+  "schemaVersion": 1,
+  "validation": "passed"
+}

@@ -3,6 +3,33 @@ import { graveCacheKey, readGraveCache, writeGraveCache } from './grave-cache';
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
 const HEADERS   = { 'User-Agent': 'GraveStory/1.0 (mobile)' };
 
+export async function searchCemeteries(query) {
+  const text = String(query || '').trim();
+  if (text.length < 3) return [];
+  try {
+    const url = `${NOMINATIM}/search?q=${encodeURIComponent(text)}&format=json&limit=8&addressdetails=1`;
+    const res = await fetch(url, { headers: HEADERS });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data || [])
+      .filter(r => {
+        const label = String(r.display_name || '').toLowerCase();
+        return r.type === 'cemetery' || r.type === 'grave_yard'
+          || label.includes('cemetery') || label.includes('graveyard')
+          || label.includes('memorial park') || label.includes('burial');
+      })
+      .map(r => ({
+        name: r.display_name,
+        lat: Number(r.lat),
+        lng: Number(r.lon),
+      }))
+      .filter(r => Number.isFinite(r.lat) && Number.isFinite(r.lng));
+  } catch (e) {
+    console.warn('searchCemeteries failed:', e.message);
+    return [];
+  }
+}
+
 const US_STATE_LOOKUP = {
   'alabama':'alabama','al':'alabama','alaska':'alaska','ak':'alaska','arizona':'arizona','az':'arizona',
   'arkansas':'arkansas','ar':'arkansas','california':'california','ca':'california','colorado':'colorado','co':'colorado',

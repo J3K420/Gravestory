@@ -11,6 +11,7 @@ export const WORKER_MAX_UPSTREAM_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 export const WORKER_ROUTE_OPERATIONS = Object.freeze([
   { route: '/admin/metrics', method: 'GET', stateChange: false, duplicateHandling: 'replayable-read', evidence: 'Fan-out is read-only; the Supabase RPCs are cataloged reporting operations.' },
+  { route: '/admin/remembrance-photo', method: 'GET', stateChange: false, duplicateHandling: 'audited-read', evidence: 'ADMIN_KEY gates exact pending-row private R2 reads and every successful access emits a redacted correlation record.' },
   { route: '/begin-scan', method: 'POST', stateChange: true, duplicateHandling: 'explicit-exception', evidence: 'Ordinary accounts are bounded by live expiring holds; approval-gated is_unlimited tester accounts deliberately bypass that allowance, and callers must not automatically replay.' },
   { route: '/commit-scan', method: 'POST', stateChange: true, duplicateHandling: 'side-effect-idempotent', evidence: 'commit_reservation changes a pending reservation and inserts one scan event only once; a replay returns committed:false/not_pending rather than repeating either side effect.' },
   { route: '/gemini-jwt/:model', method: 'POST', stateChange: true, duplicateHandling: 'explicit-exception', evidence: 'A verified, ban-capable account is required, but provider generation is unmetered by reservation and currently has no per-user rate limit; clients must not automatically replay.' },
@@ -20,6 +21,13 @@ export const WORKER_ROUTE_OPERATIONS = Object.freeze([
   { route: '/wikitree', method: 'POST', stateChange: false, duplicateHandling: 'replayable-read', evidence: 'The route performs a provider search and does not write GraveStory state.' },
   { route: '/overpass', method: 'POST', stateChange: false, duplicateHandling: 'replayable-read', evidence: 'The route performs a map query and does not write GraveStory state.' },
   { route: '/upload-image', method: 'POST', stateChange: true, duplicateHandling: 'explicit-exception', evidence: 'Current installed clients issue one non-retrying upload after Save; a lost response can leave a random-key orphan, so automatic retry remains prohibited until a versioned idempotency key crosses the installed-client compatibility window.' },
+  { route: '/upload-story-photo', method: 'POST', stateChange: true, duplicateHandling: 'idempotent-upload-id', evidence: 'A service-role RPC serializes one of four durable slots and a client upload UUID determines the private object key.' },
+  { route: '/discard-story-photo', method: 'POST', stateChange: true, duplicateHandling: 'idempotent', evidence: 'Only an owner-scoped, unlinked private object key can be discarded; R2 delete is idempotent.' },
+  { route: '/create-remembrance', method: 'POST', stateChange: true, duplicateHandling: 'idempotent-client-timestamp', evidence: 'The Worker owns remembrance provenance and replays the same client timestamp to the existing row.' },
+  { route: '/story-photo', method: 'GET', stateChange: false, duplicateHandling: 'read-only', evidence: 'Private rows require the owner JWT; public rows require approved parent publication.' },
+  { route: '/set-remembrance-visibility', method: 'POST', stateChange: true, duplicateHandling: 'monotonic-exception', evidence: 'Private transitions revoke publication before returning; public transitions reset to pending and require moderation.' },
+  { route: '/moderate-remembrance', method: 'POST', stateChange: true, duplicateHandling: 'explicit-exception', evidence: 'Moderation reloads authoritative story/R2 state and terminal decisions are idempotent; ambiguous outcomes remain private/pending.' },
+  { route: '/delete-story-photos', method: 'POST', stateChange: true, duplicateHandling: 'monotonic-exception', evidence: 'R2 deletion and soft-delete are monotonic; a lost response is reconciled by the owner story state.' },
   { route: '/revenuecat-webhook', method: 'POST', stateChange: true, duplicateHandling: 'idempotent', evidence: 'RevenueCat event.id is enforced by the immutable event ledger and grant/clawback RPCs.' },
   { route: '/delete-account', method: 'POST', stateChange: true, duplicateHandling: 'monotonic-exception', evidence: 'Scoped deletes are monotonic, but a completed retry cannot reauthenticate after the auth user is removed; the caller must treat a lost final response as unknown and reconcile by sign-in state.' },
 ]);
@@ -38,7 +46,9 @@ const LOG_EVENTS = Object.freeze({
   webhook_permanent_failure: { level: 'warn', fields: ['operation', 'status', 'correlation'] },
   webhook_transient_failure: { level: 'warn', fields: ['operation', 'status'] },
   account_cleanup_failed: { level: 'warn', fields: ['step', 'status', 'failure', 'correlation'] },
+  story_photo_cleanup_failed: { level: 'warn', fields: ['route', 'failure'] },
   admin_source_failed: { level: 'warn', fields: ['source', 'failure'] },
+  remembrance_review_photo_access: { level: 'info', fields: ['status', 'correlation'] },
 });
 
 export const WORKER_LOG_CONTRACT = Object.freeze(Object.entries(LOG_EVENTS).map(([event, value]) => Object.freeze({
@@ -218,7 +228,9 @@ const LOG_ENUMS = Object.freeze({
   operation: new Set(['grant', 'clawback']),
   source: new Set(['supabase_summary', 'supabase_funnel', 'daily_series', 'revenuecat', 'google_cloud']),
   step: new Set([
-    'analytics_events_delete', 'content_reports_anonymize', 'grave_photos_delete',
+    'remembrance_photo_uploads_delete',
+    'analytics_events_delete', 'content_reports_anonymize', 'content_reports_target_anonymize', 'grave_photos_delete',
+    'story_photos_delete', 'user_blocks_blocker_delete', 'user_blocks_blocked_delete',
     'graves_corrected_by', 'graves_marker_set_by', 'r2_collect', 'r2_delete',
     'scan_credits_delete', 'scan_events_delete', 'stories_delete',
     'tributes_delete', 'user_prefs_delete',

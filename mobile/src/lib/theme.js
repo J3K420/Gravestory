@@ -14,6 +14,7 @@ export const colors = {
   glow:      'rgba(242,182,92,0.18)',
   danger:    '#a03c3c',
   dangerDim: 'rgba(160,60,60,0.4)',
+  overlay:   'rgba(0,0,0,0.68)',
 };
 
 export const fonts = {

@@ -89,18 +89,18 @@
 
   <header>
     <h1>GraveStory</h1>
-    <p>Privacy Policy &mdash; Effective June 13, 2026</p>
+    <p>Privacy Policy &mdash; Effective July 23, 2026</p>
   </header>
 
   <div class="intro">
-    GraveStory is a mobile app that photographs gravestones and generates compassionate biographical stories about the people buried there. This policy explains what data we collect, why we collect it, and how you can control it.
+    GraveStory is a mobile app that generates researched biographies from gravestone photos and lets users contribute their own remembrances. This policy explains what data we collect, why we collect it, and how you can control it.
   </div>
 
   <h2>1. Information We Collect</h2>
-  <p><strong>Photos.</strong> When you scan a gravestone, the photo is uploaded to Cloudflare R2 (cloud storage) so the biography can be displayed on the community map to other users if you choose to make your story public. Photos are never used for advertising or sold to third parties.</p>
-  <p style="margin-top:0.75rem"><strong>Location data.</strong> With your permission, we read the GPS coordinates embedded in your photo (EXIF data) or your device&rsquo;s current location to identify the cemetery. Coordinates are stored alongside the story so your stories appear on your personal cemetery map.</p>
+  <p><strong>Photos.</strong> When you scan a gravestone or share a remembrance, the primary gravestone photo and any supporting photos you choose are uploaded to Cloudflare R2. Photos are never used for advertising or sold to third parties. Public photos are displayed only when the associated story is approved and public.</p>
+  <p style="margin-top:0.75rem"><strong>Location data.</strong> With your permission, we may read GPS embedded in a photo or your device&rsquo;s current precise location. You may instead search for a cemetery, drop a pin, or provide no location. Coordinates are stored with the story only when supplied. GPS-less public stories appear in Community Stories with &ldquo;Location not provided&rdquo; and never receive a map pin.</p>
   <p style="margin-top:0.75rem"><strong>Account information.</strong> If you create an account, we store your email address and an optional display name via Supabase (our database provider). You may also sign in with Google, in which case Google shares your email address with us.</p>
-  <p style="margin-top:0.75rem"><strong>Story data.</strong> The biography text, gravestone inscription, name, dates, and cemetery location are stored in our database. Stories are private by default; you choose whether to share them publicly on the community map.</p>
+  <p style="margin-top:0.75rem"><strong>Story and moderation data.</strong> We store generated biographies, user-written remembrances, gravestone inscriptions, names, dates, cemetery locations, publication and moderation status, Terms acceptance time, content reports, contributor reports, and account-level blocks. Reports are retained as a tamper-resistant moderation record; reporter identifiers are removed if the reporter deletes their account.</p>
   <p style="margin-top:0.75rem"><strong>Scan and purchase records.</strong> We record how many gravestones you have scanned (to enforce free-tier limits) and how many scan credits you have purchased. Purchase records are written by our payment webhook and are never modifiable by clients.</p>
   <p style="margin-top:0.75rem"><strong>Device identifier.</strong> On sign-up we generate an anonymous hardware fingerprint (a hash of device brand, model, and OS version) to deter abuse. This hash cannot be reversed to identify you personally.</p>
 
@@ -109,6 +109,8 @@
     <li>To generate biographical stories via Google Gemini AI (your photo and gravestone text are sent to Google&rsquo;s servers for processing).</li>
     <li>To search public genealogy and historical records (WikiTree, Wikidata, Wikipedia, Library of Congress Chronicling America, OpenStreetMap) to enrich the biography.</li>
     <li>To display your stories on your personal map and, if you opt in, on the community global map.</li>
+    <li>To display approved public stories, including GPS-less stories, in Community Stories.</li>
+    <li>To screen public photos and user-written text for gravestone relevance and prohibited content, route ambiguous submissions to human review, investigate reports, enforce blocks, and process takedowns.</li>
     <li>To enforce free-tier scan limits and credit balances.</li>
     <li>To sync your stories across devices when you are signed in.</li>
   </ul>
@@ -128,7 +130,7 @@
   </ul>
 
   <h2>4. Public Stories and Community Map</h2>
-  <p>If you mark a story as public, the biography text, gravestone photo, name, dates, and approximate GPS location become visible to all GraveStory users on the community map. Your display name (if set) appears as the contributor. You can make a story private or delete it at any time — it is removed from the community map immediately.</p>
+  <p>If you request public sharing and the story is approved, its text, approved photos, name, dates, contributor display name, and any location you provide become visible in Community Stories. A story with coordinates may also appear on the Community Map. A story without coordinates shows &ldquo;Location not provided&rdquo; and remains off the map. You can make your own story private or delete it at any time; it is removed from public queries immediately. Other users may report public stories or contributors and may block a contributor so that contributor&rsquo;s stories no longer appear in their feed or map.</p>
 
   <h2>5. Accuracy and How We Guard Against Fabrication</h2>
   <p>GraveStory uses generative AI to write biographies, and we take the risk of AI &ldquo;hallucination&rdquo; — confidently invented facts — seriously. A fabricated life story about a real person who is buried somewhere is not acceptable to us. We have built multiple safeguards into the app specifically to keep the biographies grounded in evidence rather than in the AI&rsquo;s imagination:</p>
@@ -145,7 +147,7 @@
   <p>No automated system is perfect, and we cannot guarantee that every detail is correct — historical records themselves contain errors, and weathered stones can be misread. We encourage you to treat the biographies as a respectful, source-cited starting point and to verify important details against the cited sources.</p>
 
   <h2>6. Data Retention</h2>
-  <p>Your stories are retained until you delete them or delete your account. Deleted stories are soft-deleted (marked with a deletion timestamp) for up to 30 days to allow sync across devices, then permanently removed. Scan event records (used for usage limits) are retained for 12 months.</p>
+  <p>Your stories and story-linked photos are retained until you delete them or delete your account. Deleting a remembrance removes its story-photo objects from Cloudflare R2 and immediately soft-deletes its story, photo, and gallery references so they are no longer publicly accessible. Other saved-story deletions likewise remove public access immediately and may retain a tombstoned sync record until account deletion or a verified erasure request. Account deletion removes associated story photos, story records, and account identifiers. Content reports may be retained for moderation, legal compliance, and abuse prevention, but reporter and reported-user identifiers are anonymized when the related account is deleted. Scan event records used for usage limits are retained for 12 months.</p>
 
   <h2>7. Your Rights</h2>
   <ul>
@@ -159,7 +161,7 @@
   <p>GraveStory is not directed at children under 13. We do not knowingly collect personal information from children under 13. If you believe a child has provided us with personal information, please contact us and we will delete it.</p>
 
   <h2>9. Security</h2>
-  <p>All data is transmitted over HTTPS. Supabase Row Level Security policies ensure users can only read and write their own records. Purchased credit balances are write-protected at the database level — only our server-side webhook can add credits.</p>
+  <p>All data is transmitted over HTTPS. Supabase Row Level Security policies restrict private stories and photos to their owners and expose public photos only when their owning story is approved and public. Authenticated photo uploads are stored under unguessable, per-user story keys. Purchased credit balances are write-protected at the database level — only our server-side webhook can add credits.</p>
 
   <h2>10. Changes to This Policy</h2>
   <p>We may update this policy from time to time. The effective date at the top of this page will reflect the most recent revision. Continued use of GraveStory after a change constitutes acceptance of the updated policy.</p>

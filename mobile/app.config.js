@@ -69,7 +69,7 @@ export default {
     slug: 'mobile',
     owner: 'j3k420',
     scheme: 'gravestory',
-    version: '1.0.0',
+    version: '1.1.0',
     orientation: 'portrait',
     updates: {
       url: 'https://u.expo.dev/f26f7a8b-2c63-4a68-bb44-903d7ed01b30',
@@ -77,7 +77,9 @@ export default {
       fallbackToCacheTimeout: 0,
     },
     runtimeVersion: {
-      policy: 'sdkVersion',
+      // Remembrance sharing changes the native/data contract. Keep older
+      // binaries out of OTA updates until they are rebuilt against it.
+      policy: 'appVersion',
     },
     icon: './assets/icon.png',
     userInterfaceStyle: 'dark',
@@ -92,7 +94,7 @@ export default {
     },
     android: {
       package: 'com.gravestory.app',
-      versionCode: 16,
+      versionCode: 17,
       // The RevenueCat (react-native-purchases) and Play Services SDKs add
       // com.google.android.gms.permission.AD_ID to the merged manifest by default.
       // GraveStory does NOT read the advertising ID, so we strip it here to keep the

@@ -488,6 +488,9 @@ async function _loadGravePhotoGallery(graveId, leftPortrait, rightPortrait) {
       .from('grave_photos')
       .select('image_url')
       .eq('grave_id', graveId)
+      .eq('visibility', 'public')
+      .eq('moderation_status', 'approved')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(10);
     const photos = (data || []).map(r => r.image_url).filter(Boolean);

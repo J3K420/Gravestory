@@ -27,3 +27,7 @@
 ## Deferred from: code review of SPEC-deterministic-verification (2026-07-14)
 
 - **Applied migration deletion or renumbering is not yet rejected against a durable ledger** — the foundation verifier checks current SQL filenames, duplicate primary IDs, and non-empty files, but it does not prove that an already-applied migration was preserved. Add the durable inventory/checksum and explicit exception handling in `spec-supabase-change-control`, which owns migration provenance and live-state reconciliation. [tools/verify-repo.mjs]
+
+## Deferred from: Share Remembrance integration review (2026-08-02)
+
+- **Cold-restart draft resumption is not yet durable** — the submission timestamp is held in memory, so same-process retries are idempotent but an app termination after the server creates the story and before the response arrives can leave a photo-less private draft that the restarted flow does not resume. Reliable restart recovery needs a separate file-backed draft lifecycle and user-facing resume/discard design; keep it out of this integration batch rather than introducing partial persistence semantics. [mobile/src/screens/RemembranceScreen.js, mobile/src/lib/api-remembrances.js]

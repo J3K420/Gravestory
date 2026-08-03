@@ -91,12 +91,13 @@ test('feature requirements fail only the route-owned capability', () => {
   assert.equal(validateWorkerFeature({}, 'gemini').ok, false);
   assert.equal(validateWorkerFeature({ GEMINI_KEY: 'test' }, 'gemini').ok, true);
   assert.equal(validateWorkerFeature({ IMAGES: {} }, 'image-storage').ok, false);
-  assert.equal(validateWorkerFeature({ IMAGES: { put() {} }, R2_PUBLIC_URL: 'https://images.example.com' }, 'image-storage').ok, true);
+  assert.equal(validateWorkerFeature({ IMAGES: { put() {} }, REMEMBRANCE_IMAGES: { put() {} }, R2_PUBLIC_URL: 'https://images.example.com' }, 'image-storage').ok, true);
   assert.equal(validateWorkerFeature({ IMAGES: { put() {} }, R2_PUBLIC_URL: 'https://images.example.com/' }, 'image-storage').ok, false);
   assert.equal(validateWorkerFeature({ ADMIN_KEY: 'weak' }, 'admin-metrics').ok, false);
   assert.equal(validateWorkerFeature({ ADMIN_KEY: `weak${' '.repeat(32)}` }, 'admin-metrics').ok, false);
   assert.equal(validateWorkerFeature({ REVENUECAT_WEBHOOK_SECRET: 'weak' }, 'revenuecat-webhook').ok, false);
   assert.equal(validateWorkerFeature({ REVENUECAT_WEBHOOK_SECRET: 'webhook-secret-at-least-32-bytes' }, 'revenuecat-webhook').ok, true);
+  assert.equal(featureForPath('/admin/remembrance-photo'), 'admin-metrics');
   assert.equal(featureForPath('/gemini/gemini-2.5-flash'), 'gemini');
   assert.equal(featureForPath('/tavily-extract'), 'tavily');
   assert.equal(featureForPath('/wikitree'), '');

@@ -219,12 +219,12 @@ test('Pages project, cache generation, and mobile version are machine-bound', (t
 
   const cacheRoot = fixture(t);
   const cachePath = join(cacheRoot, 'sw.js');
-  writeFileSync(cachePath, readFileSync(cachePath, 'utf8').replace('gravestory-v72-f36d9e62c920', 'gravestory-v73-next'));
+  writeFileSync(cachePath, readFileSync(cachePath, 'utf8').replace('gravestory-v73-f083c4721f95', 'gravestory-v74-next'));
   assert.throws(() => buildDeployConfigAttestation(cacheRoot, 'pages'), /pages\.serviceWorkerCacheId/);
 
   const versionRoot = fixture(t);
   const appPath = join(versionRoot, 'mobile/app.config.js');
-  writeFileSync(appPath, readFileSync(appPath, 'utf8').replace('versionCode: 16', 'versionCode: 17'));
+  writeFileSync(appPath, readFileSync(appPath, 'utf8').replace('versionCode: 17', 'versionCode: 18'));
   assert.throws(() => buildDeployConfigAttestation(versionRoot, 'mobile'), /mobile\.versionCode/);
 });
 
@@ -274,7 +274,7 @@ test('installed generation retirement requires sealed evidence and a sealed owne
   const approvalSha256 = writeSealed(root, approvalPath, { schemaVersion: 1, kind: 'deploy-config-owner-approval', scope: 'retire-installed-generation', subject: generationId, approvedAt: '2026-07-15T12:01:00.000Z', approvalRef: 'owner-record-2026-07-15-mobile-v15' });
   Object.assign(compatibility.retirements[0], { evidencePath, evidenceSha256, ownerApprovalPath: approvalPath, ownerApprovalSha256: approvalSha256 });
   writeJson(root, 'deploy/config/compatibility.json', compatibility);
-  assert.deepEqual(buildDeployConfigAttestation(root, 'mobile').compatibilityGenerationIds, ['mobile-android-v16-source']);
+  assert.deepEqual(buildDeployConfigAttestation(root, 'mobile').compatibilityGenerationIds, ['mobile-android-v16-source', 'mobile-android-v17-source']);
 });
 
 test('retirement timestamps must be real and observation must precede approval', (t) => {

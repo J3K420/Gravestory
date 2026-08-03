@@ -9,6 +9,7 @@ export const WORKER_CONFIG_CONTRACT = Object.freeze([
   { name: 'GEMINI_KEY', kind: 'secret', requirement: 'feature-gated', features: ['gemini'], sensitive: true },
   { name: 'TAVILY_KEY', kind: 'secret', requirement: 'feature-gated', features: ['tavily'], sensitive: true },
   { name: 'IMAGES', kind: 'binding', requirement: 'feature-gated', features: ['image-storage'], sensitive: false },
+  { name: 'REMEMBRANCE_IMAGES', kind: 'binding', requirement: 'feature-gated', features: ['image-storage'], sensitive: false },
   { name: 'R2_PUBLIC_URL', kind: 'var', requirement: 'feature-gated', features: ['image-storage'], sensitive: false },
   { name: 'ADMIN_KEY', kind: 'secret', requirement: 'feature-gated', features: ['admin-metrics'], sensitive: true },
   { name: 'REVENUECAT_WEBHOOK_SECRET', kind: 'secret', requirement: 'feature-gated', features: ['revenuecat-webhook'], sensitive: true },
@@ -35,7 +36,7 @@ export const WORKER_REQUIRED_PRODUCTION = Object.freeze([
 export const WORKER_FEATURE_REQUIREMENTS = Object.freeze({
   gemini: ['GEMINI_KEY'],
   tavily: ['TAVILY_KEY'],
-  'image-storage': ['IMAGES', 'R2_PUBLIC_URL'],
+  'image-storage': ['IMAGES', 'REMEMBRANCE_IMAGES', 'R2_PUBLIC_URL'],
   'admin-metrics': ['ADMIN_KEY'],
   'revenuecat-webhook': ['REVENUECAT_WEBHOOK_SECRET'],
   'admin-revenuecat': ['REVENUECAT_SECRET_KEY'],
@@ -116,7 +117,7 @@ export function validateWorkerConfig(env, { allowLocal = false } = {}) {
 export function validateWorkerFeature(env, feature) {
   const required = WORKER_FEATURE_REQUIREMENTS[feature] ?? [];
   const errors = required
-    .filter((key) => key !== 'IMAGES' && !hasStringValue(env[key]))
+    .filter((key) => key !== 'IMAGES' && key !== 'REMEMBRANCE_IMAGES' && !hasStringValue(env[key]))
     .map((key) => issue(key, `must be a non-empty string for ${feature}`));
   const independentSecret = feature === 'admin-metrics'
     ? 'ADMIN_KEY'
@@ -129,7 +130,8 @@ export function validateWorkerFeature(env, feature) {
     }
   }
   if (feature === 'image-storage') {
-    if (!env.IMAGES || typeof env.IMAGES.put !== 'function') errors.push(issue('IMAGES', 'must be an R2 binding for image-storage'));
+    if (!env.IMAGES || typeof env.IMAGES.put !== 'function') errors.push(issue('IMAGES', `must be an R2 binding for ${feature}`));
+    if (!env.REMEMBRANCE_IMAGES || typeof env.REMEMBRANCE_IMAGES.put !== 'function') errors.push(issue('REMEMBRANCE_IMAGES', 'must be a private R2 binding for ' + feature));
     if (hasValue(env.R2_PUBLIC_URL) && !parseHttpsOrigin(String(env.R2_PUBLIC_URL))) {
       errors.push(issue('R2_PUBLIC_URL', 'must be an exact https origin'));
     }
@@ -159,7 +161,10 @@ export function featureForPath(pathname) {
   if (pathname.startsWith('/gemini-jwt/')) return 'gemini';
   if (pathname === '/tavily' || pathname === '/tavily-extract') return 'tavily';
   if (pathname === '/upload-image') return 'image-storage';
+  if (pathname === '/upload-story-photo' || pathname === '/discard-story-photo' || pathname === '/create-remembrance' || pathname === '/story-photo' || pathname === '/set-remembrance-visibility' || pathname === '/delete-story-photos') return 'image-storage';
+  if (pathname === '/moderate-remembrance') return 'gemini';
   if (pathname === '/admin/metrics') return 'admin-metrics';
+  if (pathname === '/admin/remembrance-photo') return 'admin-metrics';
   if (pathname === '/revenuecat-webhook') return 'revenuecat-webhook';
   return '';
 }

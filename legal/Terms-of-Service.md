@@ -8,7 +8,7 @@
 > 4. This is a solid starter tuned to how GraveStory actually works. It is **not legal advice.** Before launch, have a [STATE] attorney review the disclaimer of accuracy, the limitation of liability, and the user-content sections (the highest-value review for an app that publishes AI biographies of real people). Bundle this review with the trademark/operating-agreement work.
 > 5. Keep it consistent with your Privacy Policy and your Google Play Data Safety form — Google flags mismatches.
 
-**Effective date:** [EFFECTIVE DATE]
+**Effective date:** July 23, 2026
 **Operated by:** [LLC / BUSINESS LEGAL NAME] ("GraveStory," "we," "us," or "our")
 **Contact:** [CONTACT EMAIL]
 
@@ -18,7 +18,7 @@ Welcome to GraveStory. These Terms of Service ("Terms") govern your use of the G
 
 ## 1. What GraveStory Is
 
-GraveStory lets you photograph a gravestone and receive an AI-generated biographical story about the person it commemorates, assembled from publicly available records and historical sources. The Service is intended for remembrance, education, genealogy, and historical interest.
+GraveStory lets you photograph a gravestone and receive an AI-generated biographical story about the person it commemorates, assembled from publicly available records and historical sources. Signed-in users may also upload a gravestone photo and write a remembrance themselves. The Service is intended for remembrance, education, genealogy, and historical interest.
 
 **The Service is not an official record, a genealogical authority, or a substitute for primary-source research.** It is a research aid that produces a starting point, not a verified or authoritative account.
 
@@ -35,9 +35,9 @@ Each generated story is presented with a visible notice of its AI-generated natu
 
 ## 3. Reporting Problems and Removal Requests
 
-We provide an in-app "Report a problem" feature on every generated story. If you believe a story is inaccurate, offensive, infringes someone's rights, or concerns a living person inappropriately, please report it through that feature or contact us at **[SUPPORT / REMOVAL EMAIL]**.
+We provide in-app content reporting, contributor reporting, and contributor blocking. If you believe a story is inaccurate, offensive, unlawful, infringes someone's rights, or concerns a living person inappropriately, please report it through the app or contact us at **edmondsj46@gmail.com**.
 
-We review reports and may, at our discretion, correct, restrict, unpublish, or remove content. If you are an individual (or an authorized representative or close relative) and a publicly shared story concerns you or your deceased relative and you want it removed or corrected, contact us at **[SUPPORT / REMOVAL EMAIL]** and we will act in good faith to address your request promptly.
+We review reports and may, at our discretion, correct, restrict, place in review, unpublish, or remove content or accounts. If you are an individual (or an authorized representative or close relative) and a publicly shared story concerns you or your deceased relative and you want it removed or corrected, contact us at **edmondsj46@gmail.com** and we will act in good faith to address your request promptly.
 
 ## 4. Accounts
 
@@ -47,7 +47,9 @@ Some features require an account. You are responsible for the accuracy of your a
 
 You may choose to share a story publicly, which makes it visible to others on the community map. **Public sharing is optional and off by default.**
 
-If you share a story publicly, you represent that doing so does not violate anyone's privacy or other rights. **Do not publicly share content that identifies, or includes private information about, living individuals** without a lawful basis. We may remove publicly shared content at our discretion, including in response to a report or removal request. You can make a shared story private again, or delete it, at any time.
+Public stories appear in Community Stories whether or not they have GPS. Stories with coordinates may also appear on the Community Map; GPS-less stories show "Location not provided." If you share a story publicly, you represent that doing so does not violate anyone's privacy or other rights. **Do not publicly share content that identifies, or includes private information about, living individuals** without a lawful basis. Public submissions may be automatically screened, held for human review, rejected, or removed. You can make a shared story private again, or delete it, at any time.
+
+You retain ownership of original content you submit. You grant GraveStory a non-exclusive, worldwide, royalty-free license to host, process, reproduce, and display that content only as needed to operate, moderate, secure, and improve the Service. This license ends when the content is deleted, except for limited retention required for security, legal compliance, or unresolved reports.
 
 ## 6. Your Responsibilities and Acceptable Use
 
@@ -55,6 +57,8 @@ You agree not to:
 
 - Use the Service for any unlawful purpose, or to harass, defame, or invade the privacy of any person;
 - Photograph or upload content you have no right to use, or that infringes intellectual-property or privacy rights;
+- Post sexual content, graphic violence, hateful or dehumanizing material, threats, doxxing, scams, spam, or content unrelated to remembrance;
+- Evade moderation, repeatedly repost removed content, or use another account to target someone who blocked you;
 - Attempt to scrape, reverse-engineer, overload, or interfere with the Service or its providers;
 - Misrepresent a story as an official record or as fact where you know it to be unverified;
 - Use the Service to build a competing dataset or to violate the terms of any third-party source.
@@ -95,7 +99,7 @@ These Terms are governed by the laws of the State of [STATE], without regard to 
 
 ## 15. Contact
 
-Questions, reports, or removal requests: **[CONTACT / SUPPORT EMAIL]**.
+Questions, reports, or removal requests: **edmondsj46@gmail.com**.
 
 ---
 

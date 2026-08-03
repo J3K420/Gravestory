@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { loadStories, saveStories, getLastSync, setLastSync } from './storage';
+import { deleteStoryPhotos, setRemembranceVisibility } from './api-r2';
 
 // Map a Supabase row → in-memory story object (mirrors web persistence.js)
 export function rowToStory(row) {
@@ -40,6 +41,12 @@ export function rowToStory(row) {
     grave_id: row.grave_id || null,
     source: row.source || 'library',
     marker_style: row.marker_style || null,
+    story_type: row.story_type || 'researched',
+    requested_visibility: row.requested_visibility || (row.is_public ? 'public' : 'private'),
+    publication_status: row.publication_status || (row.is_public ? 'published' : 'private'),
+    moderation_status: row.moderation_status || 'approved',
+    moderation_reason: row.moderation_reason || null,
+    terms_accepted_at: row.terms_accepted_at || null,
   };
 }
 
@@ -82,6 +89,55 @@ function storyToRow(story, userId) {
   };
 }
 
+async function syncGravePhotoVisibility(story, user) {
+  if (!user || story?.story_type === 'remembrance' || !story?.id || !story?.grave_id || !story?.image_url) return;
+  try {
+    if (story.is_public && story.publication_status !== 'pending'
+      && story.moderation_status !== 'rejected') {
+      const { error } = await supabase.from('grave_photos').upsert({
+        grave_id: story.grave_id,
+        user_id: user.id,
+        story_id: story.id,
+        image_url: story.image_url,
+        visibility: 'public',
+        moderation_status: 'approved',
+        deleted_at: null,
+      }, { onConflict: 'grave_id,user_id' });
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('grave_photos')
+        .update({ visibility: 'private', deleted_at: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .eq('story_id', story.id);
+      if (error) throw error;
+    }
+  } catch (e) {
+    console.warn('syncGravePhotoVisibility failed:', e.message);
+  }
+}
+
+async function syncStoryPhotoVisibility(story, user) {
+  if (!user || story?.story_type !== 'remembrance' || !story.id) return;
+  const publiclyVisible = story.is_public
+    && story.publication_status === 'published'
+    && story.moderation_status === 'approved';
+  try {
+    const { error } = await supabase
+      .from('story_photos')
+      .update({
+        visibility: publiclyVisible ? 'public' : 'private',
+        moderation_status: story.moderation_status || 'pending',
+      })
+      .eq('story_id', story.id)
+      .eq('user_id', user.id)
+      .is('deleted_at', null);
+    if (error) throw error;
+  } catch (e) {
+    console.warn('syncStoryPhotoVisibility failed:', e.message);
+  }
+}
+
 // Insert a new story to Supabase; returns story with cloud id set
 export async function cloudSaveStory(story, user) {
   if (!user) return story;
@@ -110,6 +166,17 @@ export async function cloudSaveStory(story, user) {
 // Update an existing story in Supabase (e.g. visibility toggle)
 export async function cloudUpdateStory(story, user) {
   if (!user || !story.id) return story;
+  if (story.story_type === 'remembrance') {
+    const visibility = story.requested_visibility === 'public' ? 'public' : 'private';
+    const result = await setRemembranceVisibility(story.id, visibility);
+    if (!result.ok) return { ...story, _needsCloudSync: true, _cloudError: result.error };
+    const updated = { ...story, ...result.story, _updatedAt: result.story.updated_at };
+    const stories = await loadStories(user.id);
+    const idx = stories.findIndex(s => s.id === story.id);
+    if (idx >= 0) { stories[idx] = updated; await saveStories(stories, user.id); }
+    await setLastSync(user.id, result.story.updated_at);
+    return updated;
+  }
   try {
     const { data, error } = await supabase
       .from('stories')
@@ -126,6 +193,8 @@ export async function cloudUpdateStory(story, user) {
       await saveStories(stories, user.id);
     }
     await setLastSync(user.id, data.updated_at);
+    await syncStoryPhotoVisibility(updated, user);
+    await syncGravePhotoVisibility(updated, user);
     return updated;
   } catch (e) {
     console.warn('cloudUpdateStory failed:', e.message);
@@ -135,8 +204,14 @@ export async function cloudUpdateStory(story, user) {
 
 // Soft-delete a story in Supabase
 export async function cloudDeleteStory(story, user) {
-  if (!user || !story.id) return;
+  if (!user || !story.id) return false;
   try {
+    if (story.story_type === 'remembrance') {
+      const deleted = await deleteStoryPhotos(story.id);
+      if (!deleted) return false;
+      await setLastSync(user.id, new Date().toISOString());
+      return true;
+    }
     const { data, error } = await supabase
       .from('stories')
       .update({ deleted_at: new Date().toISOString() })
@@ -145,8 +220,11 @@ export async function cloudDeleteStory(story, user) {
       .single();
     if (error) throw error;
     await setLastSync(user.id, data.updated_at);
+    await syncGravePhotoVisibility({ ...story, is_public: false }, user);
+    return true;
   } catch (e) {
     console.warn('cloudDeleteStory failed:', e.message);
+    return false;
   }
 }
 

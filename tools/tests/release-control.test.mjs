@@ -450,6 +450,38 @@ test('repository validation recomputes identities from reviewed Git objects and 
   assert.throws(() => validateReleaseRepository(root, { checkHistory: false }), /filename must match recordId/);
 });
 
+test('candidate materialization reconstructs catalog-authoritative CRLF SQL bytes from LF Git blobs', (t) => {
+  const root = fixtureRoot(t);
+  const lfSql = 'select 1;\n';
+  const crlfSql = Buffer.from('select 1;\r\n');
+  writeFileSync(join(root, 'supabase-migrations/001_test.sql'), lfSql);
+  const catalogPath = join(root, 'database/catalog.json');
+  const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+  catalog.artifacts[0].sha256 = createHash('sha256').update(crlfSql).digest('hex');
+  writeFileSync(catalogPath, JSON.stringify(catalog));
+  writeFileSync(join(root, '.gitattributes'), 'supabase-migrations/*.sql text eol=crlf\n');
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8', shell: false });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  git('init', '-b', 'main');
+  git('config', 'user.email', 'release-test@example.invalid');
+  git('config', 'user.name', 'Release Test');
+  git('add', '.');
+  git('commit', '-m', 'cataloged CRLF source');
+  const commit = git('rev-parse', 'HEAD');
+  const candidate = createCandidate({
+    root, component: 'mobile', sourceCommit: commit, createdAt: '2026-07-15T12:00:00Z',
+    review: { sourceCommit: commit, reviewCommit: 'f'.repeat(40), reviewId: 'bmad-review-crlf-sql', pr: 'J3K420/Gravestory#99', bmad: 'passed', recordPath: '_bmad-output/review-receipt.json', recordBlob: 'e'.repeat(40), artifactPath: '_bmad-output/specs/review.md', artifactBlob: 'c'.repeat(40) },
+    configuration: { sourceCommit: commit, component: 'mobile', identity: 'd'.repeat(64), validation: 'passed', remotePresence: 'unverified', authoritative: false },
+    baselines,
+  });
+  const migration = candidate.migrations.items.find(({ id }) => id === '001');
+  assert.equal(migration.sha256, createHash('sha256').update(crlfSql).digest('hex'));
+  const header = Buffer.from(`blob ${crlfSql.length}\0`);
+  assert.equal(migration.gitBlob, createHash('sha1').update(header).update(crlfSql).digest('hex'));
+});
 test('candidate Git reads ignore inherited repository and object-database redirection', (t) => {
   const root = fixtureRoot(t);
   const decoy = fixtureRoot(t);

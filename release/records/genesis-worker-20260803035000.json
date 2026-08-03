@@ -1,0 +1,12 @@
+{
+  "baselineId": "baseline-worker-20260713-4a01f4da",
+  "component": "worker",
+  "contentHash": "99ccc9c668f7622502d62c3fe94fcf201e4a28ae8f6ce8e5e6a0f6b30ceb5bb4",
+  "createdAt": "2026-08-03T03:50:00Z",
+  "decision": "accept-no-known-rollback",
+  "evidenceRef": "repository-baseline-unbound-rollback-20260802",
+  "ownerApprovalRef": "james-approved-ungated-20260802",
+  "recordId": "genesis-worker-20260803035000",
+  "recordType": "genesis",
+  "schemaVersion": 1
+}

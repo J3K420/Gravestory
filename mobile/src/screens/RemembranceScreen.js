@@ -48,6 +48,7 @@ export default function RemembranceScreen({ navigation }) {
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState('');
   const clientTimestampRef = useRef(null);
+  const cemeterySearchRequestRef = useRef(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -141,12 +142,35 @@ export default function RemembranceScreen({ navigation }) {
   }
 
   async function runCemeterySearch() {
+    const query = cemeteryQuery.trim();
+    if (query.length < 3) {
+      cemeterySearchRequestRef.current += 1;
+      setBusy(false);
+      setBusyLabel('');
+      setCemeteryResults([]);
+      Alert.alert('Enter more detail', 'Enter at least three characters for a cemetery or city search.');
+      return;
+    }
+    const requestId = cemeterySearchRequestRef.current + 1;
+    cemeterySearchRequestRef.current = requestId;
     setBusy(true);
     setBusyLabel('Searching cemeteries…');
-    const results = await searchCemeteries(cemeteryQuery);
-    setCemeteryResults(results);
-    setBusy(false);
-    setBusyLabel('');
+    setCemeteryResults([]);
+    try {
+      const results = await searchCemeteries(query, { throwOnFailure: true });
+      if (requestId !== cemeterySearchRequestRef.current) return;
+      setCemeteryResults(results);
+      if (results.length === 0) Alert.alert('No cemeteries found', 'Try the cemetery name, or add a city and state.');
+    } catch (error) {
+      if (requestId !== cemeterySearchRequestRef.current) return;
+      console.warn('Remembrance cemetery search failed:', error?.message);
+      Alert.alert('Cemetery search unavailable', 'Please check your connection and try again, or drop a pin instead.');
+    } finally {
+      if (requestId === cemeterySearchRequestRef.current) {
+        setBusy(false);
+        setBusyLabel('');
+      }
+    }
   }
 
   function selectCemetery(result) {
@@ -398,7 +422,9 @@ export default function RemembranceScreen({ navigation }) {
                   style={[styles.input, styles.searchInput]}
                   value={cemeteryQuery}
                   onChangeText={setCemeteryQuery}
-                  placeholder="Search cemetery and city"
+                  placeholder="Search a cemetery or city"
+                  returnKeyType="search"
+                  onSubmitEditing={runCemeterySearch}
                   placeholderTextColor={colors.ashDim}
                 />
                 <TouchableOpacity style={styles.searchBtn} onPress={runCemeterySearch}>

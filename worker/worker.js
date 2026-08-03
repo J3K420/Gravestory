@@ -1006,6 +1006,9 @@ async function handleUpload(request, env, origin, allowed, { storyPhoto = false 
       return json({ error: 'Story not found' }, 404, origin, allowed);
     }
     uploadRevision = Number(rows[0].content_revision);
+    if (!Number.isSafeInteger(uploadRevision) || uploadRevision < 1) {
+      return json({ error: 'Could not verify the remembrance revision' }, 503, origin, allowed);
+    }
     verifiedUserId = auth.userId;
   }
 
@@ -1086,12 +1089,7 @@ async function handleUpload(request, env, origin, allowed, { storyPhoto = false 
       }),
     });
     if (!reserved.ok) {
-      return json(
-        { error: reserved.status >= 500 ? 'Could not reserve a photo upload' : 'Remembrance changed during upload' },
-        reserved.status >= 500 ? 503 : 409,
-        origin,
-        allowed,
-      );
+      return remembranceReservationFailure(reserved, origin, allowed);
     }
     const reservation = await reserved.json().catch(() => null);
     uploadSlot = reservation?.slot;
@@ -1470,7 +1468,21 @@ function adminSb(env, path, init) {
   }, WORKER_DEADLINES_MS.supabase);
 }
 
-// Heavy aggregates via the migration-030 RPC (one round-trip, service-role only).
+// SQLSTATE 40001 is also used when a stale reservation is being reconciled.
+// The deterministic upload ID makes both cases safe for the client to retry.
+async function remembranceReservationFailure(response, origin, allowed) {
+  const body = await response.json().catch(() => null);
+  const code = typeof body?.code === 'string' ? body.code : '';
+  emitWorkerLog('story_photo_reservation_failed', { status: response.status });
+  if (code === '40001') {
+    return json({ error: 'Photo upload was interrupted. Please retry.' }, 503, origin, allowed);
+  }
+  if (code === 'P0002') {
+    return json({ error: 'Remembrance is no longer available for upload' }, 409, origin, allowed);
+  }
+  return json({ error: 'Photo upload service is temporarily unavailable. Please retry.' }, 503, origin, allowed);
+}
+
 async function adminSupabaseSummary(env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
     return { status: 'degraded', reason: 'Supabase service key not configured on the Worker' };

@@ -302,12 +302,14 @@ test('structured Worker events have exact schemas and redact unsafe values', () 
   assert.deepEqual(JSON.parse(lines[1]), { event: 'worker_request_failed', route: 'redacted', failure: 'redacted' });
   emitWorkerLog('scan_reservation_failed', { status: 999 }, sink);
   assert.equal(JSON.parse(lines[2]).status, 'redacted');
+  emitWorkerLog('story_photo_reservation_failed', { status: 409 }, sink);
+  assert.deepEqual(JSON.parse(lines[3]), { event: 'story_photo_reservation_failed', status: 409 });
   emitWorkerLog('webhook_record_failed', { failure: 'response', correlation: '0123456789abcdef' }, sink);
-  assert.deepEqual(JSON.parse(lines[3]), {
+  assert.deepEqual(JSON.parse(lines[4]), {
     event: 'webhook_record_failed', failure: 'response', correlation: '0123456789abcdef',
   });
   emitWorkerLog('webhook_record_failed', { failure: 'response', correlation: 'raw-user-id' }, sink);
-  assert.equal(JSON.parse(lines[4]).correlation, 'redacted');
+  assert.equal(JSON.parse(lines[5]).correlation, 'redacted');
   assert.throws(() => emitWorkerLog('worker_request_failed', { route: '/', failure: 'exception', detail: 'no' }, sink), /requires exactly/);
   assert.throws(() => emitWorkerLog('unknown', {}, sink), /Unknown Worker log event/);
 });
@@ -414,6 +416,7 @@ test('remembrance creation validates canonical graves and replays unique conflic
 test('story-photo upload keeps the story id in scope and removes stale-race objects', async () => {
   const originalFetch = globalThis.fetch;
   const userId = '77777777-7777-4777-8777-777777777777';
+  let reservationFailureCode = null;
   const storyId = '88888888-8888-4888-8888-888888888888';
   const expiredUploadId = '99999999-9999-4999-8999-999999999999';
   const uploadId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -445,6 +448,7 @@ test('story-photo upload keeps the story id in scope and removes stale-race obje
           : []);
       }
       if (url.endsWith('/rest/v1/rpc/reserve_remembrance_photo_upload')) {
+        if (reservationFailureCode) return Response.json({ code: reservationFailureCode }, { status: 409 });
         return Response.json({ slot: 0, disposition: reservationDisposition });
       }
       if (url.endsWith('/rest/v1/rpc/confirm_remembrance_photo_upload')) {
@@ -499,6 +503,21 @@ test('story-photo upload keeps the story id in scope and removes stale-race obje
     const busy = await worker.fetch(request(), env, {});
     assert.equal(busy.status, 409);
     assert.deepEqual(await busy.json(), { error: 'This photo upload is already in progress' });
+    reservationFailureCode = '40001';
+    const changed = await worker.fetch(request(), env, {});
+    assert.equal(changed.status, 503);
+    assert.deepEqual(await changed.json(), { error: 'Photo upload was interrupted. Please retry.' });
+    assert.equal(puts, 1, 'a serialization result must not reach R2');
+
+    reservationFailureCode = 'PGRST202';
+    const unavailable = await worker.fetch(request(), env, {});
+    assert.equal(unavailable.status, 503);
+    assert.deepEqual(await unavailable.json(), {
+      error: 'Photo upload service is temporarily unavailable. Please retry.',
+    });
+    assert.equal(puts, 1, 'a reservation service failure must not reach R2');
+    reservationFailureCode = null;
+
     assert.equal(puts, 1, 'a second writer must not reach R2');
     assert.deepEqual(deletedKeys, [expiredKey]);
 

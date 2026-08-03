@@ -48,6 +48,7 @@ const LOG_EVENTS = Object.freeze({
   account_cleanup_failed: { level: 'warn', fields: ['step', 'status', 'failure', 'correlation'] },
   story_photo_cleanup_failed: { level: 'warn', fields: ['route', 'failure'] },
   admin_source_failed: { level: 'warn', fields: ['source', 'failure'] },
+  story_photo_reservation_failed: { level: 'warn', fields: ['status'] },
   remembrance_review_photo_access: { level: 'info', fields: ['status', 'correlation'] },
 });
 

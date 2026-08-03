@@ -3,29 +3,62 @@ import { graveCacheKey, readGraveCache, writeGraveCache } from './grave-cache';
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
 const HEADERS   = { 'User-Agent': 'GraveStory/1.0 (mobile)' };
 
-export async function searchCemeteries(query) {
+function isCemeteryResult(result) {
+  const label = String(result?.display_name || '').toLowerCase();
+  return (result?.class === 'landuse' && result?.type === 'cemetery')
+    || (result?.class === 'amenity' && result?.type === 'grave_yard')
+    || result?.type === 'cemetery' || result?.type === 'grave_yard'
+    || /cemetery|graveyard|memorial park|burial/.test(label);
+}
+
+function toCemeteryResults(data) {
+  return (Array.isArray(data) ? data : []).filter(isCemeteryResult)
+    .map(result => ({ name: result.display_name, lat: Number(result.lat), lng: Number(result.lon) }))
+    .filter(result => result.name && Number.isFinite(result.lat) && Number.isFinite(result.lng));
+}
+
+function cityViewbox(data) {
+  const city = (Array.isArray(data) ? data : []).find(result => ['place', 'boundary'].includes(result?.class)
+    && ['city', 'town', 'village', 'municipality', 'administrative'].includes(result.type)
+    && Array.isArray(result.boundingbox) && result.boundingbox.length === 4);
+  if (!city) return null;
+  const [south, north, west, east] = city.boundingbox.map(Number);
+  return [south, north, west, east].every(Number.isFinite) && south < north && west < east
+    ? `${west},${north},${east},${south}` : null;
+}
+
+async function searchNominatim(query, viewbox = null) {
+  let url = `${NOMINATIM}/search?q=${encodeURIComponent(query)}&format=json&limit=8&addressdetails=1`;
+  if (viewbox) url += `&viewbox=${encodeURIComponent(viewbox)}&bounded=1`;
+  const controller = new AbortController();
+  let timeout;
+  try {
+    const data = await Promise.race([
+      fetch(url, { headers: HEADERS, signal: controller.signal }).then(async response => {
+        if (!response.ok) throw new Error(`Cemetery search failed (${response.status})`);
+        return response.json();
+      }),
+      new Promise((_, reject) => { timeout = setTimeout(() => {
+        controller.abort();
+        reject(new Error('Cemetery search timed out'));
+      }, 15000); }),
+    ]);
+    return Array.isArray(data) ? data : [];
+  } finally { clearTimeout(timeout); }
+}
+
+export async function searchCemeteries(query, { throwOnFailure = false } = {}) {
   const text = String(query || '').trim();
   if (text.length < 3) return [];
   try {
-    const url = `${NOMINATIM}/search?q=${encodeURIComponent(text)}&format=json&limit=8&addressdetails=1`;
-    const res = await fetch(url, { headers: HEADERS });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data || [])
-      .filter(r => {
-        const label = String(r.display_name || '').toLowerCase();
-        return r.type === 'cemetery' || r.type === 'grave_yard'
-          || label.includes('cemetery') || label.includes('graveyard')
-          || label.includes('memorial park') || label.includes('burial');
-      })
-      .map(r => ({
-        name: r.display_name,
-        lat: Number(r.lat),
-        lng: Number(r.lon),
-      }))
-      .filter(r => Number.isFinite(r.lat) && Number.isFinite(r.lng));
-  } catch (e) {
-    console.warn('searchCemeteries failed:', e.message);
+    const firstResults = await searchNominatim(text);
+    const directResults = toCemeteryResults(firstResults);
+    if (directResults.length > 0) return directResults;
+    const bounds = cityViewbox(firstResults);
+    return toCemeteryResults(await searchNominatim(bounds ? 'cemetery' : `${text} cemetery`, bounds));
+  } catch (error) {
+    console.warn('searchCemeteries failed:', error?.message);
+    if (throwOnFailure) throw error;
     return [];
   }
 }

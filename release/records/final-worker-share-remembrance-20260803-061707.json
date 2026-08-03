@@ -1,0 +1,21 @@
+{
+  "candidateId": "candidate-worker-4334c5998748-20260803060123",
+  "component": "worker",
+  "contentHash": "a0389ace17cfe96e7cd1afb1d5e6e0407c2502112319365b821ebffdb6a37856",
+  "createdAt": "2026-08-03T06:32:41.227Z",
+  "executionEvidence": {
+    "approvalRef": "james-approved-ungated-20260802",
+    "completedAt": "2026-08-03T06:31:10.601Z",
+    "evidenceRef": "cloudflare-worker-deploy-c8a2cb6d-ba6d-4506-8930-bbc43523eefd",
+    "executionId": "worker-share-remembrance-20260803-061707",
+    "kind": "platform",
+    "releaseId": "c8a2cb6d-ba6d-4506-8930-bbc43523eefd",
+    "result": "success",
+    "startedAt": "2026-08-03T06:31:04.530Z"
+  },
+  "executionId": "worker-share-remembrance-20260803-061707",
+  "recordId": "final-worker-share-remembrance-20260803-061707",
+  "recordType": "final",
+  "rollbackBaselineId": "baseline-worker-20260713-4a01f4da",
+  "schemaVersion": 1
+}

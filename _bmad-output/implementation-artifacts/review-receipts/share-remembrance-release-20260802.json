@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "kind": "bmad-code-review-receipt",
+  "sourceCommit": "4334c599874873464a6487cbcf9f7130c1db75c8",
+  "reviewId": "share-remembrance-release-20260802",
+  "pr": "J3K420/Gravestory#21",
+  "bmad": "passed",
+  "completedAt": "2026-08-03T03:41:43Z",
+  "findingsResolved": true,
+  "artifactPath": "_bmad-output/implementation-artifacts/share-remembrance-review/final-review.md",
+  "artifactBlob": "d9171e55a40176c8d59ddc03842b849728f3ad2e"
+}

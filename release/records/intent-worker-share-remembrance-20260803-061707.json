@@ -1,0 +1,12 @@
+{
+  "candidateId": "candidate-worker-4334c5998748-20260803060123",
+  "component": "worker",
+  "contentHash": "377fc0e851d425ff8d8997c9d5b60e62aceefe5e48f9501f5c26d28756ce7ee8",
+  "createdAt": "2026-08-03T06:17:07.024Z",
+  "executionId": "worker-share-remembrance-20260803-061707",
+  "executionStarted": false,
+  "originMainCommit": "c030f931b9bf651888409fe0cd7ca7ada5ec50ed",
+  "recordId": "intent-worker-share-remembrance-20260803-061707",
+  "recordType": "intent",
+  "schemaVersion": 1
+}

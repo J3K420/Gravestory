@@ -131,11 +131,17 @@ export default function RememberedStoriesScreen({ navigation }) {
         {
           text: 'Delete', style: 'destructive',
           onPress: async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (story.id && session?.user) {
+              const deleted = await cloudDeleteStory(story, session.user);
+              if (!deleted) {
+                Alert.alert('Could not delete', 'The story was not removed. Check your connection and try again.');
+                return;
+              }
+            }
             const updated = stories.filter(s => s.timestamp !== story.timestamp);
             setStories(updated);
-            const { data: { session } } = await supabase.auth.getSession();
             await saveStories(updated, session?.user?.id ?? null);
-            if (session?.user) await cloudDeleteStory(story, session.user);
           },
         },
       ]

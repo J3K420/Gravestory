@@ -34,6 +34,8 @@ import CemeteryMapScreen from './src/screens/CemeteryMapScreen';
 import GlobalMapScreen from './src/screens/GlobalMapScreen';
 import RememberedStoriesScreen from './src/screens/RememberedStoriesScreen';
 import PaywallScreen from './src/screens/PaywallScreen';
+import RemembranceScreen from './src/screens/RemembranceScreen';
+import CommunityStoriesScreen from './src/screens/CommunityStoriesScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -46,7 +48,7 @@ const navigationRef = createNavigationContainerRef();
 // screen (Home, lists, maps, settings) applies it. Opening the system camera
 // backgrounds the app, so without this guard returning to confirm a photo
 // reloads mid-scan straight to Home.
-const NO_RELOAD_SCREENS = new Set(['Camera', 'Result', 'Paywall']);
+const NO_RELOAD_SCREENS = new Set(['Camera', 'Result', 'Paywall', 'Remembrance']);
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -243,6 +245,8 @@ export default function App() {
             <Stack.Screen name="GlobalMap" component={GlobalMapScreen} />
             <Stack.Screen name="RememberedStories" component={RememberedStoriesScreen} />
             <Stack.Screen name="Paywall" component={PaywallScreen} />
+            <Stack.Screen name="Remembrance" component={RemembranceScreen} />
+            <Stack.Screen name="CommunityStories" component={CommunityStoriesScreen} />
           </Stack.Navigator>
         </NavigationContainer>
       </SafeAreaProvider>

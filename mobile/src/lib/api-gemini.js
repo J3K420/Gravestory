@@ -117,7 +117,11 @@ Return only JSON.`;
 
   if (data.error) {
     console.warn('verifyIsGravestone error — proceeding anyway. Response:', JSON.stringify(data));
-    return;
+    return {
+      status: 'unavailable',
+      confidence: 'low',
+      reason: 'Image verification was temporarily unavailable.',
+    };
   }
 
   // Verify must FAIL OPEN on its own failures — only an explicit is_gravestone===false
@@ -130,7 +134,11 @@ Return only JSON.`;
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) {
     console.warn('verifyIsGravestone — no candidate text (blocked/empty response), proceeding anyway.');
-    return;
+    return {
+      status: 'unavailable',
+      confidence: 'low',
+      reason: 'Image verification returned an ambiguous result.',
+    };
   }
   const parsed = safeParseJSON(text, { is_gravestone: true, confidence: 'low', reason: '' });
 
@@ -140,6 +148,12 @@ Return only JSON.`;
     err.reason = parsed.reason || 'The image does not appear to contain a gravestone.';
     throw err;
   }
+
+  return {
+    status: parsed.confidence === 'low' ? 'review' : 'approved',
+    confidence: parsed.confidence || 'low',
+    reason: parsed.reason || '',
+  };
 }
 
 export async function readGravestone(base64, location) {

@@ -11,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { loadStories, saveStories } from '../lib/storage';
 import { cloudSaveStory, cloudUpdateStory, cloudDeleteStory, findOrCreateGrave, setGraveMarker } from '../lib/sync';
-import { uploadGravestoneImage } from '../lib/api-r2';
+import { moderateRemembrance, uploadGravestoneImage } from '../lib/api-r2';
 import { getTributes, setTribute } from '../lib/api-tributes';
 import { submitContentReport, REPORT_REASONS, REPORT_NOTE_MAX } from '../lib/api-reports';
 import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
@@ -54,9 +54,9 @@ const REVIEW_MIN_SAVES = 2;
 const IMAGE_UA = 'GraveStory/1.0 (https://github.com/J3K420/Gravestory; gravestory mobile app)';
 // Build an <Image> source, attaching the UA header only for remote http(s) URIs
 // (Wikimedia portraits). file:// and data: URIs are returned bare.
-function imgSource(uri) {
+function imgSource(uri, extraHeaders = {}) {
   if (typeof uri === 'string' && /^https?:\/\//i.test(uri)) {
-    return { uri, headers: { 'User-Agent': IMAGE_UA } };
+    return { uri, headers: { 'User-Agent': IMAGE_UA, ...extraHeaders } };
   }
   return { uri };
 }
@@ -140,6 +140,7 @@ export default function ResultScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [story, setStory]               = useState(route.params?.story);
   const [user, setUser]                 = useState(null);
+  const [sessionToken, setSessionToken] = useState(null);
   const [sharing, setSharing]           = useState(false);
   const [exporting, setExporting]       = useState(false);
   const [saving, setSaving]             = useState(false);
@@ -148,6 +149,7 @@ export default function ResultScreen({ navigation, route }) {
   const [tributes, setTributes]         = useState({ candles: 0, flowers: 0, userTribute: null });
   const [tributeLoading, setTributeLoading] = useState(false);
   const [gravePhotos, setGravePhotos]   = useState([]);
+  const [storyPhotoRows, setStoryPhotoRows] = useState([]);
   const [livePortraits, setLivePortraits] = useState([]);
   const [extraPhotosOpen, setExtraPhotosOpen] = useState(false); // global bio: "+N more photos of this grave" strip
   const [photoViewer, setPhotoViewer]   = useState(null); // full-size uri tapped from the strip
@@ -188,6 +190,7 @@ export default function ResultScreen({ navigation, route }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      setSessionToken(session?.access_token ?? null);
     });
   }, []);
 
@@ -225,6 +228,9 @@ export default function ResultScreen({ navigation, route }) {
       .from('grave_photos')
       .select('image_url')
       .eq('grave_id', story.grave_id)
+      .eq('visibility', 'public')
+      .eq('moderation_status', 'approved')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(10)
       .then(({ data }) => {
@@ -233,6 +239,22 @@ export default function ResultScreen({ navigation, route }) {
       });
   }, [story?.grave_id, story?._isGlobal]);
 
+  // Remembrance supporting photos are stored separately from the story row.
+  // Querying the table here lets owners see private attachments while public
+  // bios receive only rows allowed by the public RLS policy.
+  useEffect(() => {
+    if (story?.story_type !== 'remembrance' || !story?.id) {
+      setStoryPhotoRows([]);
+      return;
+    }
+    supabase
+      .from('story_photos')
+      .select('image_url, photo_role, sort_order')
+      .eq('story_id', story.id)
+      .is('deleted_at', null)
+      .order('sort_order', { ascending: true })
+      .then(({ data }) => setStoryPhotoRows((data || []).filter(row => row.image_url)));
+  }, [story?.id, story?.story_type, story?.is_public, story?.publication_status]);
   // Global bios have no locally-persisted portraits — fetch live from Wikipedia.
   useEffect(() => {
     if (!story?._isGlobal || !story?.name) return;
@@ -509,6 +531,9 @@ export default function ResultScreen({ navigation, route }) {
   // scanned (still _unsaved) story there's no R2 image_url yet — the photo
   // only lives in memory as _base64 until the user taps Save — so fall back
   // to a data URI so the gravestone still appears in the carousel immediately.
+  const privatePhotoHeaders = story.story_type === 'remembrance' && !story.is_public && sessionToken
+    ? { Authorization: 'Bearer ' + sessionToken }
+    : {};
   const localGraveUri = story.image_url
     || (story._base64 ? `data:image/jpeg;base64,${story._base64}` : null);
   // On a GLOBAL bio the grave can have several community uploads. We lead the
@@ -516,13 +541,28 @@ export default function ResultScreen({ navigation, route }) {
   // it (not buried behind every extra upload); the rest go in extraGravePhotos,
   // surfaced by a tap-to-expand strip below the carousel. Non-global bios are
   // unchanged (a single own-photo grave slot, or the sample's bundled asset).
-  const graveSlots = (story._isGlobal && gravePhotos.length > 0)
-    ? [{ uri: gravePhotos[0], label: 'Gravestone' }]
-    // The sample story bundles its gravestone photo as a local asset (a require()'d
-    // module, not a URI) so the example leads with a real stone like a true scan.
-    : (story._graveImageAsset
-        ? [{ asset: story._graveImageAsset, label: 'Gravestone' }]
-        : (localGraveUri ? [{ uri: localGraveUri, label: 'Gravestone' }] : []));
+  const localStoryPhotoUris = Array.isArray(story._storyPhotos)
+    ? story._storyPhotos.filter(Boolean)
+    : [];
+  const remembrancePhotoUris = storyPhotoRows.length > 0
+    ? storyPhotoRows.map(row => row.image_url).filter(Boolean)
+    : localStoryPhotoUris;
+  const remembranceSupportingPhotos = story.story_type === 'remembrance'
+    ? remembrancePhotoUris.slice(1).map(uri => ({ uri, label: 'Supporting photo' }))
+    : [];
+  const remembrancePrimaryPhoto = story.story_type === 'remembrance'
+    ? remembrancePhotoUris[0]
+    : null;
+
+  const graveSlots = (story.story_type === 'remembrance' && remembrancePrimaryPhoto)
+    ? [{ uri: remembrancePrimaryPhoto, label: 'Gravestone' }]
+    : ((story._isGlobal && gravePhotos.length > 0)
+      ? [{ uri: gravePhotos[0], label: 'Gravestone' }]
+      // The sample story bundles its gravestone photo as a local asset (a require()'d
+      // module, not a URI) so the example leads with a real stone like a true scan.
+      : (story._graveImageAsset
+          ? [{ asset: story._graveImageAsset, label: 'Gravestone' }]
+          : (localGraveUri ? [{ uri: localGraveUri, label: 'Gravestone' }] : [])));
 
   // The other community uploads of this same stone (global bios only).
   const extraGravePhotos = (story._isGlobal && gravePhotos.length > 1)
@@ -535,6 +575,7 @@ export default function ResultScreen({ navigation, route }) {
 
   const carouselImages = [
     ...graveSlots,
+    ...remembranceSupportingPhotos,
     ...portraitUris.map(uri => ({ uri, label: 'Portrait' })),
   ].filter(Boolean);
 
@@ -635,7 +676,7 @@ export default function ResultScreen({ navigation, route }) {
             // (migration 031). Re-saving the same grave UPDATES your existing
             // photo to the newest upload instead of piling on duplicate rows
             // (which made the global-map gallery show the same stone 10×).
-            if (saved.grave_id) {
+            if (saved.grave_id && saved.id && saved.is_public) {
               (async () => {
                 try {
                   // The Supabase client RESOLVES (doesn't throw) on RLS/constraint
@@ -644,7 +685,11 @@ export default function ResultScreen({ navigation, route }) {
                   const { error } = await supabase.from('grave_photos').upsert({
                     grave_id: saved.grave_id,
                     user_id: sessionUser.id,
+                    story_id: saved.id,
                     image_url: imageUrl,
+                    visibility: 'public',
+                    moderation_status: 'approved',
+                    deleted_at: null,
                   }, { onConflict: 'grave_id,user_id' });
                   if (error) console.warn('grave_photos upsert failed (non-fatal):', error.message);
                 } catch (e) {
@@ -777,9 +822,15 @@ export default function ResultScreen({ navigation, route }) {
         {
           text: 'Delete', style: 'destructive',
           onPress: async () => {
+            if (story.id && user) {
+              const deleted = await cloudDeleteStory(story, user);
+              if (!deleted) {
+                Alert.alert('Could not delete', 'The story was not removed. Check your connection and try again.');
+                return;
+              }
+            }
             const all = await loadStories(user?.id ?? null);
             await saveStories(all.filter(s => s.timestamp !== story.timestamp), user?.id ?? null);
-            if (story.id && user) await cloudDeleteStory(story, user);
             navigation.navigate('Home');
           },
         },
@@ -835,7 +886,10 @@ export default function ResultScreen({ navigation, route }) {
 
   async function handleTogglePublic() {
     if (!user || story._isGlobal || togglingPublic) return;
-    const goingPublic = !story.is_public;
+    const sharedRequested = story.story_type === 'remembrance'
+      ? (story.is_public || story.requested_visibility === 'public' || story.publication_status === 'pending')
+      : story.is_public;
+    const goingPublic = !sharedRequested;
     // First time a user shares ANY story publicly, make them read+accept a
     // one-time notice (public stories are visible to all and may name others).
     // Making a story private again never gates.
@@ -854,7 +908,18 @@ export default function ResultScreen({ navigation, route }) {
   async function _doTogglePublic() {
     if (togglingPublic) return;
     setTogglingPublic(true);
-    const updated = { ...story, is_public: !story.is_public };
+    const sharedRequested = story.story_type === 'remembrance'
+      ? (story.is_public || story.requested_visibility === 'public' || story.publication_status === 'pending')
+      : story.is_public;
+    const makingPublic = !sharedRequested;
+    const updated = { ...story, is_public: makingPublic };
+    if (story.story_type === 'remembrance') {
+      updated.requested_visibility = makingPublic ? 'public' : 'private';
+      updated.publication_status = makingPublic
+        ? (story.moderation_status === 'approved' ? 'published' : 'pending')
+        : 'private';
+      updated.is_public = updated.publication_status === 'published';
+    }
     // Before a story reaches the public global map, strip the names of any
     // LIVING relatives from the bio prose (privacy/defamation guard). Done
     // once and cached on the row; the redacted copy is what the global RPC
@@ -905,8 +970,44 @@ export default function ResultScreen({ navigation, route }) {
     const idx = all.findIndex(s => s.timestamp === story.timestamp);
     if (idx >= 0) { all[idx] = updated; await saveStories(all, user?.id ?? null); }
     setStory(updated);
-    if (updated.id) setStory(await cloudUpdateStory(updated, user));
-    if (updated.is_public) logEvent(EVENTS.MADE_PUBLIC, {});
+    let finalStory = updated;
+    if (updated.id) {
+      finalStory = await cloudUpdateStory(updated, user);
+      if (finalStory._needsCloudSync) {
+        const restored = { ...story };
+        const restoredStories = await loadStories(user?.id ?? null);
+        const restoredIndex = restoredStories.findIndex(s => s.id === story.id || s.timestamp === story.timestamp);
+        if (restoredIndex >= 0) { restoredStories[restoredIndex] = restored; await saveStories(restoredStories, user?.id ?? null); }
+        setStory(restored);
+        Alert.alert('Visibility not changed', finalStory._cloudError || 'The server could not confirm this change. Please retry.');
+        setTogglingPublic(false);
+        return;
+      }
+      if (story.story_type === 'remembrance' && makingPublic && !finalStory.is_public) {
+        const moderation = await moderateRemembrance(updated.id);
+        const status = moderation.ok ? moderation.publicationStatus : 'pending';
+        finalStory = {
+          ...finalStory,
+          image_url: moderation.imageUrl || finalStory.image_url,
+          publication_status: status,
+          moderation_status: moderation.decision === 'approved'
+            ? 'approved'
+            : (moderation.decision === 'rejected' ? 'rejected' : 'pending'),
+          moderation_reason: moderation.reason || moderation.error || finalStory.moderation_reason,
+          is_public: status === 'published',
+        };
+        if (moderation.decision === 'rejected') {
+          Alert.alert('Not published', finalStory.moderation_reason || 'This remembrance needs changes before it can be public.');
+        } else if (!finalStory.is_public) {
+          Alert.alert('Sent for review', 'This remembrance will remain private until its public review is approved.');
+        }
+      }
+      setStory(finalStory);
+      const latest = await loadStories(user?.id ?? null);
+      const latestIndex = latest.findIndex(s => s.timestamp === finalStory.timestamp);
+      if (latestIndex >= 0) { latest[latestIndex] = finalStory; await saveStories(latest, user?.id ?? null); }
+    }
+    if (finalStory.is_public) logEvent(EVENTS.MADE_PUBLIC, {});
     setTogglingPublic(false);
   }
 
@@ -1073,9 +1174,12 @@ export default function ResultScreen({ navigation, route }) {
     && (isUnsaved ? !!story.gps : (story.gps || story.location));
   const currentMarker = getMarker(story.marker_style);
   const isPublic = story.is_public;
+  const hasMapCoordinates = story.gps != null
+    && Number.isFinite(Number(story.gps.lat)) && Number.isFinite(Number(story.gps.lng));
   const hasTappableSymbol = symbols.some(s => symbolMeaning(s) !== null);
   // Real bio (not sample/template) → show the small persistent AI caption.
-  const showAiCaption = !isSample && !story._pending && (biography || '').trim();
+  const showAiCaption = story.story_type !== 'remembrance'
+    && !isSample && !story._pending && (biography || '').trim();
 
   function dismissAiModal() {
     setAiModal(false);
@@ -1094,12 +1198,15 @@ export default function ResultScreen({ navigation, route }) {
     if (!reportReason || reportSending) return;
     setReportSending(true);
     const ok = await submitContentReport({
+      storyId: story.id || null,
       storyTs: story.timestamp,
       graveId: story.grave_id || null,
       personName: name || story.primary_name || null,
       reason: reportReason,
       note: reportNote,
       isPublic: !!(story.is_public || story._isGlobal),
+      targetUserId: story._contributorId || null,
+      targetType: 'story',
     });
     setReportSending(false);
     if (ok) {
@@ -1188,7 +1295,7 @@ export default function ResultScreen({ navigation, route }) {
               keyExtractor={(_, i) => String(i)}
               renderItem={({ item }) => (
                 <View style={styles.carouselSlide}>
-                  <Image source={item.asset ? item.asset : imgSource(item.uri)} style={styles.carouselImage} resizeMode="contain" />
+                  <Image source={item.asset ? item.asset : imgSource(item.uri, privatePhotoHeaders)} style={styles.carouselImage} resizeMode="contain" />
                   <View style={styles.carouselLabelBadge}>
                     <Text style={styles.carouselLabelText}>{item.label}</Text>
                   </View>
@@ -1237,7 +1344,7 @@ export default function ResultScreen({ navigation, route }) {
                     onPress={() => setPhotoViewer(uri)}
                     activeOpacity={0.85}
                   >
-                    <Image source={imgSource(uri)} style={styles.moreShotThumb} resizeMode="cover" />
+                    <Image source={imgSource(uri, privatePhotoHeaders)} style={styles.moreShotThumb} resizeMode="cover" />
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -1250,6 +1357,14 @@ export default function ResultScreen({ navigation, route }) {
           <View style={styles.sampleBanner}>
             <Text style={styles.sampleBannerText}>
               ✦ Example story — this is what GraveStory creates from a single photo
+            </Text>
+          </View>
+        )}
+
+        {story.story_type === 'remembrance' && story.publication_status === 'pending' && (
+          <View style={styles.moderationBanner}>
+            <Text style={styles.moderationBannerText}>
+              Saved privately · Public sharing is awaiting moderation review.
             </Text>
           </View>
         )}
@@ -1277,7 +1392,9 @@ export default function ResultScreen({ navigation, route }) {
         {/* Biography */}
         {paragraphs.length > 0 && (
           <View style={styles.sectionHeading}>
-            <Text style={styles.sectionHeadingText}>Life Story</Text>
+            <Text style={styles.sectionHeadingText}>
+              {story.story_type === 'remembrance' ? 'Remembrance' : 'Life Story'}
+            </Text>
             <View style={styles.sectionHeadingRule} />
           </View>
         )}
@@ -1310,6 +1427,14 @@ export default function ResultScreen({ navigation, route }) {
           <View style={styles.aiCaption}>
             <Text style={styles.aiCaptionText}>
               ✦ AI-generated story — researched from public records. It may contain errors and is not an official record.{' '}
+              <Text style={styles.aiReportLink} onPress={openReportModal}>Report a problem</Text>
+            </Text>
+          </View>
+        )}
+        {story.story_type === 'remembrance' && story._isGlobal && (
+          <View style={styles.aiCaption}>
+            <Text style={styles.aiCaptionText}>
+              ✦ This remembrance was written by a community contributor.{' '}
               <Text style={styles.aiReportLink} onPress={openReportModal}>Report a problem</Text>
             </Text>
           </View>
@@ -1499,7 +1624,9 @@ export default function ResultScreen({ navigation, route }) {
 
         {showPublicToggle && !isPublic && (
           <Text style={styles.chipsHint}>
-            Tap Private to make this story Public — it joins the Community Map for other visitors to discover.
+            {hasMapCoordinates
+              ? 'Tap Private to make this story Public — it joins Community Stories and the Community Map.'
+              : 'Tap Private to make this story Public — it joins Community Stories. No map pin is shown without a location.'}
           </Text>
         )}
 
@@ -1552,7 +1679,7 @@ export default function ResultScreen({ navigation, route }) {
       >
         <Pressable style={styles.photoViewerOverlay} onPress={() => setPhotoViewer(null)}>
           {!!photoViewer && (
-            <Image source={imgSource(photoViewer)} style={styles.photoViewerImage} resizeMode="contain" />
+            <Image source={imgSource(photoViewer, privatePhotoHeaders)} style={styles.photoViewerImage} resizeMode="contain" />
           )}
           <Text style={styles.photoViewerHint}>Tap to close</Text>
         </Pressable>
@@ -1904,6 +2031,15 @@ const styles = StyleSheet.create({
   sampleBannerText: {
     color: colors.flame, fontFamily: fonts.bodyItalic, fontSize: 12,
     lineHeight: 17, textAlign: 'center',
+  },
+  moderationBanner: {
+    marginBottom: 16, padding: 12,
+    borderWidth: 1, borderColor: colors.ember,
+    borderRadius: radius.sm, backgroundColor: colors.stone2,
+  },
+  moderationBannerText: {
+    color: colors.parchment, fontFamily: fonts.body,
+    fontSize: 12, lineHeight: 18, textAlign: 'center',
   },
 
   name: {

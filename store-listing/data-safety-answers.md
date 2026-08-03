@@ -1,6 +1,6 @@
 # GraveStory — Data Safety form answers (Play Console)
 
-> Derived from an actual code audit of `mobile/` (2026-06-25), not a template. Google
+> Derived from an actual code audit of `mobile/` (updated 2026-07-23), not a template. Google
 > cross-checks these against real app behavior/permissions, so every line maps to a real
 > data flow. File evidence is in the project; this is the paste-ready summary.
 
@@ -34,11 +34,8 @@ The form has 3 stages: **Overview questions → Data types → Security practice
 
 ---
 
-## ⚠️ Two minor items to double-check in the live form (neither blocks)
-1. **"Name" (Personal info)** — the editable display name is shown PUBLICLY on the community
-   map ("Shared by {name}"). If users have a display name, declare **Name = Collected**
-   (purpose: App functionality + Account management) in addition to Email. Confirm it's ticked.
-2. **Account-creation method** — the app is **OAuth-only** (no in-app password). Ticking
+## ⚠️ One minor item to double-check in the live form (does not block)
+1. **Account-creation method** — the app is **OAuth-only** (no in-app password). Ticking
    "Username and password" too is low-risk but strictly the accurate answer is **OAuth only**.
 
 ## Stage 2 — Data types to DECLARE (collected; NOT shared — see verdict above)
@@ -48,17 +45,15 @@ of these persist in Supabase); the AI image call could be argued ephemeral but i
 say collected. **Required vs optional** as noted. **Purpose** as noted.
 
 ### Location → **Precise location**
-- Collected: **Yes** · Shared: **Yes** (sent to Nominatim/OpenStreetMap + Photon/komoot for
-  geocoding; also stored in your Supabase and shown as a map pin).
+- Collected: **Yes** · Shared: **No** (Nominatim/OpenStreetMap + Photon/komoot process
+  geocoding requests as service providers; an optional public map pin is a user-initiated action).
 - Purpose: **App functionality** (place the grave on the map; resolve place/cemetery names).
-- Optional: it's core to mapping but the user chooses camera/GPS — mark **Required** to be safe
-  (the feature depends on it). User can use the app without granting GPS (EXIF/manual), so
-  "Optional" is also defensible; pick Required for honesty about the core experience.
+- Optional: **Yes**. Users can deny GPS, search manually, drop a pin, or skip location entirely;
+  GPS-less public remembrances remain available in Community Stories but never on the map.
 
 ### Photos and videos → **Photos**
-- Collected: **Yes** · Shared: **Yes** (the gravestone photo is sent to **Google Gemini** for
-  OCR/verification, and stored in **your Cloudflare R2**; public stories show the photo on the
-  community map gallery).
+- Collected: **Yes** · Shared: **No** (Google Gemini processes OCR/safety review as a service
+  provider and Cloudflare R2 is first-party storage; optional public display is user-initiated).
 - Purpose: **App functionality**.
 - Required: **Yes** (the photo IS the input to the app).
 
@@ -67,17 +62,17 @@ say collected. **Required vs optional** as noted. **Purpose** as noted.
 - Purpose: **Account management**, **App functionality** (sync).
 
 ### Personal info → **Name**
-- Collected: **Yes** (Google display name; editable) · Shared: **Yes** (published as the
-  "Shared by {name}" contributor label on the public community map, by design).
+- Collected: **Yes** (Google display name; editable) · Shared: **No** (the contributor label is
+  displayed only through the user's explicit public-sharing action).
 - Purpose: **App functionality**, **Account management**.
 
 ### Personal info → **User IDs**
-- Collected: **Yes** (Supabase user UUID) · Shared: **Yes** (sent to **RevenueCat** as the
-  app-user id to attach purchases).
+- Collected: **Yes** (Supabase user UUID) · Shared: **No** (RevenueCat processes the app-user id
+  as a service provider to attach purchases).
 - Purpose: **App functionality**, **Account management**.
 
 ### Financial info → **Purchase history**
-- Collected: **Yes** · Shared: **Yes** (**RevenueCat** processes purchase/transaction data;
+- Collected: **Yes** · Shared: **No** (**RevenueCat** processes purchase/transaction data as a service provider;
   Google Play handles the actual payment).
 - Purpose: **App functionality** (grant scan credits).
 - Note: no payment-card data touches your app — do NOT declare "Payment info"/card numbers.
@@ -88,13 +83,22 @@ say collected. **Required vs optional** as noted. **Purpose** as noted.
 - Purpose: **Analytics**.
 
 ### App activity / Messages-style → **Other user-generated content**
-- This covers the **inscription text, OCR'd names/dates of the DECEASED, and the generated
-  biography**. These are sent to research APIs (Tavily, WikiTree, Wikidata, Wikipedia,
-  Chronicling America, Internet Archive) and to Gemini.
-- Collected: **Yes** · Shared: **Yes** (the research APIs above).
+- This covers the **inscription text, OCR'd names/dates of the deceased, generated biographies,
+  user-written remembrances, content reports, and optional report notes**. Research inputs are
+  sent to research APIs; remembrance text and selected photos are sent to Gemini for safety
+  screening and stored in Supabase/R2.
+- Collected: **Yes** · Shared: **No** (research and Gemini providers process requests on
+  GraveStory's behalf; optional public display is user-initiated).
 - Purpose: **App functionality**.
 - Context note (not a form field): these are names of *deceased* people from public memorials,
   and living-relative names are redacted before any PUBLIC display.
+
+### Photos and videos → **Photos** (remembrance update)
+- The existing Photos declaration remains correct, but the purpose now also includes storing a
+  primary gravestone photo plus up to three optional supporting photos for a user-authored
+  remembrance, verifying cemetery relevance, safety screening, moderation, and optional public
+  display. Location is independently optional; a GPS-less photo can still be published in the
+  Community Stories list.
 
 ---
 
@@ -130,3 +134,7 @@ the only item the code audit couldn't fully resolve from JS source.
 
 > A "Data safety" declaration that mismatches the app's real permissions/SDK behavior is a top
 > rejection cause and can block future updates — which is exactly why this is audited from code.
+>
+> Google definitions used for this audit: service-provider and specific user-initiated transfers
+> are excluded from "sharing," while off-device transmission still counts as collection:
+> https://support.google.com/googleplay/android-developer/answer/10787469

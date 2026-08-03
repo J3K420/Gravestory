@@ -2,3 +2,9 @@ supabase-migrations/*.sql text eol=crlf
 supabase-migrations/**/*.sql text eol=crlf
 queries/*.sql text eol=crlf
 queries/**/*.sql text eol=crlf
+
+# These migrations were applied with exact historical byte layouts. Preserve
+# those cataloged bytes instead of normalizing them during cross-platform checkout.
+supabase-migrations/035_share_remembrances.sql -text -whitespace
+supabase-migrations/036_remembrance_security_forward_fix.sql -text -whitespace
+supabase-migrations/037_remembrance_operator_moderation.sql -text -whitespace

@@ -108,7 +108,7 @@ function unboundedBindingCalls(source) {
     ...callRanges(code, 'withDeadline'),
     ...callRanges(code, 'runBestEffortBatchWithinDeadline'),
   ];
-  return [...code.matchAll(/\benv\.IMAGES\.[A-Za-z_$][\w$]*\s*\(/g)]
+  return [...code.matchAll(/\benv\.(?:IMAGES|REMEMBRANCE_IMAGES)\.[A-Za-z_$][\w$]*\s*\(/g)]
     .filter((match) => !bounded.some(([start, end]) => start < match.index && match.index < end))
     .map((match) => match[0]);
 }
@@ -141,7 +141,7 @@ test('every Worker upstream deadline is explicit, finite, and bounded', () => {
     assert.deepEqual(workerBypasses(source), { fetch: false, console: false }, 'runtime bypass in ' + path);
     assert.deepEqual(unboundedBindingCalls(source), [], 'binding bypass in ' + path);
     deadlineCalls += (source.match(/fetchWithDeadline\s*\(/g) || []).length;
-    bindingCalls += (source.match(/\benv\.IMAGES\.[A-Za-z_$][\w$]*\s*\(/g) || []).length;
+    bindingCalls += (source.match(/\benv\.(?:IMAGES|REMEMBRANCE_IMAGES)\.[A-Za-z_$][\w$]*\s*\(/g) || []).length;
   }
   assert.ok(deadlineCalls >= 19);
   assert.ok(bindingCalls >= 2);
@@ -314,9 +314,9 @@ test('structured Worker events have exact schemas and redact unsafe values', () 
 
 test('every Worker route has a duplicate-delivery disposition', () => {
   const expected = [
-    '/admin/metrics', '/begin-scan', '/commit-scan', '/delete-account', '/gemini-jwt/:model',
-    '/gemini/:model', '/overpass', '/revenuecat-webhook', '/tavily', '/tavily-extract',
-    '/upload-image', '/wikitree',
+    '/admin/metrics', '/admin/remembrance-photo', '/begin-scan', '/commit-scan', '/create-remembrance', '/delete-account', '/delete-story-photos', '/discard-story-photo',
+    '/gemini-jwt/:model', '/gemini/:model', '/moderate-remembrance', '/overpass', '/revenuecat-webhook', '/set-remembrance-visibility', '/story-photo', '/tavily', '/tavily-extract',
+    '/upload-image', '/upload-story-photo', '/wikitree',
   ].sort();
   assert.deepEqual(WORKER_ROUTE_OPERATIONS.map(({ route }) => route).sort(), expected);
   const source = read('worker/worker.js');
@@ -342,6 +342,352 @@ test('every Worker route has a duplicate-delivery disposition', () => {
   }
   assert.equal(canonicalWorkerRoute('/gemini/model-name'), '/gemini/:model');
   assert.equal(canonicalWorkerRoute('/unknown'), 'unmatched');
+});
+
+test('remembrance creation validates canonical graves and replays unique conflicts', async () => {
+  const originalFetch = globalThis.fetch;
+  const userId = '11111111-1111-4111-8111-111111111111';
+  const graveId = '22222222-2222-4222-8222-222222222222';
+  const storyId = '33333333-3333-4333-8333-333333333333';
+  const requests = [];
+  let lookupCount = 0;
+  try {
+    globalThis.fetch = async (input, init = {}) => {
+      const url = String(input);
+      requests.push({ url, init });
+      if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId });
+      if (url.endsWith('/rest/v1/rpc/find_grave')) {
+        assert.deepEqual(JSON.parse(init.body), {
+          p_name: 'Ada Lovelace', p_lat: 40.123, p_lng: -74.456,
+        });
+        return Response.json(graveId);
+      }
+      if (url.includes('/rest/v1/stories?user_id=eq.')) {
+        lookupCount++;
+        return Response.json(lookupCount === 1 ? [] : [{ id: storyId, story_type: 'remembrance' }]);
+      }
+      if (url.endsWith('/rest/v1/stories')) {
+        assert.equal(init.method, 'POST');
+        assert.equal(init.headers.Prefer, 'return=representation');
+        return Response.json({ code: '23505' }, { status: 409 });
+      }
+      throw new Error('unexpected remembrance creation fetch: ' + url);
+    };
+
+    const response = await worker.fetch(new Request('https://worker.test/create-remembrance', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer user-jwt',
+        'Content-Type': 'application/json',
+        'X-Client-Key': 'public-client-key',
+        Origin: 'https://gravestory.pages.dev',
+      },
+      body: JSON.stringify({
+        clientTimestamp: 1_722_000_000_000,
+        name: 'Ada Lovelace',
+        remembrance: 'A thoughtful remembrance.',
+        termsAcceptedAt: new Date().toISOString(),
+        requestedVisibility: 'private',
+        graveId,
+        latitude: 40.123,
+        longitude: -74.456,
+      }),
+    }), productionEnv({
+      R2_PUBLIC_URL: 'https://images.example.test',
+      IMAGES: { put() {} },
+      REMEMBRANCE_IMAGES: { put() {} },
+    }), {});
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      story: { id: storyId, story_type: 'remembrance' }, duplicate: true,
+    });
+    const insert = requests.find(({ url }) => url.endsWith('/rest/v1/stories'));
+    assert.ok(insert);
+    assert.equal(insert.url.includes('on_conflict'), false);
+    assert.equal(lookupCount, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('story-photo upload keeps the story id in scope and removes stale-race objects', async () => {
+  const originalFetch = globalThis.fetch;
+  const userId = '77777777-7777-4777-8777-777777777777';
+  const storyId = '88888888-8888-4888-8888-888888888888';
+  const expiredUploadId = '99999999-9999-4999-8999-999999999999';
+  const uploadId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const cancelledUploadId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const expiredKey = `stories/${userId}/${storyId}/${expiredUploadId}.jpg`;
+  let claimCalls = 0;
+  let confirmationAllowed = true;
+  let reservationDisposition = 'write';
+  let active = true;
+  let puts = 0;
+  const deletedKeys = [];
+  try {
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId });
+      if (url.includes('/rest/v1/stories?') && url.includes('select=id,content_revision')) {
+        assert.match(url, /moderation_status=neq\.removed/);
+        assert.match(url, /publication_status=neq\.removed/);
+        return Response.json([{ id: storyId, content_revision: 3 }]);
+      }
+      if (url.includes('/rest/v1/stories?') && url.includes('select=id&limit=1')) {
+        assert.match(url, /content_revision=eq\.3/);
+        return Response.json(active ? [{ id: storyId }] : []);
+      }
+      if (url.endsWith('/rest/v1/rpc/claim_expired_remembrance_photo_uploads')) {
+        claimCalls += 1;
+        return Response.json(claimCalls === 1
+          ? [{ upload_id: expiredUploadId, object_key: expiredKey }]
+          : []);
+      }
+      if (url.endsWith('/rest/v1/rpc/reserve_remembrance_photo_upload')) {
+        return Response.json({ slot: 0, disposition: reservationDisposition });
+      }
+      if (url.endsWith('/rest/v1/rpc/confirm_remembrance_photo_upload')) {
+        return Response.json(confirmationAllowed);
+      }
+      if (url.endsWith('/rest/v1/rpc/release_remembrance_photo_upload')) {
+        return Response.json(true);
+      }
+      throw new Error('unexpected story-photo upload fetch: ' + url);
+    };
+    const remembranceImages = {
+      put: async (key) => { puts++; assert.match(key, new RegExp(`^stories/${userId}/${storyId}/`)); },
+      list: async () => ({ objects: [], truncated: false }),
+      delete: async (key) => { deletedKeys.push(key); },
+    };
+    const env = productionEnv({
+      R2_PUBLIC_URL: 'https://images.example.test',
+      IMAGES: { put() {} },
+      REMEMBRANCE_IMAGES: remembranceImages,
+    });
+    const request = (requestUploadId = uploadId) => new Request('https://worker.test/upload-story-photo', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer user-jwt',
+        'Content-Type': 'application/json',
+        'X-Client-Key': 'public-client-key',
+        Origin: 'https://gravestory.pages.dev',
+      },
+      body: JSON.stringify({
+        storyId,
+        uploadId: requestUploadId,
+        data: btoa('photo-bytes'),
+        contentType: 'image/jpeg',
+      }),
+    });
+
+    const uploaded = await worker.fetch(request(), env, {});
+    assert.equal(uploaded.status, 200);
+    const uploadedBody = await uploaded.json();
+    assert.match(uploadedBody.objectKey, new RegExp(`^stories/${userId}/${storyId}/`));
+    assert.equal(uploadedBody.slot, 0);
+    assert.deepEqual(deletedKeys, [expiredKey]);
+
+    reservationDisposition = 'linked';
+    const replay = await worker.fetch(request(), env, {});
+    assert.equal(replay.status, 200);
+    assert.equal((await replay.json()).objectKey, uploadedBody.objectKey);
+    assert.equal(puts, 1, 'an already-linked retry must not overwrite its R2 object');
+    assert.deepEqual(deletedKeys, [expiredKey]);
+
+    reservationDisposition = 'busy';
+    const busy = await worker.fetch(request(), env, {});
+    assert.equal(busy.status, 409);
+    assert.deepEqual(await busy.json(), { error: 'This photo upload is already in progress' });
+    assert.equal(puts, 1, 'a second writer must not reach R2');
+    assert.deepEqual(deletedKeys, [expiredKey]);
+
+    reservationDisposition = 'write';
+    confirmationAllowed = false;
+    const stale = await worker.fetch(request(cancelledUploadId), env, {});
+    assert.equal(stale.status, 409);
+    assert.deepEqual(await stale.json(), { error: 'Photo upload was cancelled' });
+    assert.equal(puts, 2);
+    assert.equal(deletedKeys.length, 2);
+    assert.equal(deletedKeys[0], expiredKey);
+    assert.match(deletedKeys[1], new RegExp(`^stories/${userId}/${storyId}/`));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('remembrance deletion is type-scoped, revision-correct, and retry-idempotent', async () => {
+  const originalFetch = globalThis.fetch;
+  const userId = '44444444-4444-4444-8444-444444444444';
+  const storyId = '55555555-5555-4555-8555-555555555555';
+  const requests = [];
+  try {
+    globalThis.fetch = async (input, init = {}) => {
+      const url = String(input);
+      requests.push({ url, init });
+      if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId });
+      if (url.includes('/rest/v1/stories?') && init.method !== 'PATCH') {
+        assert.match(url, /story_type=eq\.remembrance/);
+        assert.match(url, /select=id,content_revision,deleted_at/);
+        return Response.json([{ id: storyId, content_revision: 5, deleted_at: null }]);
+      }
+      if (url.includes('/rest/v1/stories?') && init.method === 'PATCH') {
+        const body = JSON.parse(init.body);
+        assert.match(url, /story_type=eq\.remembrance/);
+        if (body.deleted_at) {
+          assert.match(url, /content_revision=eq\.6/);
+          assert.equal(body.content_revision, 7);
+          return Response.json([{ id: storyId, content_revision: 7, deleted_at: body.deleted_at }]);
+        }
+        assert.match(url, /content_revision=eq\.5/);
+        assert.equal(body.content_revision, 6);
+        return Response.json([{ id: storyId, content_revision: 6, deleted_at: null }]);
+      }
+      if (url.includes('/rest/v1/story_photos?') && init.method !== 'PATCH') {
+        assert.match(url, /deleted_at=is\.null/);
+        return Response.json([]);
+      }
+      if (url.includes('/rest/v1/story_photos?') && init.method === 'PATCH') {
+        assert.equal(url.includes('content_revision'), false);
+        return Response.json([]);
+      }
+      if (url.includes('/rest/v1/grave_photos?') && init.method === 'PATCH') {
+        assert.equal(url.includes('content_revision'), false);
+        return Response.json([]);
+      }
+      throw new Error('unexpected remembrance deletion fetch: ' + url);
+    };
+
+    const response = await worker.fetch(new Request('https://worker.test/delete-story-photos', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer user-jwt',
+        'Content-Type': 'application/json',
+        'X-Client-Key': 'public-client-key',
+        Origin: 'https://gravestory.pages.dev',
+      },
+      body: JSON.stringify({ storyId }),
+    }), productionEnv({
+      R2_PUBLIC_URL: 'https://images.example.test',
+      IMAGES: { put() {} },
+      REMEMBRANCE_IMAGES: {
+        put() {},
+        list: async () => ({ objects: [], truncated: false }),
+        delete: async () => {},
+      },
+    }), {});
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true, duplicate: false });
+    assert.equal(requests.filter(({ url }) => url.includes('/rest/v1/stories?')).length, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a deleted-remembrance retry still removes late R2 objects', async () => {
+  const originalFetch = globalThis.fetch;
+  const userId = '99999999-9999-4999-8999-999999999999';
+  const storyId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const lateKey = `stories/${userId}/${storyId}/late-object.jpg`;
+  const deletedKeys = [];
+  try {
+    globalThis.fetch = async (input, init = {}) => {
+      const url = String(input);
+      if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId });
+      if (url.includes('/rest/v1/stories?') && init.method !== 'PATCH') {
+        return Response.json([{ id: storyId, content_revision: 7, deleted_at: '2026-08-02T00:00:00.000Z' }]);
+      }
+      if (url.includes('/rest/v1/story_photos?') && init.method !== 'PATCH') return Response.json([]);
+      if (url.includes('/rest/v1/story_photos?') && init.method === 'PATCH') return Response.json([]);
+      if (url.includes('/rest/v1/grave_photos?') && init.method === 'PATCH') return Response.json([]);
+      if (url.includes('/rest/v1/stories?') && init.method === 'PATCH') {
+        throw new Error('an already-deleted retry must not patch the story again');
+      }
+      throw new Error('unexpected deleted-remembrance retry fetch: ' + url);
+    };
+    const response = await worker.fetch(new Request('https://worker.test/delete-story-photos', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer user-jwt',
+        'Content-Type': 'application/json',
+        'X-Client-Key': 'public-client-key',
+        Origin: 'https://gravestory.pages.dev',
+      },
+      body: JSON.stringify({ storyId }),
+    }), productionEnv({
+      R2_PUBLIC_URL: 'https://images.example.test',
+      IMAGES: { put() {} },
+      REMEMBRANCE_IMAGES: {
+        put() {},
+        list: async () => ({ objects: [{ key: lateKey }], truncated: false }),
+        delete: async (key) => { deletedKeys.push(key); },
+      },
+    }), {});
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true, duplicate: true });
+    assert.deepEqual(deletedKeys, [lateKey]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('operator remembrance moderation is service-role-only and exact-state guarded', () => {
+  const migration = read('supabase-migrations/037_remembrance_operator_moderation.sql');
+  const runbook = read('docs/remembrance-moderation-runbook.md');
+  const workerSource = read('worker/worker.js');
+  const mobileApi = read('mobile/src/lib/api-remembrances.js');
+
+  assert.match(migration, /SECURITY DEFINER/);
+  assert.match(migration, /DROP INDEX IF EXISTS public\.stories_remembrance_idempotency/);
+  assert.match(migration, /stories_remembrance_idempotency[\s\S]*deleted_at IS NULL/);
+  assert.match(migration, /story_photos_block_remembrance_deletion/);
+  assert.match(migration, /coalesce\(auth\.role\(\), ''\) <> 'service_role'/);
+  assert.match(migration, /confirm_remembrance_photo_upload/);
+  assert.match(migration, /writer_token uuid/);
+  assert.match(migration, /'disposition', 'linked'/);
+  assert.match(migration, /claim_remembrance_photo_upload_discard/);
+  assert.match(migration, /r\.writer_token = p_writer_token/);
+  assert.match(migration, /uploaded_at IS NOT NULL/);
+  assert.match(workerSource, /rpc\/confirm_remembrance_photo_upload/);
+  assert.match(
+    workerSource,
+    /catch \(err\) \{[\s\S]*?if \(isDeadlineError\(err\)\) throw err;[\s\S]*?if \(storyPhoto\)/,
+  );
+  assert.match(migration, /stories_block_remembrance_reactivation/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.remembrance_photo_uploads/);
+  assert.match(migration, /reserve_remembrance_photo_upload[\s\S]*FOR UPDATE/);
+  assert.match(migration, /generate_series\(0, 3\)/);
+  assert.match(migration, /claim_expired_remembrance_photo_uploads/);
+  assert.match(migration, /cleanup_claimed_at IS NULL/);
+  assert.match(migration, /cleanup cutoff must be at least 15 minutes old/);
+  assert.match(migration, /story_photos_link_remembrance_upload/);
+  assert.match(migration, /release_remembrance_photo_upload/);
+  assert.match(migration, /REVOKE ALL ON public\.remembrance_photo_uploads FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /session_user NOT IN \('postgres', 'supabase_admin'\)/);
+  assert.match(migration, /v_revision IS DISTINCT FROM p_expected_revision/);
+  assert.match(migration, /v_current_ids IS DISTINCT FROM v_expected_ids/);
+  assert.match(migration, /v_current_keys IS DISTINCT FROM v_expected_keys/);
+  assert.match(migration, /p_worker_origin !~ '\^https:/);
+  assert.match(migration, /SET image_url = p_worker_origin \|\| '\/story-photo\?key='/);
+  assert.match(migration, /replace\(sp\.object_key, '\/', '%2F'\)/);
+  assert.match(migration, /v_primary_image_url := p_worker_origin/);
+  assert.match(migration, /s\.content_revision = p_expected_revision/);
+  assert.match(migration, /s\.moderation_status = 'pending'/);
+  assert.match(migration, /REVOKE ALL ON FUNCTION[\s\S]*FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION[\s\S]*TO service_role/);
+  assert.match(runbook, /moderate_remembrance_operator[\s\S]*p_worker_origin/);
+  assert.match(runbook, /migration 036 is already applied[\s\S]*do not re-run it/i);
+  assert.doesNotMatch(runbook, /update public\.stories\s+set moderation_status/);
+  assert.match(workerSource, /rpc\/moderate_remembrance_operator/);
+  assert.match(workerSource, /rpc\/reserve_remembrance_photo_upload/);
+  assert.match(workerSource, /moderation_status=neq\.removed&publication_status=neq\.removed/);
+  assert.match(workerSource, /p_expected_photo_ids: reviewedPhotoIds/);
+  assert.match(read('mobile/src/lib/api-r2.js'), /const uploadId = Crypto\.randomUUID\(\)[\s\S]*for \(let attempt = 0; attempt < 2/);
+  assert.match(read('mobile/src/lib/api-r2.js'), /await discardStoryPhoto\(storyId, objectKey\)/);
+  assert.match(workerSource, /const alreadyDeleted = Boolean\(ownedRows\[0\]\.deleted_at\)/);
+  assert.match(mobileApi, /await discardStoryPhoto\(saved\.id, result\.objectKey\)/);
 });
 
 test('reservation exceptions and commit replay semantics match the authoritative migration', async () => {
@@ -629,6 +975,67 @@ test('RevenueCat retries ambiguous success bodies and non-FK conflicts', async (
   }
 });
 
+test('human review reads only an exact pending private photo and emits an audit event', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalInfo = console.info;
+  const adminKey = 'admin-secret-at-least-32-bytes-long';
+  const ownerId = '11111111-1111-4111-8111-111111111111';
+  const storyId = '22222222-2222-4222-8222-222222222222';
+  const uploadId = '33333333-3333-4333-8333-333333333333';
+  const key = `stories/${ownerId}/${storyId}/${uploadId}.jpg`;
+  const logs = [];
+  try {
+    console.info = (line) => logs.push(line);
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.includes('/rest/v1/story_photos?')) {
+        assert.match(url, /moderation_status/);
+        return Response.json([{ story_id: storyId, user_id: ownerId, moderation_status: 'pending' }]);
+      }
+      if (url.includes('/rest/v1/stories?')) {
+        assert.match(url, /publication_status=eq\.pending/);
+        assert.match(url, /moderation_status=eq\.pending/);
+        return Response.json([{ id: storyId }]);
+      }
+      throw new Error('unexpected remembrance review fetch: ' + url);
+    };
+    const env = productionEnv({
+      ADMIN_KEY: adminKey,
+      REMEMBRANCE_IMAGES: {
+        put() {},
+        get: async (requestedKey) => {
+          assert.equal(requestedKey, key);
+          return {
+            body: new TextEncoder().encode('private-photo'),
+            httpMetadata: { contentType: 'image/jpeg' },
+          };
+        },
+      },
+    });
+    const unauthorized = await worker.fetch(new Request(
+      `https://worker.test/admin/remembrance-photo?key=${encodeURIComponent(key)}`,
+    ), env, {});
+    assert.equal(unauthorized.status, 401);
+
+    const response = await worker.fetch(new Request(
+      `https://worker.test/admin/remembrance-photo?key=${encodeURIComponent(key)}`,
+      { headers: { Authorization: `Bearer ${adminKey}`, Origin: 'https://local-admin.example' } },
+    ), env, {});
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
+    assert.equal(await response.text(), 'private-photo');
+    const audit = logs.map((line) => JSON.parse(line)).find(
+      ({ event }) => event === 'remembrance_review_photo_access',
+    );
+    assert.equal(audit.status, 200);
+    assert.match(audit.correlation, /^[a-f0-9]{16}$/);
+    assert.equal(logs.join('\n').includes(key), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.info = originalInfo;
+  }
+});
+
 test('admin fan-out failures stay useful, redacted, and observable', async () => {
   const originalFetch = globalThis.fetch;
   const originalWarn = console.warn;
@@ -671,11 +1078,22 @@ test('account deletion warns on failed R2 URL collection and still completes', a
   const userId = '55555555-5555-4555-8555-555555555555';
   const logs = [];
   let r2Deletes = 0;
+  let remembrancesClosed = false;
   try {
     console.warn = (line) => logs.push(line);
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = async (input, init = {}) => {
       const url = String(input);
       if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId });
+      if (url.includes('/rest/v1/stories?')
+        && url.includes('story_type=eq.remembrance')
+        && init.method === 'PATCH') {
+        const body = JSON.parse(init.body);
+        assert.equal(body.publication_status, 'removed');
+        assert.equal(body.moderation_status, 'removed');
+        assert.equal(body.is_public, false);
+        remembrancesClosed = true;
+        return new Response(null, { status: 204 });
+      }
       if (url.includes('/rest/v1/stories?') && url.includes('select=image_url')) {
         return new Response('sensitive collection failure', { status: 503 });
       }
@@ -696,7 +1114,16 @@ test('account deletion warns on failed R2 URL collection and still completes', a
     }), productionEnv({
       IMAGES: {
         put() {},
+        list() { return { objects: [] }; },
         delete() { r2Deletes++; },
+      },
+      REMEMBRANCE_IMAGES: {
+        put() {},
+        list() {
+          assert.equal(remembrancesClosed, true);
+          return { objects: [] };
+        },
+        delete() {},
       },
       R2_PUBLIC_URL: 'https://images.example.test',
     }), {});

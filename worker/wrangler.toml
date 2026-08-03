@@ -43,3 +43,8 @@ SCAN_TOKEN_ENFORCE = "false"
 [[r2_buckets]]
 binding = "IMAGES"
 bucket_name = "gravestory-images"
+
+# Private remembrance UGC. This bucket must not have an R2 public/custom domain.
+[[r2_buckets]]
+binding = "REMEMBRANCE_IMAGES"
+bucket_name = "gravestory-remembrance-private"

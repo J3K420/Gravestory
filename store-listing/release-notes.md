@@ -7,7 +7,17 @@ their own line. Max 500 characters per language.
 
 ---
 
-## versionCode 16 — Play permissions compliance (prepared; not live as of 2026-07-13)
+## versionCode 17 — Share a Remembrance + Community Stories
+
+```
+<en-US>
+New: Share a remembrance in your own words with a gravestone photo, optional supporting photos, and optional location. Browse public stories even when no map location was provided, with new reporting and blocking controls.
+</en-US>
+```
+
+---
+
+## versionCode 16 — Play permissions compliance (no user-facing feature)
 
 vc16 drops `expo-media-library` (removes the READ_MEDIA_IMAGES request) and
 strips the unused RECORD_AUDIO permission so the manifest matches the Data

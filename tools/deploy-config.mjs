@@ -235,6 +235,11 @@ export function resolveWorkerDeployConfig(root = DEFAULT_ROOT) {
   const binding = requiredValue(scopedTomlString(imageBuckets[0], 'binding'), 'worker.IMAGES.binding');
   if (binding !== 'IMAGES') fail('worker.IMAGES.binding', 'must declare the IMAGES binding');
   const imagesBucket = requiredValue(scopedTomlString(imageBuckets[0], 'bucket_name'), 'worker.IMAGES.bucket_name');
+  const remembranceBuckets = toml.r2Buckets.filter((item) => item.binding === 'REMEMBRANCE_IMAGES');
+  if (remembranceBuckets.length !== 1) fail('worker.REMEMBRANCE_IMAGES.binding', 'must declare exactly one private remembrance binding');
+  const remembranceBinding = requiredValue(scopedTomlString(remembranceBuckets[0], 'binding'), 'worker.REMEMBRANCE_IMAGES.binding');
+  if (remembranceBinding !== 'REMEMBRANCE_IMAGES') fail('worker.REMEMBRANCE_IMAGES.binding', 'must declare the private remembrance binding');
+  const remembranceBucket = requiredValue(scopedTomlString(remembranceBuckets[0], 'bucket_name'), 'worker.REMEMBRANCE_IMAGES.bucket_name');
   return {
     serviceName,
     accountId,
@@ -246,6 +251,8 @@ export function resolveWorkerDeployConfig(root = DEFAULT_ROOT) {
     scanTokenEnforce: requiredValue(scopedTomlString(toml.vars, 'SCAN_TOKEN_ENFORCE'), 'worker.SCAN_TOKEN_ENFORCE'),
     imagesBinding: binding,
     imagesBucket,
+    remembranceImagesBinding: remembranceBinding,
+    remembranceImagesBucket: remembranceBucket,
     declarations: contract.map(({ name, kind, requirement, features, sensitive }) => ({ name, kind, requirement, features, sensitive })),
   };
 }

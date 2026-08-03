@@ -109,6 +109,8 @@ export default function GlobalMapScreen({ navigation }) {
           ...rowToStory(row),
           is_public: true,
           _contributor: row.contributor_name || 'Anonymous',
+          _contributorId: row.contributor_id || null,
+          story_type: row.story_type || 'researched',
           _isGlobal: true,
         }));
 

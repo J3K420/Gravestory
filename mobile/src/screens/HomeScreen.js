@@ -14,7 +14,7 @@ import { SAMPLE_STORY } from '../lib/sample-story';
 import { logEvent, EVENTS } from '../lib/analytics';
 import { colors, fonts, radius } from '../lib/theme';
 import GravestoneLogo from '../components/GravestoneLogo';
-import { MapStack, Globe } from '../components/Icons';
+import { MapStack, Globe, ShareIcon } from '../components/Icons';
 
 // Static candlelit aura that sits BEHIND the gravestone logo so the hero feels
 // lit from within — the same warm radial technique as the loading/viewfinder
@@ -179,6 +179,21 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.scanBtnText}>Scan a Gravestone</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Remembrance')}
+          activeOpacity={0.85}
+          style={styles.remembranceBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Share a remembrance"
+        >
+          <ShareIcon size={18} color={colors.flame} />
+          <View style={styles.remembranceCopy}>
+            <Text style={styles.remembranceTitle}>Share a remembrance</Text>
+            <Text style={styles.remembranceSub}>Upload a gravestone photo and tell the story yourself — free.</Text>
+          </View>
+          <Text style={styles.remembranceArrow}>›</Text>
+        </TouchableOpacity>
+
         <Text style={styles.desc}>
           Photograph a gravestone — we'll uncover the story of the life it marks.
         </Text>
@@ -203,6 +218,15 @@ export default function HomeScreen({ navigation }) {
             <Text style={[styles.mapBtnText, { color: colors.silver }]}>Community Map</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={styles.communityStoriesBtn}
+          onPress={() => navigation.navigate('CommunityStories')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.communityStoriesText}>Browse Community Stories</Text>
+          <Text style={styles.communityStoriesArrow}>›</Text>
+        </TouchableOpacity>
 
         <Text style={styles.mapHint}>
           My Map gathers the graves you've scanned. The Community Map shows stories shared by explorers everywhere.
@@ -264,6 +288,16 @@ const styles = StyleSheet.create({
   scanBtnText: {
     color: colors.onFlame, fontSize: 16, letterSpacing: 1.2, fontFamily: fonts.sansBold,
   },
+  remembranceBtn: {
+    width: '100%', marginTop: 12, paddingVertical: 14, paddingHorizontal: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 11,
+    borderWidth: 1, borderColor: colors.flame, borderRadius: radius.md,
+    backgroundColor: colors.stone2,
+  },
+  remembranceCopy: { flex: 1 },
+  remembranceTitle: { color: colors.flame, fontFamily: fonts.title, fontSize: 16, marginBottom: 3 },
+  remembranceSub: { color: colors.ash, fontFamily: fonts.body, fontSize: 11.5, lineHeight: 17 },
+  remembranceArrow: { color: colors.flame, fontFamily: fonts.body, fontSize: 22 },
 
   // Sign-in invite — gold-accented card sitting just above the scan CTA. Same
   // left-border idiom as the first-run tip card, but persistent for signed-out
@@ -340,6 +374,14 @@ const styles = StyleSheet.create({
   },
   mapBtnCommunity: { borderColor: 'rgba(170,190,220,0.2)' },
   mapBtnText: { color: colors.ash, fontSize: 13, fontFamily: fonts.body },
+  communityStoriesBtn: {
+    width: '100%', marginTop: 10, paddingVertical: 12, paddingHorizontal: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm,
+    backgroundColor: colors.stone2,
+  },
+  communityStoriesText: { color: colors.silver, fontFamily: fonts.bodyMedium, fontSize: 13 },
+  communityStoriesArrow: { color: colors.silver, fontFamily: fonts.body, fontSize: 18 },
 
   savedBtn: {
     marginTop: 16, width: '100%',

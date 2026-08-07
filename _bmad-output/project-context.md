@@ -293,6 +293,8 @@ Pipeline logic, scan APIs, and biography generation are mobile-only. Cross-platf
 
 **Shared Remembrance preview repair:** Migration 038 was owner-applied to production. Mobile commit `9a267a0` normalizes nullable Result/sync story arrays, preserving real source links and private-photo authorization while allowing saved remembrances to reopen after sync. Android preview update group `07e7eef9-6c71-45ac-8447-a72e079f6ff3` delivered it to the versionCode 17/runtime `1.1.0` tester APK; the owner confirmed the repaired flow works. Production OTA/channel was untouched. Worker hardening from `86845c0` remains undeployed and requires explicit approval.
 
+**Next production AAB is intentionally deferred (owner decision 2026-08-07):** live Play versionCode 15/runtime `exposdk:54.0.0` cannot receive the runtime `1.1.0` preview repair. Do not build, submit, or publish a production OTA yet. A new session will evaluate and integrate Tavily alternatives to reduce per-scan search cost; the provider and architecture remain undecided. Validate that work, confirm the next unused Play versionCode, then build one AAB containing both change sets.
+
 **Cutover still gated:** publish and verify the URL-only production OTA; update and publicly verify the Google Play privacy, deletion, description, and website fields; keep GitHub Pages and the repository public until those pass; retain both origins in the Worker allowlist. Follow `docs/cloudflare-pages-cutover.md`. Retiring the legacy site/origin requires explicit owner approval.
 
 ---

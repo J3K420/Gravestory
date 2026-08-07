@@ -141,6 +141,8 @@ Stories fetched from the community global map have `_isGlobal: true`. This contr
 
 **Shared Remembrance preview repair:** Migration 038 was owner-applied to production. Commit `9a267a0` makes Result rendering and `rowToStory()` null-safe for story array fields, allowing new and sync-recovered remembrances to open while preserving researched source links and private-photo auth headers. It was published only to Android `preview` runtime `1.1.0` as update group `07e7eef9-6c71-45ac-8447-a72e079f6ff3`; the owner confirmed the repaired flow works. Production OTA/channel was untouched. Worker hardening from `86845c0` remains undeployed and requires explicit authorization.
 
+**Next production AAB is intentionally deferred (owner decision 2026-08-07):** live Play versionCode 15 uses runtime `exposdk:54.0.0` and cannot receive the runtime `1.1.0` preview repair. Make no production build or production OTA yet. The next session will evaluate and integrate Tavily alternatives to reduce per-scan search cost; no provider or architecture has been selected. After validation, confirm the next unused Play versionCode and build one AAB containing the remembrance repair plus the search-cost work.
+
 **Cutover still gated:**
 - Publish and verify the URL-only mobile Settings OTA from the latest baseline.
 - Update Google Play's privacy-policy URL, account-deletion URL, full description, and store-listing website; then verify the public listing.

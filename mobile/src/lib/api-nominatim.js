@@ -2,6 +2,111 @@ import { graveCacheKey, readGraveCache, writeGraveCache } from './grave-cache';
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
 const HEADERS   = { 'User-Agent': 'GraveStory/1.0 (mobile)' };
+const NOMINATIM_MIN_INTERVAL_MS = 1000;
+const NOMINATIM_QUEUE_TIMEOUT_MS = 15000;
+const NOMINATIM_REQUEST_TIMEOUT_MS = 15000;
+const CEMETERY_CACHE_TTL_MS = 5 * 60 * 1000;
+const CEMETERY_CACHE_MAX_ENTRIES = 25;
+const cemeterySearchCache = new Map();
+let nominatimQueue = Promise.resolve();
+let lastNominatimRequestAt = null;
+
+function monotonicNow() {
+  return globalThis.performance.now();
+}
+
+function nominatimAbortError(message = 'Nominatim request cancelled') {
+  const error = new Error(message);
+  error.name = 'AbortError';
+  return error;
+}
+
+function waitWithAbort(delayMs, signal) {
+  return new Promise((resolve, reject) => {
+    let timeout;
+    const onAbort = () => {
+      clearTimeout(timeout);
+      signal.removeEventListener('abort', onAbort);
+      reject(nominatimAbortError());
+    };
+    if (signal.aborted) return onAbort();
+    signal.addEventListener('abort', onAbort, { once: true });
+    timeout = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+  });
+}
+
+function waitForNominatimSlot(signal) {
+  const slot = nominatimQueue.then(async () => {
+    if (signal.aborted) throw nominatimAbortError();
+    let waitMs = lastNominatimRequestAt === null
+      ? 0 : Math.max(0, NOMINATIM_MIN_INTERVAL_MS - (monotonicNow() - lastNominatimRequestAt));
+    while (waitMs > 0) {
+      await waitWithAbort(waitMs, signal);
+      waitMs = Math.max(0, NOMINATIM_MIN_INTERVAL_MS - (monotonicNow() - lastNominatimRequestAt));
+    }
+    if (signal.aborted) throw nominatimAbortError();
+    lastNominatimRequestAt = monotonicNow();
+  });
+  nominatimQueue = slot.catch(() => {});
+  return slot;
+}
+
+async function fetchNominatimJson(url, { signal } = {}) {
+  const controller = new AbortController();
+  let abortMessage = 'Nominatim request cancelled';
+  const onExternalAbort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener('abort', onExternalAbort, { once: true });
+
+  let queueTimeout = setTimeout(() => {
+    abortMessage = 'Nominatim queue timed out';
+    controller.abort();
+  }, NOMINATIM_QUEUE_TIMEOUT_MS);
+  let onQueueAbort;
+  const queueAborted = new Promise((_, reject) => {
+    onQueueAbort = () => reject(nominatimAbortError(abortMessage));
+    if (controller.signal.aborted) onQueueAbort();
+    else controller.signal.addEventListener('abort', onQueueAbort, { once: true });
+  });
+  try {
+    try {
+      await Promise.race([waitForNominatimSlot(controller.signal), queueAborted]);
+    } finally {
+      clearTimeout(queueTimeout);
+      queueTimeout = null;
+      controller.signal.removeEventListener('abort', onQueueAbort);
+    }
+
+    let requestTimeout;
+    let onAbort;
+    const aborted = new Promise((_, reject) => {
+      onAbort = () => reject(nominatimAbortError(abortMessage));
+      if (controller.signal.aborted) onAbort();
+      else controller.signal.addEventListener('abort', onAbort, { once: true });
+    });
+    requestTimeout = setTimeout(() => {
+      abortMessage = 'Nominatim request timed out';
+      controller.abort();
+    }, NOMINATIM_REQUEST_TIMEOUT_MS);
+    const request = (async () => {
+      const response = await fetch(url, { headers: HEADERS, signal: controller.signal });
+      const data = response.ok ? await response.json() : null;
+      return { ok: response.ok, status: response.status, data };
+    })();
+    try {
+      return await Promise.race([request, aborted]);
+    } finally {
+      clearTimeout(requestTimeout);
+      controller.signal.removeEventListener('abort', onAbort);
+    }
+  } finally {
+    clearTimeout(queueTimeout);
+    signal?.removeEventListener('abort', onExternalAbort);
+  }
+}
 
 function isCemeteryResult(result) {
   const label = String(result?.display_name || '').toLowerCase();
@@ -27,37 +132,51 @@ function cityViewbox(data) {
     ? `${west},${north},${east},${south}` : null;
 }
 
-async function searchNominatim(query, viewbox = null) {
+async function searchNominatim(query, viewbox = null, signal = null) {
   let url = `${NOMINATIM}/search?q=${encodeURIComponent(query)}&format=json&limit=8&addressdetails=1`;
   if (viewbox) url += `&viewbox=${encodeURIComponent(viewbox)}&bounded=1`;
-  const controller = new AbortController();
-  let timeout;
   try {
-    const data = await Promise.race([
-      fetch(url, { headers: HEADERS, signal: controller.signal }).then(async response => {
-        if (!response.ok) throw new Error(`Cemetery search failed (${response.status})`);
-        return response.json();
-      }),
-      new Promise((_, reject) => { timeout = setTimeout(() => {
-        controller.abort();
-        reject(new Error('Cemetery search timed out'));
-      }, 15000); }),
-    ]);
+    const { ok, status, data } = await fetchNominatimJson(url, { signal });
+    if (!ok) throw new Error(`Cemetery search failed (${status})`);
     return Array.isArray(data) ? data : [];
-  } finally { clearTimeout(timeout); }
+  } catch (error) {
+    if (error?.name === 'AbortError' && !signal?.aborted) throw new Error('Cemetery search timed out');
+    throw error;
+  }
 }
 
-export async function searchCemeteries(query, { throwOnFailure = false } = {}) {
+function cacheCemeteryResults(cacheKey, results) {
+  const now = Date.now();
+  for (const [key, cached] of cemeterySearchCache) {
+    if (cached.expiresAt <= now) cemeterySearchCache.delete(key);
+  }
+  cemeterySearchCache.delete(cacheKey);
+  cemeterySearchCache.set(cacheKey, { results, expiresAt: now + CEMETERY_CACHE_TTL_MS });
+  while (cemeterySearchCache.size > CEMETERY_CACHE_MAX_ENTRIES) {
+    cemeterySearchCache.delete(cemeterySearchCache.keys().next().value);
+  }
+}
+
+export async function searchCemeteries(query, { throwOnFailure = false, signal = null } = {}) {
   const text = String(query || '').trim();
   if (text.length < 3) return [];
+  const cacheKey = text.toLowerCase();
+  const cached = cemeterySearchCache.get(cacheKey);
+  if (cached?.expiresAt > Date.now()) return cached.results;
+  if (cached) cemeterySearchCache.delete(cacheKey);
+
   try {
-    const firstResults = await searchNominatim(text);
+    const firstResults = await searchNominatim(text, null, signal);
     const directResults = toCemeteryResults(firstResults);
-    if (directResults.length > 0) return directResults;
-    const bounds = cityViewbox(firstResults);
-    return toCemeteryResults(await searchNominatim(bounds ? 'cemetery' : `${text} cemetery`, bounds));
+    let results = directResults;
+    if (results.length === 0) {
+      const bounds = cityViewbox(firstResults);
+      results = toCemeteryResults(await searchNominatim(bounds ? 'cemetery' : `${text} cemetery`, bounds, signal));
+    }
+    cacheCemeteryResults(cacheKey, results);
+    return results;
   } catch (error) {
-    console.warn('searchCemeteries failed:', error?.message);
+    if (!signal?.aborted) console.warn('searchCemeteries failed:', error?.message);
     if (throwOnFailure) throw error;
     return [];
   }
@@ -172,9 +291,8 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
   for (const q of queries) {
     try {
       const url = `${NOMINATIM}/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`;
-      const res = await fetch(url, { headers: HEADERS });
-      if (!res.ok) continue;
-      const data = await res.json();
+      const { ok, data } = await fetchNominatimJson(url);
+      if (!ok) continue;
       if (!data?.length) continue;
 
       const strictCemetery = data.find(r =>
@@ -270,9 +388,8 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
       try {
         const viewbox = `${w - pad},${s - pad},${e + pad},${n + pad}`;
         const url = `${NOMINATIM}/search?q=${encodeURIComponent(personName)}&format=json&viewbox=${viewbox}&limit=10`;
-        const res = await fetch(url, { headers: HEADERS });
-        if (res.ok) {
-          const data = await res.json();
+        const { ok, data } = await fetchNominatimJson(url);
+        if (ok) {
           let bestMatch = null, bestScore = 0;
           for (const r of (data || [])) {
             const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
@@ -330,9 +447,8 @@ export async function forwardGeocode(locationStr, personName = null, dates = nul
 export async function reverseGeocodeCemetery(lat, lng) {
   try {
     const url = `${NOMINATIM}/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&extratags=1&namedetails=1`;
-    const res = await fetch(url, { headers: HEADERS });
-    if (!res.ok) return null;
-    const data = await res.json();
+    const { ok, data } = await fetchNominatimJson(url);
+    if (!ok) return null;
     const a = data.address || {};
     const looksLikeCemetery = (s) => /cemetery|graveyard|grave yard|memorial park|burial|mausoleum/i.test(s || '');
     const candidate = a.cemetery || a.grave_yard || a.amenity || null;
@@ -352,19 +468,18 @@ export async function reverseGeocodeCemetery(lat, lng) {
 
 // Reverse-geocode a GPS coordinate to a human-readable "City, State" string.
 // Used to enrich search context before Tavily/WikiTree queries fire.
-export async function reverseGeocode(lat, lng) {
+export async function reverseGeocode(lat, lng, { signal = null } = {}) {
   try {
     const url = `${NOMINATIM}/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`;
-    const res = await fetch(url, { headers: HEADERS });
-    if (!res.ok) return null;
-    const data = await res.json();
+    const { ok, data } = await fetchNominatimJson(url, { signal });
+    if (!ok) return null;
     const addr = data.address || {};
     const city  = addr.city || addr.town || addr.village || addr.hamlet || addr.suburb || '';
     const state = addr.state || '';
     const country = (addr.country_code || '').toLowerCase() !== 'us' ? (addr.country || '') : '';
     return [city, state || country].filter(Boolean).join(', ') || null;
   } catch (e) {
-    console.warn('reverseGeocode failed:', e?.message);
+    if (!signal?.aborted) console.warn('reverseGeocode failed:', e?.message);
     return null;
   }
 }

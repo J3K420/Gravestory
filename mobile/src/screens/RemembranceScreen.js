@@ -21,12 +21,44 @@ import { Pin } from '../components/Icons';
 
 const STEPS = ['Community rules', 'Photos', 'Remembrance', 'Location', 'Preview'];
 const TERMS_URL = 'https://gravestory.pages.dev/terms/';
+const LOCATION_TIMEOUT_MS = 20000;
 const DEFAULT_PIN = {
   latitude: 39.5,
   longitude: -98.35,
   latitudeDelta: 35,
   longitudeDelta: 35,
 };
+
+function getCurrentPosition(signal) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let subscription = null;
+    let timeout = null;
+    const cleanup = () => {
+      clearTimeout(timeout);
+      signal.removeEventListener('abort', onAbort);
+      subscription?.remove();
+    };
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback(value);
+    };
+    const onAbort = () => finish(reject, new Error('Location request cancelled'));
+    if (signal.aborted) return onAbort();
+    signal.addEventListener('abort', onAbort, { once: true });
+    timeout = setTimeout(() => finish(reject, new Error('Location request timed out')), LOCATION_TIMEOUT_MS);
+    Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.Balanced },
+      position => finish(resolve, position),
+      message => finish(reject, new Error(String(message || 'Location unavailable')))
+    ).then(result => {
+      subscription = result;
+      if (settled) subscription.remove();
+    }).catch(error => finish(reject, error));
+  });
+}
 
 export default function RemembranceScreen({ navigation }) {
   const [user, setUser] = useState(null);
@@ -48,17 +80,75 @@ export default function RemembranceScreen({ navigation }) {
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState('');
   const clientTimestampRef = useRef(null);
+  const submitInFlightRef = useRef(false);
   const cemeterySearchRequestRef = useRef(0);
+  const cemeteryQueryRef = useRef('');
+  const locationOperationRef = useRef(null);
+  const locationOperationIdRef = useRef(0);
+  const screenActiveRef = useRef(false);
+
+  function beginLocationOperation(type, label) {
+    if (busy || submitInFlightRef.current || locationOperationRef.current) return null;
+    const operation = { id: locationOperationIdRef.current + 1, type, controller: new AbortController() };
+    locationOperationIdRef.current = operation.id;
+    locationOperationRef.current = operation;
+    setBusy(true);
+    setBusyLabel(label);
+    return operation;
+  }
+
+  function isLocationOperationCurrent(operation) {
+    return screenActiveRef.current && locationOperationRef.current?.id === operation.id;
+  }
+
+  function finishLocationOperation(operation) {
+    if (!isLocationOperationCurrent(operation)) return;
+    locationOperationRef.current = null;
+    setBusy(false);
+    setBusyLabel('');
+  }
+
+  function cancelLocationOperation(type = null) {
+    const operation = locationOperationRef.current;
+    if (!operation || (type && operation.type !== type)) return;
+    operation.controller.abort();
+    locationOperationRef.current = null;
+    cemeterySearchRequestRef.current += 1;
+    if (screenActiveRef.current) {
+      setBusy(false);
+      setBusyLabel('');
+    }
+  }
+
+  function handleCemeteryQueryChange(value) {
+    cemeteryQueryRef.current = value;
+    cemeterySearchRequestRef.current += 1;
+    setCemeteryQuery(value);
+    setCemeteryResults([]);
+    cancelLocationOperation('cemetery-search');
+  }
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      screenActiveRef.current = true;
+      if (!submitInFlightRef.current) {
+        setBusy(false);
+        setBusyLabel('');
+      }
+      setCemeteryResults([]);
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (!active) return;
         setUser(session?.user || null);
         setAuthChecked(true);
       });
-      return () => { active = false; };
+      return () => {
+        active = false;
+        screenActiveRef.current = false;
+        cemeterySearchRequestRef.current += 1;
+        locationOperationRef.current?.controller.abort();
+        locationOperationRef.current = null;
+      };
     }, [])
   );
 
@@ -118,72 +208,98 @@ export default function RemembranceScreen({ navigation }) {
   }
 
   async function useCurrentLocation() {
-    setBusy(true);
-    setBusyLabel('Finding your location…');
+    const operation = beginLocationOperation('current-location', 'Finding your location…');
+    if (!operation) return;
+    setCemeteryResults([]);
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
+      if (!isLocationOperationCurrent(operation)) return;
       if (!permission.granted) {
         Alert.alert('Location not shared', 'You can search for a cemetery, drop a pin, or skip location.');
         return;
       }
-      const result = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const result = await getCurrentPosition(operation.controller.signal);
+      if (!isLocationOperationCurrent(operation)) return;
       const point = { lat: result.coords.latitude, lng: result.coords.longitude };
+      const label = await reverseGeocode(point.lat, point.lng, { signal: operation.controller.signal });
+      if (!isLocationOperationCurrent(operation)) return;
       setGps(point);
       setLocationMode('current');
-      const label = await reverseGeocode(point.lat, point.lng);
       setLocationLabel(label || 'Current location');
     } catch (e) {
+      if (!isLocationOperationCurrent(operation)) return;
       console.warn('Remembrance location failed:', e.message);
       Alert.alert('Location unavailable', 'Try cemetery search, drop a pin, or continue without location.');
     } finally {
-      setBusy(false);
-      setBusyLabel('');
+      finishLocationOperation(operation);
     }
   }
 
   async function runCemeterySearch() {
-    const query = cemeteryQuery.trim();
+    if (busy || locationOperationRef.current) return;
+    const query = cemeteryQueryRef.current.trim();
     if (query.length < 3) {
       cemeterySearchRequestRef.current += 1;
-      setBusy(false);
-      setBusyLabel('');
       setCemeteryResults([]);
       Alert.alert('Enter more detail', 'Enter at least three characters for a cemetery or city search.');
       return;
     }
+    const operation = beginLocationOperation('cemetery-search', 'Searching cemeteries…');
+    if (!operation) return;
     const requestId = cemeterySearchRequestRef.current + 1;
     cemeterySearchRequestRef.current = requestId;
-    setBusy(true);
-    setBusyLabel('Searching cemeteries…');
     setCemeteryResults([]);
     try {
-      const results = await searchCemeteries(query, { throwOnFailure: true });
-      if (requestId !== cemeterySearchRequestRef.current) return;
+      const results = await searchCemeteries(query, {
+        throwOnFailure: true,
+        signal: operation.controller.signal,
+      });
+      if (!isLocationOperationCurrent(operation)
+        || requestId !== cemeterySearchRequestRef.current
+        || query !== cemeteryQueryRef.current.trim()) return;
       setCemeteryResults(results);
       if (results.length === 0) Alert.alert('No cemeteries found', 'Try the cemetery name, or add a city and state.');
     } catch (error) {
-      if (requestId !== cemeterySearchRequestRef.current) return;
+      if (!isLocationOperationCurrent(operation)
+        || requestId !== cemeterySearchRequestRef.current
+        || query !== cemeteryQueryRef.current.trim()) return;
       console.warn('Remembrance cemetery search failed:', error?.message);
       Alert.alert('Cemetery search unavailable', 'Please check your connection and try again, or drop a pin instead.');
     } finally {
-      if (requestId === cemeterySearchRequestRef.current) {
-        setBusy(false);
-        setBusyLabel('');
-      }
+      finishLocationOperation(operation);
     }
   }
 
   function selectCemetery(result) {
+    cancelLocationOperation();
     setGps({ lat: result.lat, lng: result.lng });
     setLocationLabel(result.name);
     setLocationMode('cemetery');
     setCemeteryResults([]);
   }
 
+  function choosePinLocation() {
+    cancelLocationOperation();
+    setGps(null);
+    setLocationLabel('');
+    setLocationMode('pin');
+    setCemeteryResults([]);
+  }
+
+  function placePin(event) {
+    cancelLocationOperation();
+    const coordinate = event.nativeEvent.coordinate;
+    setGps({ lat: coordinate.latitude, lng: coordinate.longitude });
+    setLocationLabel('Dropped pin');
+    setLocationMode('pin');
+  }
+
   function skipLocation() {
+    cancelLocationOperation();
     setGps(null);
     setLocationLabel('');
     setLocationMode('skip');
+    setCemeteryResults([]);
   }
 
   function continueFromRules() {
@@ -209,7 +325,8 @@ export default function RemembranceScreen({ navigation }) {
   }
 
   async function submit() {
-    if (busy) return;
+    if (busy || submitInFlightRef.current || locationOperationRef.current) return;
+    submitInFlightRef.current = true;
     setBusy(true);
     setBusyLabel('Reviewing and saving…');
     try {
@@ -257,6 +374,7 @@ export default function RemembranceScreen({ navigation }) {
       console.warn('Remembrance submission failed:', e.message);
       Alert.alert('Could not submit', 'Please check your connection and try again.');
     } finally {
+      submitInFlightRef.current = false;
       setBusy(false);
       setBusyLabel('');
     }
@@ -290,7 +408,9 @@ export default function RemembranceScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.back}>← Back</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.back}>← Back</Text>
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Share a Remembrance</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -413,7 +533,7 @@ export default function RemembranceScreen({ navigation }) {
               <Text style={styles.bodyText}>
                 Location is optional. Without it, the story appears in Community Stories but never on the map.
               </Text>
-              <TouchableOpacity style={styles.locationBtn} onPress={useCurrentLocation}>
+              <TouchableOpacity style={[styles.locationBtn, busy && styles.disabled]} onPress={useCurrentLocation} disabled={busy}>
                 <Pin size={16} color={colors.flame} />
                 <Text style={styles.locationBtnText}>Use current location</Text>
               </TouchableOpacity>
@@ -421,13 +541,13 @@ export default function RemembranceScreen({ navigation }) {
                 <TextInput
                   style={[styles.input, styles.searchInput]}
                   value={cemeteryQuery}
-                  onChangeText={setCemeteryQuery}
+                  onChangeText={handleCemeteryQueryChange}
                   placeholder="Search a cemetery or city"
                   returnKeyType="search"
                   onSubmitEditing={runCemeterySearch}
                   placeholderTextColor={colors.ashDim}
                 />
-                <TouchableOpacity style={styles.searchBtn} onPress={runCemeterySearch}>
+                <TouchableOpacity style={[styles.searchBtn, busy && styles.disabled]} onPress={runCemeterySearch} disabled={busy}>
                   <Text style={styles.searchBtnText}>Search</Text>
                 </TouchableOpacity>
               </View>
@@ -436,7 +556,7 @@ export default function RemembranceScreen({ navigation }) {
                   <Text style={styles.resultText}>{result.name}</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity style={styles.locationBtn} onPress={() => setLocationMode('pin')}>
+              <TouchableOpacity style={[styles.locationBtn, busy && styles.disabled]} onPress={choosePinLocation} disabled={busy}>
                 <Pin size={16} color={colors.ash} />
                 <Text style={styles.locationBtnText}>Drop a pin</Text>
               </TouchableOpacity>
@@ -448,11 +568,7 @@ export default function RemembranceScreen({ navigation }) {
                     initialRegion={gps ? {
                       latitude: gps.lat, longitude: gps.lng, latitudeDelta: 0.02, longitudeDelta: 0.02,
                     } : DEFAULT_PIN}
-                    onPress={event => {
-                      const coordinate = event.nativeEvent.coordinate;
-                      setGps({ lat: coordinate.latitude, lng: coordinate.longitude });
-                      setLocationLabel('Dropped pin');
-                    }}
+                    onPress={placePin}
                   >
                     {gps && <Marker coordinate={{ latitude: gps.lat, longitude: gps.lng }} />}
                   </MapView>

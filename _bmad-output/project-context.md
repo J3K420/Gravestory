@@ -287,12 +287,14 @@ Pipeline logic, scan APIs, and biography generation are mobile-only. Cross-platf
 
 ---
 
-## Current State (Cloudflare URL cutover, 2026-07-13)
+## Current State (Shared Remembrance preview repair, 2026-08-07)
 
 **Done:** The Android app is live. The web scan pipeline is retired, and the landing page/global map/read-only bio surface is live at `https://gravestory.pages.dev/` with verified service-worker cache `gravestory-v69`.
+
+**Shared Remembrance preview repair:** Migration 038 was owner-applied to production. Mobile commit `9a267a0` normalizes nullable Result/sync story arrays, preserving real source links and private-photo authorization while allowing saved remembrances to reopen after sync. Android preview update group `07e7eef9-6c71-45ac-8447-a72e079f6ff3` delivered it to the versionCode 17/runtime `1.1.0` tester APK; the owner confirmed the repaired flow works. Production OTA/channel was untouched. Worker hardening from `86845c0` remains undeployed and requires explicit approval.
 
 **Cutover still gated:** publish and verify the URL-only production OTA; update and publicly verify the Google Play privacy, deletion, description, and website fields; keep GitHub Pages and the repository public until those pass; retain both origins in the Worker allowlist. Follow `docs/cloudflare-pages-cutover.md`. Retiring the legacy site/origin requires explicit owner approval.
 
 ---
 
-_Last Updated: 2026-07-13 — Update when technology stack, patterns, or cutover status changes._
+_Last Updated: 2026-08-07 — Update when technology stack, patterns, or release state changes._

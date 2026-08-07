@@ -130,13 +130,16 @@ Stories fetched from the community global map have `_isGlobal: true`. This contr
 | Worker | `cd worker && wrangler deploy` |
 | Mobile preview APK | `npx eas build --platform android --profile preview` |
 | Mobile phase-9 test build | `npx eas build --platform android --profile phase9` |
+| Mobile preview OTA | From `mobile/`: verify clean pushed source + `preview` channel, then `npx eas update --channel preview --environment production --platform android` |
 | Mobile OTA update | From `mobile/`: verify clean source + `production` channel, then `npx eas update --branch production --environment production --platform android` |
 
 ---
 
-## Current state (Cloudflare URL cutover, 2026-07-13)
+## Current state (Shared Remembrance preview repair, 2026-08-07)
 
 **Done:** The Android app is live, the web scan pipeline has been retired, and the landing page/global map/read-only bio surface is live at `https://gravestory.pages.dev/` with verified service-worker cache `gravestory-v69`.
+
+**Shared Remembrance preview repair:** Migration 038 was owner-applied to production. Commit `9a267a0` makes Result rendering and `rowToStory()` null-safe for story array fields, allowing new and sync-recovered remembrances to open while preserving researched source links and private-photo auth headers. It was published only to Android `preview` runtime `1.1.0` as update group `07e7eef9-6c71-45ac-8447-a72e079f6ff3`; the owner confirmed the repaired flow works. Production OTA/channel was untouched. Worker hardening from `86845c0` remains undeployed and requires explicit authorization.
 
 **Cutover still gated:**
 - Publish and verify the URL-only mobile Settings OTA from the latest baseline.

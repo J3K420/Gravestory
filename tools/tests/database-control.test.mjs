@@ -21,7 +21,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 test('database catalog fingerprints and classifies the complete SQL inventory', () => {
   const result = validateDatabaseControl(root, loadDatabaseCatalog());
-  assert.deepEqual(result, { artifactCount: 47, migrationCount: 36, bootstrapStatus: 'unresolved' });
+  assert.deepEqual(result, { artifactCount: 48, migrationCount: 37, bootstrapStatus: 'unresolved' });
 });
 
 test('SQL fingerprints preserve exact bytes, including line endings', () => {

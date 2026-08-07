@@ -5,16 +5,18 @@
 1. Back up the Supabase schema and verify migrations 001–036 are present.
 2. Confirm `supabase-migrations/035_share_remembrances.sql` has already run.
 3. Confirm migration 036 is already applied and matches its catalog fingerprint; do not re-run it.
-4. Run `supabase-migrations/037_remembrance_operator_moderation.sql` in the Supabase SQL editor.
-5. Provision the private `gravestory-remembrance-private` R2 bucket, bind it as `REMEMBRANCE_IMAGES`, and do not attach an R2 public/custom domain.
-6. Execute the verification queries at the end of this document.
-7. Deploy `worker/worker.js` so authenticated story-photo upload/deletion routes exist.
-8. Test with an internal APK before publishing any OTA or Play release.
-9. Re-check the hosted Terms, Privacy Policy, Data Safety answers, and Content Rating.
-10. Roll out through internal testing, closed testing, then a staged production rollout.
+4. Confirm migration 037 is already applied and matches its catalog fingerprint; do not re-run it.
+5. Run `supabase-migrations/038_fix_remembrance_photo_upload_key_validation.sql`; it is the forward-only repair for photo reservations and must run after 037.
+6. Provision the private `gravestory-remembrance-private` R2 bucket, bind it as `REMEMBRANCE_IMAGES`, and do not attach an R2 public/custom domain.
+7. Execute the verification queries at the end of this document.
+8. Deploy `worker/worker.js` so authenticated story-photo upload/deletion routes exist.
+9. Test with an internal APK before publishing any OTA or Play release.
+10. Re-check the hosted Terms, Privacy Policy, Data Safety answers, and Content Rating.
+11. Roll out through internal testing, closed testing, then a staged production rollout.
 
-Do not enable the remembrance release until migrations 035, 036, and 037 have run. The mobile
-sync layer and Worker depend on the schema, security controls, and service-role human-review path.
+Do not enable the remembrance release until migrations 035, 036, 037, and 038 have run. The mobile
+sync layer and Worker depend on the schema, security controls, service-role human-review path, and
+working photo-upload reservation validation.
 
 ## Publication rules
 
@@ -149,6 +151,13 @@ in moderation records.
 ## Verification queries
 
 ```sql
+-- Must return true: migration 038 replaced the broken regex validator.
+select position(
+  'p_object_key NOT IN' in pg_get_functiondef(
+    'public.reserve_remembrance_photo_upload(uuid,uuid,bigint,uuid,text,uuid)'::regprocedure
+  )
+) > 0 as remembrance_photo_key_validation_repaired;
+
 -- Must return zero: public remembrances that bypassed approval.
 select id from public.stories
 where story_type = 'remembrance'
@@ -171,6 +180,6 @@ select id, name from public.global_public_stories(500)
 where latitude is null or longitude is null;
 ```
 
-The final query must return zero rows by construction.
+The first query must return `true`. The final query must return zero rows by construction.
 
 

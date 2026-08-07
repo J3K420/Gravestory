@@ -440,8 +440,10 @@ async function resolveUser(request, env) {
   try {
     const u = await userRes.json();
     if (!u?.id) return { userId: null, status: 401, code: 'BAD_AUTH', error: 'Could not resolve user' };
+    // Supabase UUIDs and case-sensitive R2 prefixes use one canonical spelling.
+    const userId = String(u.id).toLowerCase();
     // app_metadata is server-controlled (NOT user_metadata) — a client cannot forge it.
-    return { userId: u.id, isUnlimited: u?.app_metadata?.is_unlimited === true };
+    return { userId, isUnlimited: u?.app_metadata?.is_unlimited === true };
   } catch {
     return { userId: null, status: 401, code: 'BAD_AUTH', error: 'Could not resolve user' };
   }
@@ -987,9 +989,13 @@ async function handleUpload(request, env, origin, allowed, { storyPhoto = false 
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(storyId)) {
       return json({ error: 'Invalid storyId' }, 400, origin, allowed);
     }
+    // PostgreSQL uuid::text is lowercase. Canonicalize every UUID before it
+    // becomes part of the case-sensitive R2 object key or reservation payload.
+    storyId = storyId.toLowerCase();
+    verifiedUserId = String(auth.userId).toLowerCase();
     const owned = await fetchWithDeadline(
       `${env.SUPABASE_URL}/rest/v1/stories?id=eq.${encodeURIComponent(storyId)}`
-        + `&user_id=eq.${encodeURIComponent(auth.userId)}&story_type=eq.remembrance`
+        + `&user_id=eq.${encodeURIComponent(verifiedUserId)}&story_type=eq.remembrance`
         + '&deleted_at=is.null&moderation_status=neq.removed&publication_status=neq.removed'
         + '&select=id,content_revision&limit=1',
       {
@@ -1009,7 +1015,6 @@ async function handleUpload(request, env, origin, allowed, { storyPhoto = false 
     if (!Number.isSafeInteger(uploadRevision) || uploadRevision < 1) {
       return json({ error: 'Could not verify the remembrance revision' }, 503, origin, allowed);
     }
-    verifiedUserId = auth.userId;
   }
 
   // body is attacker-controlled JSON: data must be a STRING (a non-string .length
@@ -1067,6 +1072,7 @@ async function handleUpload(request, env, origin, allowed, { storyPhoto = false 
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uploadId)) {
       return json({ error: 'Invalid uploadId' }, 400, origin, allowed);
     }
+    uploadId = uploadId.toLowerCase();
     writerToken = crypto.randomUUID();
   }
   const key = storyPhoto
@@ -1268,10 +1274,14 @@ async function handleDiscardStoryPhoto(request, env, origin, allowed) {
   const auth = await resolveUser(request, env);
   if (!auth.userId) return json({ error: auth.error || 'Unauthorized' }, auth.status || 401, origin, allowed);
   const body = await request.json().catch(() => null);
-  const storyId = typeof body?.storyId === 'string' ? body.storyId.trim() : '';
+  let storyId = typeof body?.storyId === 'string' ? body.storyId.trim() : '';
   const objectKey = typeof body?.objectKey === 'string' ? body.objectKey.trim() : '';
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  if (!uuid.test(storyId) || !objectKey.startsWith(`stories/${auth.userId}/${storyId}/`)) {
+  if (!uuid.test(storyId)) {
+    return json({ error: 'Invalid story photo discard request' }, 400, origin, allowed);
+  }
+  storyId = storyId.toLowerCase();
+  if (!objectKey.startsWith(`stories/${auth.userId}/${storyId}/`)) {
     return json({ error: 'Invalid story photo discard request' }, 400, origin, allowed);
   }
   const owned = await adminSb(env, 'stories?id=eq.' + encodeURIComponent(storyId)
@@ -2151,10 +2161,11 @@ async function handleModerateRemembrance(request, env, origin, allowed) {
   } catch {
     return json({ error: 'Invalid JSON body' }, 400, origin, allowed);
   }
-  const storyId = typeof body?.storyId === 'string' ? body.storyId.trim() : '';
+  let storyId = typeof body?.storyId === 'string' ? body.storyId.trim() : '';
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(storyId)) {
     return json({ error: 'Invalid storyId' }, 400, origin, allowed);
   }
+  storyId = storyId.toLowerCase();
 
   const storyRes = await adminSb(
     env,
@@ -2390,10 +2401,11 @@ async function handleDeleteStoryPhotos(request, env, origin, allowed) {
     return json({ error: auth.error || 'Unauthorized' }, auth.status || 401, origin, allowed);
   }
   const body = await request.json().catch(() => null);
-  const storyId = typeof body?.storyId === 'string' ? body.storyId.trim() : '';
+  let storyId = typeof body?.storyId === 'string' ? body.storyId.trim() : '';
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(storyId)) {
     return json({ error: 'Invalid storyId' }, 400, origin, allowed);
   }
+  storyId = storyId.toLowerCase();
 
   const headers = {
     'apikey': env.SUPABASE_SERVICE_KEY,
@@ -2589,7 +2601,7 @@ async function handleDeleteAccount(request, env, origin, allowed) {
   let userId;
   try {
     const u = await userRes.json();
-    userId = u?.id;
+    userId = u?.id ? String(u.id).toLowerCase() : null;
   } catch {
     userId = null;
   }

@@ -428,19 +428,25 @@ test('story-photo upload keeps the story id in scope and removes stale-race obje
   let active = true;
   let puts = 0;
   const deletedKeys = [];
+  let uploadedObjectKey;
   try {
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = async (input, init = {}) => {
       const url = String(input);
-      if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId });
+      if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId.toUpperCase() });
       if (url.includes('/rest/v1/stories?') && url.includes('select=id,content_revision')) {
         assert.match(url, /moderation_status=neq\.removed/);
         assert.match(url, /publication_status=neq\.removed/);
         return Response.json([{ id: storyId, content_revision: 3 }]);
       }
       if (url.includes('/rest/v1/stories?') && url.includes('select=id&limit=1')) {
-        assert.match(url, /content_revision=eq\.3/);
-        return Response.json(active ? [{ id: storyId }] : []);
+        if (url.includes('content_revision=eq.3')) {
+          return Response.json(active ? [{ id: storyId }] : []);
+        }
+        assert.ok(url.includes(`id=eq.${storyId}`));
+        assert.ok(url.includes(`user_id=eq.${userId}`));
+        return Response.json([{ id: storyId }]);
       }
+      if (url.includes('/rest/v1/story_photos?')) return Response.json([]);
       if (url.endsWith('/rest/v1/rpc/claim_expired_remembrance_photo_uploads')) {
         claimCalls += 1;
         return Response.json(claimCalls === 1
@@ -448,11 +454,26 @@ test('story-photo upload keeps the story id in scope and removes stale-race obje
           : []);
       }
       if (url.endsWith('/rest/v1/rpc/reserve_remembrance_photo_upload')) {
+        const reservationBody = JSON.parse(init.body);
+        assert.equal(reservationBody.p_story_id, storyId);
+        assert.equal(reservationBody.p_user_id, userId);
+        assert.equal(reservationBody.p_upload_id, reservationBody.p_upload_id.toLowerCase());
+        assert.equal(
+          reservationBody.p_object_key,
+          `stories/${userId}/${storyId}/${reservationBody.p_upload_id}.jpg`,
+        );
         if (reservationFailureCode) return Response.json({ code: reservationFailureCode }, { status: 409 });
         return Response.json({ slot: 0, disposition: reservationDisposition });
       }
       if (url.endsWith('/rest/v1/rpc/confirm_remembrance_photo_upload')) {
         return Response.json(confirmationAllowed);
+      }
+      if (url.endsWith('/rest/v1/rpc/claim_remembrance_photo_upload_discard')) {
+        const discardBody = JSON.parse(init.body);
+        assert.equal(discardBody.p_story_id, storyId);
+        assert.equal(discardBody.p_user_id, userId);
+        assert.equal(discardBody.p_object_key, uploadedObjectKey);
+        return Response.json(true);
       }
       if (url.endsWith('/rest/v1/rpc/release_remembrance_photo_upload')) {
         return Response.json(true);
@@ -469,7 +490,7 @@ test('story-photo upload keeps the story id in scope and removes stale-race obje
       IMAGES: { put() {} },
       REMEMBRANCE_IMAGES: remembranceImages,
     });
-    const request = (requestUploadId = uploadId) => new Request('https://worker.test/upload-story-photo', {
+    const request = (requestUploadId = uploadId.toUpperCase()) => new Request('https://worker.test/upload-story-photo', {
       method: 'POST',
       headers: {
         Authorization: 'Bearer user-jwt',
@@ -478,7 +499,7 @@ test('story-photo upload keeps the story id in scope and removes stale-race obje
         Origin: 'https://gravestory.pages.dev',
       },
       body: JSON.stringify({
-        storyId,
+        storyId: storyId.toUpperCase(),
         uploadId: requestUploadId,
         data: btoa('photo-bytes'),
         contentType: 'image/jpeg',
@@ -488,7 +509,9 @@ test('story-photo upload keeps the story id in scope and removes stale-race obje
     const uploaded = await worker.fetch(request(), env, {});
     assert.equal(uploaded.status, 200);
     const uploadedBody = await uploaded.json();
-    assert.match(uploadedBody.objectKey, new RegExp(`^stories/${userId}/${storyId}/`));
+    uploadedObjectKey = uploadedBody.objectKey;
+    assert.equal(uploadedObjectKey, `stories/${userId}/${storyId}/${uploadId}.jpg`);
+    assert.equal(uploadedBody.uploadId, uploadId);
     assert.equal(uploadedBody.slot, 0);
     assert.deepEqual(deletedKeys, [expiredKey]);
 
@@ -530,6 +553,20 @@ test('story-photo upload keeps the story id in scope and removes stale-race obje
     assert.equal(deletedKeys.length, 2);
     assert.equal(deletedKeys[0], expiredKey);
     assert.match(deletedKeys[1], new RegExp(`^stories/${userId}/${storyId}/`));
+
+    const discarded = await worker.fetch(new Request('https://worker.test/discard-story-photo', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer user-jwt',
+        'Content-Type': 'application/json',
+        'X-Client-Key': 'public-client-key',
+        Origin: 'https://gravestory.pages.dev',
+      },
+      body: JSON.stringify({ storyId: storyId.toUpperCase(), objectKey: uploadedObjectKey }),
+    }), env, {});
+    assert.equal(discarded.status, 200);
+    assert.deepEqual(await discarded.json(), { ok: true });
+    assert.equal(deletedKeys.at(-1), uploadedObjectKey);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -540,11 +577,13 @@ test('remembrance deletion is type-scoped, revision-correct, and retry-idempoten
   const userId = '44444444-4444-4444-8444-444444444444';
   const storyId = '55555555-5555-4555-8555-555555555555';
   const requests = [];
+  const photoKey = `stories/${userId}/${storyId}/66666666-6666-4666-8666-666666666666.jpg`;
+  const deletedKeys = [];
   try {
     globalThis.fetch = async (input, init = {}) => {
       const url = String(input);
       requests.push({ url, init });
-      if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId });
+      if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId.toUpperCase() });
       if (url.includes('/rest/v1/stories?') && init.method !== 'PATCH') {
         assert.match(url, /story_type=eq\.remembrance/);
         assert.match(url, /select=id,content_revision,deleted_at/);
@@ -585,19 +624,23 @@ test('remembrance deletion is type-scoped, revision-correct, and retry-idempoten
         'X-Client-Key': 'public-client-key',
         Origin: 'https://gravestory.pages.dev',
       },
-      body: JSON.stringify({ storyId }),
+      body: JSON.stringify({ storyId: storyId.toUpperCase() }),
     }), productionEnv({
       R2_PUBLIC_URL: 'https://images.example.test',
       IMAGES: { put() {} },
       REMEMBRANCE_IMAGES: {
         put() {},
-        list: async () => ({ objects: [], truncated: false }),
-        delete: async () => {},
+        list: async ({ prefix }) => {
+          assert.equal(prefix, `stories/${userId}/${storyId}/`);
+          return { objects: [{ key: photoKey }], truncated: false };
+        },
+        delete: async (key) => { deletedKeys.push(key); },
       },
     }), {});
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true, duplicate: false });
+    assert.deepEqual(deletedKeys, [photoKey]);
     assert.equal(requests.filter(({ url }) => url.includes('/rest/v1/stories?')).length, 3);
   } finally {
     globalThis.fetch = originalFetch;
@@ -652,6 +695,87 @@ test('a deleted-remembrance retry still removes late R2 objects', async () => {
   }
 });
 
+test('uppercase moderation reads the canonical private photo key', async () => {
+  const originalFetch = globalThis.fetch;
+  const userId = '11111111-1111-4111-8111-111111111111';
+  const storyId = '22222222-2222-4222-8222-222222222222';
+  const photoId = '33333333-3333-4333-8333-333333333333';
+  const uploadId = '44444444-4444-4444-8444-444444444444';
+  const objectKey = `stories/${userId}/${storyId}/${uploadId}.jpg`;
+  const readKeys = [];
+  try {
+    globalThis.fetch = async (input, init = {}) => {
+      const url = String(input);
+      if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId.toUpperCase() });
+      if (url.includes('/rest/v1/stories?')) {
+        assert.ok(url.includes(`id=eq.${storyId}`));
+        assert.ok(url.includes(`user_id=eq.${userId}`));
+        return Response.json([{
+          id: storyId,
+          user_id: userId,
+          name: 'Test Remembrance',
+          biography: 'A respectful remembrance.',
+          story_type: 'remembrance',
+          terms_accepted_at: '2026-08-01T00:00:00.000Z',
+          content_revision: 1,
+          requested_visibility: 'public',
+          moderation_status: 'pending',
+          moderation_attempted_at: null,
+        }]);
+      }
+      if (url.includes('/rest/v1/story_photos?')) {
+        assert.ok(url.includes(`story_id=eq.${storyId}`));
+        return Response.json([{
+          id: photoId,
+          object_key: objectKey,
+          photo_role: 'primary',
+          sort_order: 0,
+        }]);
+      }
+      if (url.endsWith('/rest/v1/rpc/moderate_remembrance_operator')) {
+        const body = JSON.parse(init.body);
+        assert.equal(body.p_story_id, storyId);
+        assert.deepEqual(body.p_expected_object_keys, [objectKey]);
+        return Response.json(true);
+      }
+      if (url.includes('generativelanguage.googleapis.com')) {
+        return Response.json({
+          candidates: [{ content: { parts: [{ text: '{"decision":"review","reason":"Needs human review."}' }] } }],
+        });
+      }
+      throw new Error('unexpected uppercase moderation fetch: ' + url);
+    };
+
+    const response = await worker.fetch(new Request('https://worker.test/moderate-remembrance', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer user-jwt',
+        'Content-Type': 'application/json',
+        'X-Client-Key': 'public-client-key',
+        Origin: 'https://gravestory.pages.dev',
+      },
+      body: JSON.stringify({ storyId: storyId.toUpperCase() }),
+    }), productionEnv({
+      GEMINI_KEY: 'test-gemini-key',
+      REMEMBRANCE_IMAGES: {
+        get: async (key) => {
+          readKeys.push(key);
+          return {
+            arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+            httpMetadata: { contentType: 'image/jpeg' },
+          };
+        },
+      },
+    }), {});
+
+    assert.equal(response.status, 202);
+    assert.equal((await response.json()).decision, 'review');
+    assert.deepEqual(readKeys, [objectKey]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('operator remembrance moderation is service-role-only and exact-state guarded', () => {
   const migration = read('supabase-migrations/037_remembrance_operator_moderation.sql');
   const runbook = read('docs/remembrance-moderation-runbook.md');
@@ -698,6 +822,7 @@ test('operator remembrance moderation is service-role-only and exact-state guard
   assert.match(migration, /GRANT EXECUTE ON FUNCTION[\s\S]*TO service_role/);
   assert.match(runbook, /moderate_remembrance_operator[\s\S]*p_worker_origin/);
   assert.match(runbook, /migration 036 is already applied[\s\S]*do not re-run it/i);
+  assert.match(runbook, /migration 037 is already applied[\s\S]*do not re-run it/i);
   assert.doesNotMatch(runbook, /update public\.stories\s+set moderation_status/);
   assert.match(workerSource, /rpc\/moderate_remembrance_operator/);
   assert.match(workerSource, /rpc\/reserve_remembrance_photo_upload/);
@@ -707,6 +832,35 @@ test('operator remembrance moderation is service-role-only and exact-state guard
   assert.match(read('mobile/src/lib/api-r2.js'), /await discardStoryPhoto\(storyId, objectKey\)/);
   assert.match(workerSource, /const alreadyDeleted = Boolean\(ownedRows\[0\]\.deleted_at\)/);
   assert.match(mobileApi, /await discardStoryPhoto\(saved\.id, result\.objectKey\)/);
+});
+
+test('remembrance photo reservation accepts only exact canonical object keys', () => {
+  const predecessor = read('supabase-migrations/037_remembrance_operator_moderation.sql');
+  const migration = read('supabase-migrations/038_fix_remembrance_photo_upload_key_validation.sql');
+  const functionPattern = /CREATE OR REPLACE FUNCTION public\.reserve_remembrance_photo_upload\([\s\S]*?\r?\n\$\$;/;
+  const validationPattern = /  IF p_object_key IS NULL OR p_object_key (?:!~|NOT IN) \([\s\S]*?  END IF;\r?\n/;
+  const predecessorFunction = predecessor.match(functionPattern)?.[0];
+  const repairedFunction = migration.match(functionPattern)?.[0];
+  const withoutValidation = (source) => {
+    assert.ok(source, 'reservation function must exist');
+    const normalized = source.replace(validationPattern, '  <OBJECT_KEY_VALIDATION>\n');
+    assert.notEqual(normalized, source, 'object-key validation block must exist exactly once');
+    assert.doesNotMatch(normalized, validationPattern);
+    return normalized.replaceAll('\r\n', '\n');
+  };
+
+  assert.equal(
+    withoutValidation(repairedFunction),
+    withoutValidation(predecessorFunction),
+    'migration 038 must preserve every migration 037 reservation behavior outside key validation',
+  );
+  assert.match(migration, /p_object_key NOT IN/);
+  assert.match(migration, /p_upload_id::text \|\| '\.jpg'/);
+  assert.match(migration, /p_upload_id::text \|\| '\.png'/);
+  assert.match(migration, /p_upload_id::text \|\| '\.webp'/);
+  assert.doesNotMatch(migration, /p_object_key !~/);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\.reserve_remembrance_photo_upload[\s\S]*FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.reserve_remembrance_photo_upload[\s\S]*TO service_role/);
 });
 
 test('reservation exceptions and commit replay semantics match the authoritative migration', async () => {
@@ -1102,7 +1256,7 @@ test('account deletion warns on failed R2 URL collection and still completes', a
     console.warn = (line) => logs.push(line);
     globalThis.fetch = async (input, init = {}) => {
       const url = String(input);
-      if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId });
+      if (url.endsWith('/auth/v1/user')) return Response.json({ id: userId.toUpperCase() });
       if (url.includes('/rest/v1/stories?')
         && url.includes('story_type=eq.remembrance')
         && init.method === 'PATCH') {
@@ -1138,8 +1292,9 @@ test('account deletion warns on failed R2 URL collection and still completes', a
       },
       REMEMBRANCE_IMAGES: {
         put() {},
-        list() {
+        list({ prefix }) {
           assert.equal(remembrancesClosed, true);
+          assert.equal(prefix, `stories/${userId}/`);
           return { objects: [] };
         },
         delete() {},

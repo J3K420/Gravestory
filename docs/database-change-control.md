@@ -6,7 +6,7 @@ This repository contract does not connect to Supabase. It does not establish whi
 
 ## Current sequence and known limits
 
-The primary sequence contains 36 forward migrations: `001` through `026`, then `028` through `037`. Every migration is described and SHA-256 fingerprinted in the catalog. `027` is an explained gap: the proposed client-triggerable refund design was abandoned before a SQL file shipped because it would have reopened unlimited scan allowance resets; `028_split_scan_check_commit.sql` records the safer replacement.
+The primary sequence contains 37 forward migrations: `001` through `026`, then `028` through `038`. Every migration is described and SHA-256 fingerprinted in the catalog. `027` is an explained gap: the proposed client-triggerable refund design was abandoned before a SQL file shipped because it would have reopened unlimited scan allowance resets; `028_split_scan_check_commit.sql` records the safer replacement.
 
 The sequence is not yet a complete bootstrap. Migration `001` alters `public.stories`, but neither the current tree nor repository history contains the original table definition and pre-001 policies. Inferring that privileged baseline from client code would risk silently weakening RLS. Until a reviewed baseline is recovered, the catalog remains `bootstrap.status = "unresolved"` and the local command stops before Docker or SQL execution. Consequently, GraveStory does not yet claim full dev/production database parity.
 

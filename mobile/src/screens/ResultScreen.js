@@ -14,7 +14,7 @@ import { cloudSaveStory, cloudUpdateStory, cloudDeleteStory, findOrCreateGrave, 
 import { moderateRemembrance, uploadGravestoneImage } from '../lib/api-r2';
 import { getTributes, setTribute } from '../lib/api-tributes';
 import { submitContentReport, REPORT_REASONS, REPORT_NOTE_MAX } from '../lib/api-reports';
-import { fetchWikipediaPortraits, normalizePortraits } from '../lib/api-wikipedia';
+import { fetchWikipediaPortraits } from '../lib/api-wikipedia';
 import { redactLivingNamesForPublic, REDACTION_UNAVAILABLE, stripOriginatedNamesForPublic, stripOriginatedNamesFromSources, stripOriginatedNamesFromMentions, filterMentionsForPublic } from '../lib/api-gemini';
 import { useRefresh } from '../lib/use-refresh';
 import { deletePendingPhoto } from '../lib/pending';
@@ -24,6 +24,7 @@ import { colors, fonts, radius } from '../lib/theme';
 import { MapStack, ShareIcon, Globe, Pin, TreeIcon } from '../components/Icons';
 import { MARKER_STYLES, MARKER_PACKS, getMarker, GraveMarkerSvg } from '../components/GraveMarkers';
 import { SYMBOL_CONTEXT } from '../lib/biography';
+import { normalizePortraits, normalizeResultStoryArrays } from '../lib/story-shape';
 
 const SCREEN_W = Dimensions.get('window').width;
 const AI_DISCLAIMER_SEEN_KEY = 'gs_ai_disclaimer_seen';
@@ -425,7 +426,14 @@ export default function ResultScreen({ navigation, route }) {
     );
   }
 
-  const { name, dates, biography, sources = [], source_urls = [], location, portraits, graveData, symbol_meanings, mentions: storyMentions } = story;
+  const { name, dates, biography, location, graveData, symbol_meanings } = story;
+  const {
+    sources,
+    sourceUrls: source_urls,
+    symbols: storySymbols,
+    mentions: storyMentions,
+    portraits,
+  } = normalizeResultStoryArrays(story);
   // Mentions — name-safe one-line source pointers (resolveMentions). Shown as a
   // single "Also found in…" chip opening a bottom sheet of tappable hyperlinks.
   const mentions = Array.isArray(storyMentions)
@@ -433,8 +441,8 @@ export default function ResultScreen({ navigation, route }) {
     : [];
   // Symbols round-trip as a top-level column (set at scan time, mirrors web);
   // fall back to graveData for any older in-memory story that predates that.
-  const symbols = Array.isArray(story.symbols) && story.symbols.length
-    ? story.symbols
+  const symbols = storySymbols.length
+    ? storySymbols
     : (Array.isArray(graveData?.symbols) ? graveData.symbols : []);
   // Resolve a symbol's displayable meaning: static SYMBOL_CONTEXT table first
   // (fast, trusted), then the per-story AI-resolved meanings (filled at scan time

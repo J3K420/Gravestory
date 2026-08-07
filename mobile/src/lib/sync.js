@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { loadStories, saveStories, getLastSync, setLastSync } from './storage';
 import { deleteStoryPhotos, setRemembranceVisibility } from './api-r2';
+import { normalizeStoredStoryArrays } from './story-shape';
 
 // Map a Supabase row → in-memory story object (mirrors web persistence.js)
 export function rowToStory(row) {
@@ -19,14 +20,10 @@ export function rowToStory(row) {
     maiden_name: row.maiden_name || null,
     location: row.location,
     inscription: row.inscription,
-    symbols: row.symbols,
+    ...normalizeStoredStoryArrays(row),
     symbol_meanings: row.symbol_meanings || null,
-    // Mentions (migration 022) — name-safe one-line source pointers.
-    mentions: Array.isArray(row.mentions) ? row.mentions : [],
     family_name: row.family_name,
     notes: row.notes,
-    sources: row.sources,
-    source_urls: row.source_urls,
     gps: (row.latitude != null && row.longitude != null)
       ? { lat: row.latitude, lng: row.longitude }
       : null,

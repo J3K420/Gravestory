@@ -203,13 +203,6 @@ export async function fetchWikipediaArticleSummary(name, dates, knownTitle) {
   }
 }
 
-// Normalizes portrait data from both old saved stories ({ left, right } object)
-// and the new array format so display code doesn't need to handle both shapes.
-export function normalizePortraits(portraits) {
-  if (!portraits) return [];
-  if (Array.isArray(portraits)) return portraits.filter(Boolean);
-  return [portraits.left, portraits.right].filter(Boolean);
-}
 
 // Returns an array of up to 5 remote Wikipedia image URLs (stable HTTPS JPEGs).
 // Returns remote URLs directly — no local file download needed, so portraits
